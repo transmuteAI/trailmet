@@ -1,8 +1,3 @@
-
-import os
-import glob
-import numpy as np
-from pickle import Unpickler
 import torchvision
 from .dataset import BaseDataset
 
@@ -35,7 +30,6 @@ class CIFAR10Dataset(BaseDataset):
             dataset_type = item + "_dataset"
             if item == 'val' and not self.val_exists:
                 self.dataset_dict[dataset_type] = None
-            print(self.transform[item])
             data = dataset(root=self.root, 
                         train=(item !="test"),
                         transform=self.transform[item],
