@@ -1,17 +1,24 @@
+"""
+The :mod:`trailmet.datasets` module includes utilities to load datasets,
+including methods to load and fetch popular reference datasets.
+"""
 import os
-from .cifar import CIFAR10Dataset
-
+from .cifar import CIFAR10Dataset, CIFAR100Dataset, ImageNetDataset
 
 class DatasetFactory(object):
+    """
+    docstring to be written
+    """
     @staticmethod
     def create_dataset(**kwargs):
         """
         Args:
-            name: dataset name 'CIFAR10', 'CIFAR100', 'ImageNet',
-            root: root
-            load_img: wether to load image
+            name(string): dataset name 'CIFAR10', 'CIFAR100', 'ImageNet',
+            root(string):  Root directory of dataset where directory
+                   cifar-10-batches-py exists or will be saved
+                   to if download is set to True.
         Return:
-            dataset
+            dataset(tuple): dataset
         """
         assert 'name' in kwargs, "should provide dataset name"
         name = kwargs['name']
@@ -24,5 +31,5 @@ class DatasetFactory(object):
         elif 'ImageNet' == name:
             dataset = ImageNetDataset(**kwargs)
         else:
-            raise Exception("unknow dataset {}".format(kwargs['name']))
+            raise Exception("unknown dataset{}".format(kwargs['name']))
         return dataset

@@ -1,17 +1,21 @@
+"""
+Author:
+"""
 import os
 import pickle
 import torch
 import numpy as np
 from torch.utils.data.sampler import SubsetRandomSampler
 
-
-
 class BaseDataset:
+    """
+    Base class to be inherited by 
+    """
     def __init__(self, name=None, root=None,
                 transform=None,
                 target_transform=None,
                  download=True, 
-                 split_types = ['train', 'val', 'test'],
+                 split_types = None,
                  val_fraction = 0.2,
                  shuffle=True,
                  random_seed = 42):
@@ -28,6 +32,13 @@ class BaseDataset:
         self.val_exists = False
 
     def stack_dataset(self):
+        """
+        Returns
+        -------
+            dataset_dict (dictionary): The keys of the dictionary are "train_datset", "val_dataset"
+            and "test_dataset" and the values are object of pytorch CIFER10 dataset containing train,
+            val and test respectively.
+        """
         num_train = len(self.dataset_dict["train_dataset"])
         indices = list(range(num_train))
         split = int(np.floor(self.val_fraction * num_train))
