@@ -17,10 +17,26 @@ seed_everything(43)
 from ..prune.prune import BasePruning
 
 class ChipNet(BasePruning):
-    
+
     def __init__(self):
         super(ChipNet, self).__init__(self)
+
+        # Set default values for ChipNet specific parameters
+
         pass
+
+    def pretrain(self):
+
+        # add condition of training ourselves or using a pretrained model
+        pass
+
+    def prune(self):
+        pass
+
+    def finetune(self):
+        pass
+
+
 
 
 
@@ -73,13 +89,13 @@ def train(model, loss_fn, optimizer, scheduler=None):
     tk1 = tqdm_notebook(dataloaders['train'], total=len(dataloaders['train']))
     running_loss = 0
     for x_var, y_var in tk1:
-        counter +=1
+        counter += 1
         x_var = x_var.to(device=device)
         y_var = y_var.to(device=device)
         scores = model(x_var)
 
         loss = loss_fn(scores, y_var)
-        running_loss+=loss.item()
+        running_loss += loss.item()
         tk1.set_postfix(loss=running_loss/counter)
         optimizer.zero_grad()
         loss.backward()

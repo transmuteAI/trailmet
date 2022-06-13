@@ -1,6 +1,9 @@
 class BaseAlgorithm:
 
     def __init__(self):
+
+        # set default value for parameters generic to all th algorithms
+
         pass
 
     def compress_model(self):
