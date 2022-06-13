@@ -1,4 +1,4 @@
-class Algorithms:
+class BaseAlgorithm:
 
     def __init__(self):
         pass
