@@ -9,6 +9,8 @@ PRETRAIN:
     BATCH_SIZE:
         TRAIN: 16
         VAL: 32
+    LEARNING_RATE: 0.05
+    SCHEDULER:
 
 PRUNE:
     EPOCHS: 20
