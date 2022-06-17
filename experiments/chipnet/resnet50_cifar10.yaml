@@ -1,0 +1,25 @@
+META_ARC: "siamrpn_r50_l234_dwxcorr"
+
+GENERAL:
+    DATASET: "CIFAR10"
+    BACKBONE: "resnet50"
+
+PRETRAIN:
+    EPOCHS: 50
+    BATCH_SIZE:
+        TRAIN: 16
+        VAL: 32
+    LEARNING_RATE: 0.05
+    SCHEDULER:
+
+PRUNE:
+    EPOCHS: 20
+    BATCH_SIZE:
+        TRAIN: 16
+        VAL: 32
+
+FINETUNE:
+    EPOCHS: 20
+    BATCH_SIZE:
+        TRAIN: 16
+        VAL: 32

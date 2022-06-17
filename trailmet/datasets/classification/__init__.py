@@ -3,7 +3,8 @@ The :mod:`trailmet.datasets` module includes utilities to load datasets,
 including methods to load and fetch popular reference datasets.
 """
 import os
-from .cifar import CIFAR10Dataset, CIFAR100Dataset, ImageNetDataset
+#from .cifar import CIFAR10Dataset, CIFAR100Dataset, ImageNetDataset
+from .cifar import CIFAR10Dataset
 
 class DatasetFactory(object):
     """

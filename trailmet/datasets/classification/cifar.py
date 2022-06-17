@@ -42,7 +42,7 @@ class CIFAR10Dataset(BaseDataset):
             If the split_type contains "val", then suffle has to be True, default value is None.
         val_fraction (float): If float, should be between 0.0 and 1.0 and represent
         the proportion of the dataset to include in the val split.
-        suffle (bool): Whether or not to shuffle the data before splitting into val from train,
+        shuffle (bool): Whether or not to shuffle the data before splitting into val from train,
             default is True. If shuffle is true, there should be 'val' in split_types.
         random_seed (int): RandomState instance, default=None.
     """
