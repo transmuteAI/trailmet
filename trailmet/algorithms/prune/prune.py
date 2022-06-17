@@ -15,16 +15,32 @@ class BasePruning(BaseAlgorithm):
         pass
 
     def pretrain(self):
-        pass
+        best_acc = 0
+        num_epochs = args.epochs
+        train_losses = []
+        valid_losses = []
+        valid_accuracy = []
+        if args.test_only == False:
+            for epoch in range(num_epochs):
+                adjust_learning_rate(optimizer, epoch, args)
+                print('Starting epoch %d / %d' % (epoch + 1, num_epochs))
+                t_loss = train(model, criterion, optimizer)
+                acc, v_loss = test(model, criterion, optimizer, "val")
 
-    def prune(self):
-        pass
+                if acc>best_acc:
+                    print("**Saving model**")
+                    best_acc=acc
+                    torch.save({
+                        "epoch": epoch + 1,
+                        "state_dict" : model.state_dict(),
+                        "acc" : best_acc,
+                    }, f"checkpoints/{args.model}_{args.dataset}_pretrained.pth")
 
-    def soft_prune(self):
-        pass
+                train_losses.append(t_loss)
+                valid_losses.append(v_loss)
+                valid_accuracy.append(acc)
+                df_data=np.array([train_losses, valid_losses, valid_accuracy]).T
+                df = pd.DataFrame(df_data, columns = ['train_losses','valid_losses','valid_accuracy'])
+                df.to_csv(f'logs/{args.model}_{args.dataset}_pretrained.csv')
 
-    def hard_prune(self):
-        pass
-
-    def finetune(self):
-        pass
+    def prune(self)

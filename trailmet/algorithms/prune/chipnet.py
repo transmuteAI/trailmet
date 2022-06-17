@@ -18,146 +18,230 @@ from ..prune.prune import BasePruning
 
 class ChipNet(BasePruning):
 
-    def __init__(self):
+    def __init__(self, model, data_object, args):
         super(ChipNet, self).__init__(self)
+        self.model = model
+        self.data_object = data_object
+        self.args = args
+        self.budget_type = self.args.budget_type
+        self.target_budget = self.args.target_budget
+        self.budget_loss_weightage = args.budget_loss_weightage
+        self.crispness_loss_weightage = args.crispness_loss_weightage
+        self.b_inc = self.args.beta_increment
+        self.g_inc = self.args.gamma_increment
+        self.steepness = 10
+        self.CE_loss = nn.CrossEntropyLoss()
+        self.device = self.args.device
 
-        # Set default values for ChipNet specific parameters
-
+    def prepare_model_for_compression(self, modules_to_ignore = None):
         pass
+    
+    def criterion(self, y_pred, y_true):
+        ce_loss = self.CE_loss(y_pred, y_true)
+        budget_loss = ((self.get_remaining(self.steepness, args.budget_type).to(self.device)-self.target_budget.to(self.device))**2).to(self.device)
+        crispness_loss = self.get_crispnessLoss(device)
+        return budget_loss*self.budget_loss_weightage + crispness_loss*self.crispness_loss_weightage + ce_loss
 
-    def pretrain(self):
+    def calculate_prune_threshold(self):
+        zetas = self.give_zetas()
+        if self.budget_type in ['volume_ratio']:
+            zeta_weights = self.give_zeta_weights()
+            zeta_weights = zeta_weights[np.argsort(zetas)]
+        zetas = sorted(zetas)
+        if self.budget_type == 'volume_ratio':
+            curr_budget = 0
+            indx = 0
+            while(curr_budget<(1.-Vc)):
+                indx+=1
+                curr_budget+=zeta_weights[indx]
+            prune_threshold = zetas[indx]
+        else:
+            prune_threshold = zetas[int((1.-Vc)*len(zetas))]
+        return prune_threshold
 
-        # add condition of training ourselves or using a pretrained model
-        pass
+    def smoothRound(self, x, steepness=20.):
+        return 1./(1.+torch.exp(-1*steepness*(x-0.5)))
+    
+    def n_remaining(self, m, steepness=20.):
+        return (m.pruned_zeta if m.is_pruned else self.smoothRound(m.get_zeta_t(), steepness)).sum()
+    
+    def is_all_pruned(self, m):
+        return self.n_remaining(m) == 0
+    
+    def get_remaining(self, steepness=20., budget_type = 'channel_ratio'):
+        """return the fraction of active zeta_t (i.e > 0.5)""" 
+        n_rem = 0
+        n_total = 0
+        for l_block in self.prunable_modules:
+            if budget_type == 'volume_ratio':
+                n_rem += (self.n_remaining(l_block, steepness)*l_block._conv_module.output_area)
+                n_total += (l_block.num_gates*l_block._conv_module.output_area)
+            elif budget_type == 'channel_ratio':
+                n_rem += self.n_remaining(l_block, steepness)
+                n_total += l_block.num_gates
+            elif budget_type == 'parameter_ratio':
+                k = l_block._conv_module.kernel_size[0]
+                prev_total = 3 if self.prev_module[l_block] is None else self.prev_module[l_block].num_gates
+                prev_remaining = 3 if self.prev_module[l_block] is None else self.n_remaining(self.prev_module[l_block], steepness) 
+                n_rem += self.n_remaining(l_block, steepness)*prev_remaining*k*k
+                n_total += l_block.num_gates*prev_total*k*k
+            elif budget_type == 'flops_ratio':
+                k = l_block._conv_module.kernel_size[0]
+                output_area = l_block._conv_module.output_area
+                prev_total = 3 if self.prev_module[l_block] is None else self.prev_module[l_block].num_gates
+                prev_remaining = 3 if self.prev_module[l_block] is None else self.n_remaining(self.prev_module[l_block], steepness) 
+                curr_remaining = self.n_remaining(l_block, steepness)
+                n_rem += curr_remaining*prev_remaining*k*k*output_area + curr_remaining*output_area
+                n_total += l_block.num_gates*prev_total*k*k*output_area + l_block.num_gates*output_area
+        return n_rem/n_total
 
-    def prune(self):
-        pass
+    def give_zetas(self):
+        zetas = []
+        for l_block in self.prunable_modules:
+            zetas.append(l_block.get_zeta_t().cpu().detach().numpy().tolist())
+        zetas = [z for k in zetas for z in k ]
+        return zetas
 
-    def finetune(self):
-        pass
+    def give_zeta_weights(self):
+        zeta_weights = []
+        for l_block in self.prunable_modules:
+            zeta_weights.append([l_block._conv_module.output_area]*l_block.num_gates)
+        zeta_weights = [z for k in zeta_weights for z in k ]
+        return zeta_weights/np.sum(zeta_weights)
 
+    def plot_zt(self):
+        """plots the distribution of zeta_t and returns the same"""
+        zetas = self.give_zetas()
+        exactly_zeros = np.sum(np.array(zetas)==0.0)
+        exactly_ones = np.sum(np.array(zetas)==1.0)
+        plt.hist(zetas)
+        plt.show()
+        return exactly_zeros, exactly_ones
+    
+    def get_crispnessLoss(self, device):
+        """loss reponsible for making zeta_t 1 or 0"""
+        loss = torch.FloatTensor([]).to(device)
+        for l_block in self.prunable_modules:
+            loss = torch.cat([loss, torch.pow(l_block.get_zeta_t()-l_block.get_zeta_i(), 2)])
+        return torch.mean(loss).to(device)
 
+    def prune(self, Vc, budget_type = 'channel_ratio', finetuning=False, threshold=None):
+        """prunes the network to make zeta_t exactly 1 and 0"""
 
+        if budget_type == 'parameter_ratio':
+            zetas = sorted(self.give_zetas())
+            high = len(zetas)-1
+            low = 0
+            while low<high:
+                mid = (high + low)//2
+                threshold = zetas[mid]
+                for l_block in self.prunable_modules:
+                    l_block.prune(threshold)
+                self.remove_orphans()
+                if self.params()<Vc:
+                    high = mid-1
+                else:
+                    low = mid+1
+        elif budget_type == 'flops_ratio':
+            zetas = sorted(self.give_zetas())
+            high = len(zetas)-1
+            low = 0
+            while low<high:
+                mid = (high + low)//2
+                threshold = zetas[mid]
+                for l_block in self.prunable_modules:
+                    l_block.prune(threshold)
+                self.remove_orphans()
+                if self.flops()<Vc:
+                    high = mid-1
+                else:
+                    low = mid+1
+        else:
+            if threshold==None:
+                self.prune_threshold = self.calculate_prune_threshold(Vc, budget_type)
+                threshold = min(self.prune_threshold, 0.9)
+                
+        for l_block in self.prunable_modules:
+            l_block.prune(threshold)
 
+        if finetuning:
+            self.remove_orphans()
+            return threshold
+        else:
+            problem = self.check_abnormality()
+            return threshold, problem
 
+    def unprune(self):
+        for l_block in self.prunable_modules:
+            l_block.unprune()
+    
+    def prepare_for_finetuning(self, device, budget, budget_type = 'channel_ratio'):
+        """freezes zeta"""
+        self.device = device
+        self(torch.rand(2,3,32,32).to(device))
+        threshold = self.prune(budget, budget_type=budget_type, finetuning=True)
+        if budget_type not in ['parameter_ratio', 'flops_ratio']:
+            while self.get_remaining(steepness=20., budget_type=budget_type)<budget:
+                threshold-=0.0001
+                self.prune(budget, finetuning=True, budget_type=budget_type, threshold=threshold)
+        return threshold      
 
-ap = argparse.ArgumentParser(description='pretraining')
-ap.add_argument('dataset', choices=['c10', 'c100', 'tin','svhn'], type=str, help='Dataset choice')
-ap.add_argument('model', type=str, help='Model choice')
-ap.add_argument('--test_only', '-t', type=bool, default=False, help='test the best model')
-ap.add_argument('--valid_size', '-v', type=float, default=0.1, help='valid_size')
-ap.add_argument('--batch_size', default=128, type=int, help='Batch Size')
-ap.add_argument('--lr', default=0.05, type=float, help='Learning rate')
-ap.add_argument('--scheduler_type', '-st', type=int, choices=[1, 2], default=1, help='lr scheduler type')
-ap.add_argument('--decay', '-d', type=float, default=0.001, help='weight decay')
-ap.add_argument('--epochs', default=200, type=int, help='Epochs')
-ap.add_argument('--workers', default=0, type=int, help='number of workers')
-ap.add_argument('--cuda_id', '-id', type=str, default='0', help='gpu number')
-args = ap.parse_args()
+    def get_params_count(self):
+        total_params = 0
+        active_params = 0
+        for l_block in self.modules():
+            if isinstance(l_block, PrunableBatchNorm2d):
+                active_param, total_param = l_block.get_params_count()
+                active_params+=active_param 
+                total_params+=total_param
+            if isinstance(l_block, nn.Linear):
+                linear_params = l_block.weight.view(-1).shape[0]
+                active_params+=linear_params
+                total_params+=linear_params
+        return active_params, total_params
 
-############################### preparing dataset ################################
+    def get_volume(self):
+        total_volume = 0.
+        active_volume = 0.
+        for l_block in self.prunable_modules:
+                active_volume_, total_volume_ = l_block.get_volume()
+                active_volume+=active_volume_ 
+                total_volume+=total_volume_
+        return active_volume, total_volume
 
-data_object = DataManager(args)
-trainloader, valloader, testloader = data_object.prepare_data()
-dataloaders = {
-        'train': trainloader, 'val': valloader, "test": testloader
-}
-
-############################### preparing model ###################################
-
-model = get_model(args.model, 'full', data_object.num_classes, data_object.insize)
-
-############################## preparing for training #############################
-
-if os.path.exists('logs') == False:
-    os.mkdir("logs")
-
-if os.path.exists('checkpoints') == False:
-    os.mkdir("checkpoints")
-
-criterion = nn.CrossEntropyLoss()
-
-optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=args.decay)
-
-device = torch.device(f"cuda:{str(args.cuda_id)}")
-
-model.to(device)
-
-def train(model, loss_fn, optimizer, scheduler=None):
-    model.train()
-    counter = 0
-    tk1 = tqdm_notebook(dataloaders['train'], total=len(dataloaders['train']))
-    running_loss = 0
-    for x_var, y_var in tk1:
-        counter += 1
-        x_var = x_var.to(device=device)
-        y_var = y_var.to(device=device)
-        scores = model(x_var)
-
-        loss = loss_fn(scores, y_var)
-        running_loss += loss.item()
-        tk1.set_postfix(loss=running_loss/counter)
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-    return running_loss/counter
-
-def test(model, loss_fn, optimizer, phase, scheduler=None):
-    model.eval()
-    counter = 0
-    tk1 = tqdm_notebook(dataloaders[phase], total=len(dataloaders[phase]))
-    running_loss = 0
-    running_acc = 0
-    total = 0
-    with torch.no_grad():
-        for x_var, y_var in tk1:
-            counter +=1
-            x_var = x_var.to(device=device)
-            y_var = y_var.to(device=device)
-            scores = model(x_var)
-            loss = loss_fn(scores, y_var)
-            _, scores = torch.max(scores.data, 1)
-            y_var = y_var.cpu().detach().numpy()
-            scores = scores.cpu().detach().numpy()
-
-            correct = (scores == y_var).sum().item()
-            running_loss+=loss.item()
-            running_acc+=correct
-            total+=scores.shape[0]
-            tk1.set_postfix(loss=running_loss/counter, acc=running_acc/total)
-    return running_acc/total, running_loss/counter
-
-###################################### training starts here ############################
-
-best_acc = 0
-num_epochs = args.epochs
-train_losses = []
-valid_losses = []
-valid_accuracy = []
-if args.test_only == False:
-    for epoch in range(num_epochs):
-        adjust_learning_rate(optimizer, epoch, args)
-        print('Starting epoch %d / %d' % (epoch + 1, num_epochs))
-        t_loss = train(model, criterion, optimizer)
-        acc, v_loss = test(model, criterion, optimizer, "val")
-
-        if acc>best_acc:
-            print("**Saving model**")
-            best_acc=acc
-            torch.save({
-                "epoch": epoch + 1,
-                "state_dict" : model.state_dict(),
-                "acc" : best_acc,
-            }, f"checkpoints/{args.model}_{args.dataset}_pretrained.pth")
-
-        train_losses.append(t_loss)
-        valid_losses.append(v_loss)
-        valid_accuracy.append(acc)
-        df_data=np.array([train_losses, valid_losses, valid_accuracy]).T
-        df = pd.DataFrame(df_data, columns = ['train_losses','valid_losses','valid_accuracy'])
-        df.to_csv(f'logs/{args.model}_{args.dataset}_pretrained.csv')
-
-state = torch.load(f"checkpoints/{args.model}_{args.dataset}_pretrained.pth")
-model.load_state_dict(state['state_dict'],strict=True)
-acc, v_loss = test(model, criterion, optimizer, "test")
-print(f"Test Accuracy: {acc} | Valid Accuracy: {state['acc']}")
+    def get_flops(self):
+        total_flops = 0.
+        active_flops = 0.
+        for l_block in self.prunable_modules:
+                active_flops_, total_flops_ = l_block.get_flops()
+                active_flops+=active_flops_ 
+                total_flops+=total_flops_
+        return active_flops, total_flops
+    
+    def get_channels(self):
+        total_channels = 0.
+        active_channels = 0.
+        for l_block in self.prunable_modules:
+                active_channels+=l_block.pruned_zeta.sum().item()
+                total_channels+=l_block.num_gates
+        return active_channels, total_channels
+          
+    def set_beta_gamma(self, beta, gamma):
+        for l_block in self.prunable_modules:
+            l_block.set_beta_gamma(beta, gamma)
+    
+    def check_abnormality(self):
+        n_removable = self.removable_orphans()
+        isbroken = self.check_if_broken()
+        if n_removable!=0. and isbroken:
+            return f'both rem_{n_removable} and broken'
+        if n_removable!=0.:
+            return f'removable_{n_removable}'
+        if isbroken:
+            return 'broken'
+        
+    def check_if_broken(self):
+        for bn in self.prunable_modules:
+            if bn.is_imp and bn.pruned_zeta.sum()==0:
+                return True
+        return False
