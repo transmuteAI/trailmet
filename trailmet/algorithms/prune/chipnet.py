@@ -199,8 +199,8 @@ class ChipNet(BasePruning):
                 df = pd.DataFrame(df_data,columns = ['Remaining before pruning', 'Remaining after pruning', 'Valid accuracy', 'Pruning accuracy', 'Pruning threshold', 'problems'])
                 df.to_csv(f"logs/{self.log_name}_pruned.csv")
 
-    def train_one_epoch(self, model, dataloader, loss_fn, optimizer, epoch):
-        super().train_one_epoch(model, dataloader, loss_fn, optimizer, None)
+    def train_one_epoch(self, model, dataloader, loss_fn, optimizer, scheduler):
+        super().train_one_epoch(model, dataloader, loss_fn, optimizer, scheduler)
         self.steepness=min(60,self.steepness+5./len(dataloader))
 
     def prepare_model_for_compression(self):
