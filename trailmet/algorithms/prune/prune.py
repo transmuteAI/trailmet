@@ -24,7 +24,7 @@ class BasePruning(BaseAlgorithm):
             for epoch in range(num_epochs):
                 adjust_learning_rate(optimizer, epoch, args)
                 print('Starting epoch %d / %d' % (epoch + 1, num_epochs))
-                t_loss = train(model, criterion, optimizer)
+                t_loss = pretraining_epoch(model, criterion, optimizer)
                 acc, v_loss = test(model, criterion, optimizer, "val")
 
                 if acc>best_acc:
@@ -43,4 +43,4 @@ class BasePruning(BaseAlgorithm):
                 df = pd.DataFrame(df_data, columns = ['train_losses','valid_losses','valid_accuracy'])
                 df.to_csv(f'logs/{args.model}_{args.dataset}_pretrained.csv')
 
-    def prune(self)
+    def prune(self):

@@ -9,7 +9,7 @@ class BaseAlgorithm:
     def compress_model(self):
         pass
 
-    def pretrain_epoch(self, model, loss_fn, optimizer, scheduler = None):
+    def train_one_epoch(self, model, loss_fn, optimizer, scheduler = None):
         model.train()
         counter = 0
         tk1 = tqdm_notebook(dataloaders['train'], total=len(dataloaders['train']))

@@ -107,10 +107,10 @@ class ModuleInjection:
 
 class ChipNet(BasePruning):
     "class to compress models using chipnet method"
-    def __init__(self, model, data_object, args):
+    def __init__(self, model, dataset, args):
         super(ChipNet, self).__init__(self)
         self.model = model
-        self.data_object = data_object
+        self.dataset = dataset
         self.args = args
         self.budget_type = self.args.budget_type
         self.target_budget = self.args.target_budget
