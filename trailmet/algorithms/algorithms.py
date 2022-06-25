@@ -54,18 +54,20 @@ class BaseAlgorithm(object):
                         "epoch": epoch + 1,
                         "state_dict" : model.state_dict(),
                         "acc" : best_acc,
-                    }, f"checkpoints/{self.log_name}_pretrained.pth")
+                    }, f"checkpoints/{self.log_name}.pth")
                 train_losses.append(t_loss)
                 valid_losses.append(v_loss)
                 valid_accuracy.append(acc)
                 df_data=np.array([train_losses, valid_losses, valid_accuracy]).T
                 df = pd.DataFrame(df_data, columns = ['train_losses','valid_losses','valid_accuracy'])
-                df.to_csv(f'logs/{self.log_name}_pretrained.csv')
+                df.to_csv(f'logs/{self.log_name}.csv')
 
         state = torch.load(f"checkpoints/{self.log_name}_pretrained.pth")
         model.load_state_dict(state['state_dict'],strict=True)
         acc, v_loss = self.test(model, dataloaders['test'], criterion)
         print(f"Test Accuracy: {acc} | Valid Accuracy: {state['acc']}")
+
+    
 
     def get_optimizer(self, optimizer_name, model, lr, weight_decay):
         if optimizer_name == 'SGD':

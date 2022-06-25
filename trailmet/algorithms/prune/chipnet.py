@@ -123,10 +123,16 @@ class ChipNet(BasePruning):
     def compress_model(self):
         self.model.to(self.device)
         if 'PRETRAIN' in self.kwargs:
+            self.log_name = self.log_name + '_pretrained'
             super().pretrain(self.model, self.dataloaders, **self.kwargs['PRETRAIN'])
         if 'PRUNE' in self.kwargs:
+            self.log_name = self.log_name + '_pruning'
             self.prepare_model_for_compression()
             self.prune(self.model, self.dataloaders, **self.kwargs['PRUNE'])
+        if 'FINETUNE' in self.kwargs:
+            self.prepare_for_finetuning(self.target_budget.item(), self.budget_type)
+            self.log_name = self.log_name + '_finetuned'
+            super().pretrain(self.model, self.dataloaders, **self.kwargs['FINETUNE'])
 
     def prune(self, model, dataloaders, **kwargs):
         num_epochs = kwargs.get('EPOCHS', 20)
@@ -193,11 +199,11 @@ class ChipNet(BasePruning):
                         "prune_threshold":threshold,
                         "state_dict" : model.state_dict(),
                         "accuracy" : acc,
-                    }, f"checkpoints/{self.log_name}_pruned.pth")
+                    }, f"checkpoints/{self.log_name}.pth")
 
                 df_data=np.array([remaining_before_pruning, remaining_after_pruning, valid_accuracy, pruning_accuracy, pruning_threshold, problems]).T
                 df = pd.DataFrame(df_data,columns = ['Remaining before pruning', 'Remaining after pruning', 'Valid accuracy', 'Pruning accuracy', 'Pruning threshold', 'problems'])
-                df.to_csv(f"logs/{self.log_name}_pruned.csv")
+                df.to_csv(f"logs/{self.log_name}.csv")
 
     def train_one_epoch(self, model, dataloader, loss_fn, optimizer, scheduler):
         super().train_one_epoch(model, dataloader, loss_fn, optimizer, scheduler)
@@ -363,15 +369,14 @@ class ChipNet(BasePruning):
         for l_block in self.prunable_modules:
             l_block.unprune()
     
-    def prepare_for_finetuning(self, device, budget, budget_type = 'channel_ratio'):
+    def prepare_for_finetuning(self, budget, budget_type = 'channel_ratio'):
         """freezes zeta"""
-        self.device = device
-        self(torch.rand(2,3,32,32).to(device))
-        threshold = self.prune(budget, budget_type=budget_type, finetuning=True)
+        self(torch.rand(2,3,32,32).to(self.device))
+        threshold = self.prune_model(budget, budget_type=budget_type, finetuning=True)
         if budget_type not in ['parameter_ratio', 'flops_ratio']:
             while self.get_remaining(steepness=20., budget_type=budget_type)<budget:
                 threshold-=0.0001
-                self.prune(budget, finetuning=True, budget_type=budget_type, threshold=threshold)
+                self.prune_model(budget, finetuning=True, budget_type=budget_type, threshold=threshold)
         return threshold      
 
     def get_params_count(self):
