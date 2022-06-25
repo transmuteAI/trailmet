@@ -4,13 +4,10 @@ import torch
 import numpy as np
 import torch.nn as nn
 import torch.optim as optim
-from utils import *
 import matplotlib.pyplot as plt
+import pandas as pd
 
 seed_everything(43)
-
-import torch
-import torch.nn as nn
 
 class PrunableBatchNorm2d(torch.nn.BatchNorm2d):
     def __init__(self, num_features, conv_module=None):
@@ -107,27 +104,124 @@ class ModuleInjection:
 
 class ChipNet(BasePruning):
     "class to compress models using chipnet method"
-    def __init__(self, model, dataset, args):
-        super(ChipNet, self).__init__(self)
+    def __init__(self, model, dataloaders, **kwargs):
+        super(ChipNet, self).__init__(**kwargs)
         self.model = model
-        self.dataset = dataset
-        self.args = args
-        self.budget_type = self.args.budget_type
-        self.target_budget = self.args.target_budget
-        self.budget_loss_weightage = args.budget_loss_weightage
-        self.crispness_loss_weightage = args.crispness_loss_weightage
-        self.b_inc = self.args.beta_increment
-        self.g_inc = self.args.gamma_increment
+        self.dataloaders = dataloaders
+        self.kwargs = kwargs
+        self.budget_type = self.kwargs['CHIPNET_ARGS'].get('BUDGET_TYPE', 'channel_ratio')
+        self.target_budget = self.kwargs['CHIPNET_ARGS'].get('TARGET_BUDGET', 0.5)
+        self.steepness  = self.kwargs['CHIPNET_ARGS'].get('STEEPNESS', 10)
+        self.budget_loss_weightage = self.kwargs['CHIPNET_ARGS'].get('BUDGET_LOSS_WEIGHTAGE', 30)
+        self.crispness_loss_weightage = self.kwargs['CHIPNET_ARGS'].get('CRISPNESS_LOSS_WEIGHTAGE', 10)
+        self.b_inc = self.kwargs['CHIPNET_ARGS'].get('BETA_INCREMENT', 5.)
+        self.g_inc = self.kwargs['CHIPNET_ARGS'].get('GAMMA_INCREMENT', 2.)
+        self.target_budget = torch.FloatTensor([self.target_budget]).to(self.device)
         self.steepness = 10
         self.ceLoss = nn.CrossEntropyLoss()
-        self.device = self.args.device
 
-    def prepare_model_for_compression(self, modules_to_ignore = None):
-        pass
+    def compress_model(self):
+        self.model.to(self.device)
+        if 'PRETRAIN' in self.kwargs:
+            super().pretrain(self.model, self.dataloaders, **self.kwargs['PRETRAIN'])
+        if 'PRUNE' in self.kwargs:
+            self.prepare_model_for_compression()
+            self.prune(self.model, self.dataloaders, **self.kwargs['PRUNE'])
+
+    def prune(self, model, dataloaders, **kwargs):
+        num_epochs = kwargs.get('EPOCHS', 20)
+        test_only = kwargs.get('TEST_ONLY', False)
+        #### preparing optimizer ####
+        lr = kwargs.get('LR', 0.001)
+        weight_decay = kwargs.get('WEIGHT_DECAY', 0.001)
+        param_optimizer = list(model.named_parameters())
+        no_decay = ["zeta"]
+        optimizer_parameters = [
+                {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)], 'weight_decay': weight_decay,'lr':lr},
+                {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], 'weight_decay': 0.0,'lr':lr},
+            ]
+        optimizer = optim.AdamW(optimizer_parameters)
+        #############################
+        criterion = self.prune_criterion
+        best_acc = 0
+        beta, gamma = 1., 2.
+        model.set_beta_gamma(beta, gamma)
+
+        remaining_before_pruning = []
+        remaining_after_pruning = []
+        valid_accuracy = []
+        pruning_accuracy = []
+        pruning_threshold = []
+        problems = []
+
+        if test_only == False:
+            for epoch in range(num_epochs):
+                print(f'Starting epoch {epoch + 1} / {num_epochs}')
+                self.unprune_model()
+                self.train_one_epoch(model, dataloaders['train'], criterion, optimizer, epoch)
+                print(f'[{epoch + 1} / {num_epochs}] Validation before pruning')
+                acc = self.test(model, dataloaders['val'], criterion)
+                remaining = self.get_remaining(self.steepness, self.budget_type).item()
+                remaining_before_pruning.append(remaining)
+                valid_accuracy.append(acc)
+                # exactly_zeros, exactly_ones = model.plot_zt()
+                # exact_zeros.append(exactly_zeros)
+                # exact_ones.append(exactly_ones)
+                
+                print(f'[{epoch + 1} / {num_epochs}] Validation after pruning')
+                threshold, problem = model.prune(self.target_budget, self.budget_type)
+                acc = self.test(model, dataloaders['val'], criterion)
+                remaining = self.get_remaining(self.steepness, self.budget_type).item()
+                pruning_accuracy.append(acc)
+                pruning_threshold.append(threshold)
+                remaining_after_pruning.append(remaining)
+                problems.append(problem)
+                
+                # 
+                beta=min(6., beta+(0.1/self.b_inc))
+                gamma=min(256, gamma*(2**(1./self.g_inc)))
+                model.set_beta_gamma(beta, gamma)
+                print("Changed beta to", beta, "changed gamma to", gamma)     
+                
+                if acc>best_acc:
+                    print("**Saving checkpoint**")
+                    best_acc=acc
+                    torch.save({
+                        "epoch" : epoch+1,
+                        "beta" : beta,
+                        "gamma" : gamma,
+                        "prune_threshold":threshold,
+                        "state_dict" : model.state_dict(),
+                        "accuracy" : acc,
+                    }, f"checkpoints/{self.log_name}_pruned.pth")
+
+                df_data=np.array([remaining_before_pruning, remaining_after_pruning, valid_accuracy, pruning_accuracy, pruning_threshold, problems]).T
+                df = pd.DataFrame(df_data,columns = ['Remaining before pruning', 'Remaining after pruning', 'Valid accuracy', 'Pruning accuracy', 'Pruning threshold', 'problems'])
+                df.to_csv(f"logs/{self.log_name}_pruned.csv")
+
+    def train_one_epoch(self, model, dataloader, loss_fn, optimizer, epoch):
+        super().train_one_epoch(model, dataloader, loss_fn, optimizer, None)
+        self.steepness=min(60,self.steepness+5./len(dataloader))
+
+    def prepare_model_for_compression(self):
+        ModuleInjection.pruning_method='prune'
+        def replace_bn(m):
+            for attr_str in dir(m):
+                target_attr = getattr(m, attr_str)
+                if type(target_attr) == torch.nn.BatchNorm2d:
+                    conv_attr = getattr(m, attr_str.replace('bn','conv'))
+                    conv, bn = ModuleInjection.make_prunable(conv_attr, target_attr)
+                    setattr(m, attr_str.replace('bn','conv'), conv)
+                    setattr(m, attr_str, bn)
+            for _, ch in m.named_children():
+                replace_bn(ch)
+        self.prunable_modules = ModuleInjection.prunable_modules
+        replace_bn(self.model)
+        
     
-    def criterion(self, y_pred, y_true):
+    def prune_criterion(self, y_pred, y_true):
         ce_loss = self.ceLoss(y_pred, y_true)
-        budget_loss = ((self.get_remaining(self.steepness, self.args.budget_type).to(self.device)-self.target_budget.to(self.device))**2).to(self.device)
+        budget_loss = ((self.get_remaining(self.steepness, self.budget_type).to(self.device)-self.target_budget.to(self.device))**2).to(self.device)
         crispness_loss = self.get_crispnessLoss()
         return budget_loss*self.budget_loss_weightage + crispness_loss*self.crispness_loss_weightage + ce_loss
 
@@ -218,7 +312,7 @@ class ChipNet(BasePruning):
             loss = torch.cat([loss, torch.pow(l_block.get_zeta_t()-l_block.get_zeta_i(), 2)])
         return torch.mean(loss).to(self.device)
 
-    def prune(self, target_budget, budget_type = 'channel_ratio', finetuning=False, threshold=None):
+    def prune_model(self, target_budget, budget_type = 'channel_ratio', finetuning=False, threshold=None):
         """prunes the network to make zeta_t exactly 1 and 0"""
 
         if budget_type == 'parameter_ratio':
@@ -264,7 +358,7 @@ class ChipNet(BasePruning):
             problem = self.check_abnormality()
             return threshold, problem
 
-    def unprune(self):
+    def unprune_model(self):
         """unprunes the network to again make pruning gates continuous"""
         for l_block in self.prunable_modules:
             l_block.unprune()
@@ -300,9 +394,9 @@ class ChipNet(BasePruning):
         total_volume = 0.
         active_volume = 0.
         for l_block in self.prunable_modules:
-                active_volume_, total_volume_ = l_block.get_volume()
-                active_volume+=active_volume_ 
-                total_volume+=total_volume_
+            active_volume_, total_volume_ = l_block.get_volume()
+            active_volume+=active_volume_ 
+            total_volume+=total_volume_
         return active_volume, total_volume
 
     def get_flops(self):
@@ -310,9 +404,9 @@ class ChipNet(BasePruning):
         total_flops = 0.
         active_flops = 0.
         for l_block in self.prunable_modules:
-                active_flops_, total_flops_ = l_block.get_flops()
-                active_flops+=active_flops_ 
-                total_flops+=total_flops_
+            active_flops_, total_flops_ = l_block.get_flops()
+            active_flops+=active_flops_ 
+            total_flops+=total_flops_
         return active_flops, total_flops
     
     def get_channels(self):
@@ -320,10 +414,10 @@ class ChipNet(BasePruning):
         total_channels = 0.
         active_channels = 0.
         for l_block in self.prunable_modules:
-                active_channels+=l_block.pruned_zeta.sum().item()
-                total_channels+=l_block.num_gates
+            active_channels+=l_block.pruned_zeta.sum().item()
+            total_channels+=l_block.num_gates
         return active_channels, total_channels
-          
+
     def set_beta_gamma(self, beta, gamma):
         """explicitly sets the values of beta and gamma parameters"""
         for l_block in self.prunable_modules:
