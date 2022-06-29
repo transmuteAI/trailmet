@@ -2,7 +2,6 @@ import torch.nn as nn
 
 
 class BaseModel(nn.Module):
-    """base class for models""""
     def __init__(self):
         super(BaseModel, self).__init__()
         pass

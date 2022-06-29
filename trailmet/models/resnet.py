@@ -1,6 +1,5 @@
-import torch
 import torch.nn as nn
-import numpy as np
+from torch.hub import load_state_dict_from_url
 from .base_model import BaseModel
 
 
@@ -9,7 +8,6 @@ def conv3x3(in_planes, out_planes, stride=1):
     return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=1, bias=False)
 
 class BasicBlock(nn.Module):
-    """basic block of resnet"""
     expansion = 1
 
     def __init__(self, inplanes, planes, stride=1, downsample=None):
@@ -41,7 +39,6 @@ class BasicBlock(nn.Module):
         return out
 
 class Bottleneck(nn.Module):
-    """bottleneck block resnet model"""
     expansion = 4
 
     def __init__(self, inplanes, planes, stride=1, downsample=None):
@@ -243,7 +240,7 @@ def make_resnet152(num_classes, insize):
     model = ResNet(Bottleneck, [3, 8, 36, 3], num_classes=num_classes, insize=insize)
     return model
 
-def get_resnet_model(model, num_classes, insize):
+def get_resnet_model(model, num_classes, insize, pretrained):
     """Returns the requested model, ready for training/pruning with the specified method.
     :param model: str, either wrn or r50
     :param num_classes: int, num classes in the dataset
@@ -251,20 +248,36 @@ def get_resnet_model(model, num_classes, insize):
     """
     if model == 'wrn':
         net = make_wide_resnet(num_classes, insize)
+        pretrained_weights = None
+
     elif model == 'resnet18':
         net = make_resnet18(num_classes, insize)
+        pretrained_weights = "https://download.pytorch.org/models/resnet18-f37072fd.pth"
     elif model == 'resnet20':
         net = make_resnet20(num_classes, insize)
+        pretrained_weights = None
     elif model == 'resnet32':
         net = make_resnet32(num_classes, insize)
+        pretrained_weights =  None
     elif model == 'resnet50':
         net = make_resnet50(num_classes, insize)
+        pretrained_weights = "https://download.pytorch.org/models/resnet50-11ad3fa6.pth"
     elif model == 'resnet56':
         net = make_resnet56(num_classes, insize)
+        pretrained_weights = None 
     elif model == 'resnet101':
         net = make_resnet101(num_classes, insize)
+        pretrained_weights = "https://download.pytorch.org/models/resnet101-cd907fc2.pth"
     elif model == 'resnet110':
         net = make_resnet110(num_classes, insize)
+        pretrained_weights = None
     elif model == 'resnet152':
         net = make_resnet152(num_classes, insize)
+        pretrained_weights = "https://download.pytorch.org/models/resnet152-f82ba261.pth"
+    if pretrained:
+        if pretrained_weights != None:
+            weights = load_state_dict_from_url(pretrained_weights, progress=True)
+            net.load_state_dict(weights, strict = False)
+        else:
+            print("pretrained weights not available")
     return net
