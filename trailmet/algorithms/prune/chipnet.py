@@ -1,3 +1,4 @@
+from enum import Flag
 from trailmet.utils import seed_everything
 from trailmet.algorithms.prune.prune import BasePruning
 import torch
@@ -341,7 +342,7 @@ class ChipNet(BasePruning):
                 threshold = zetas[mid]
                 for l_block in self.prunable_modules:
                     l_block.prune(threshold)
-                self.model.remove_orphans()
+                self.remove_orphans()
                 if self.params()<target_budget:
                     high = mid-1
                 else:
@@ -355,7 +356,7 @@ class ChipNet(BasePruning):
                 threshold = zetas[mid]
                 for l_block in self.prunable_modules:
                     l_block.prune(threshold)
-                self.model.remove_orphans()
+                self.remove_orphans()
                 if self.flops()<target_budget:
                     high = mid-1
                 else:
@@ -369,7 +370,7 @@ class ChipNet(BasePruning):
             l_block.prune(threshold)
 
         if finetuning:
-            self.model.remove_orphans()
+            self.remove_orphans()
             return threshold
         else:
             problem = self.check_abnormality()
@@ -441,7 +442,7 @@ class ChipNet(BasePruning):
     
     def check_abnormality(self):
         """checks for any abnormality in the pruning process"""
-        n_removable = self.model.removable_orphans()
+        n_removable = self.removable_orphans()
         isbroken = self.check_if_broken()
         if n_removable!=0. and isbroken:
             return f'both rem_{n_removable} and broken'
@@ -456,3 +457,23 @@ class ChipNet(BasePruning):
             if bn.is_imp and bn.pruned_zeta.sum()==0:
                 return True
         return False
+
+    def removable_orphans(self):
+        num_removed = 0
+        bn_layers = self.model.get_bn_layers()
+        for l_blocks in bn_layers:
+            flag = sum([self.is_all_pruned(m) for m in l_blocks])
+            if flag:
+                num_removed += sum([self.n_remaining(m) for m in l_blocks])
+        return num_removed
+
+    def remove_orphans(self):
+        num_removed = 0
+        bn_layers = self.model.get_bn_layers()
+        for l_blocks in bn_layers:
+            flag = sum([self.is_all_pruned(m) for m in l_blocks])
+            if flag:
+                num_removed += sum([self.n_remaining(m) for m in l_blocks])
+                for m in l_blocks:
+                    m.pruned_zeta.data.copy_(torch.zeros_like(m.pruned_zeta))
+        return num_removed
