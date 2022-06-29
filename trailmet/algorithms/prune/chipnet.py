@@ -383,7 +383,7 @@ class ChipNet(BasePruning):
     
     def prepare_for_finetuning(self, budget, budget_type = 'channel_ratio'):
         """freezes zeta"""
-        self(torch.rand(2,3,32,32).to(self.device))
+        self.model(torch.rand(2,3,32,32).to(self.device))
         threshold = self.prune_model(budget, budget_type=budget_type, finetuning=True)
         if budget_type not in ['parameter_ratio', 'flops_ratio']:
             while self.get_remaining(steepness=20., budget_type=budget_type)<budget:
