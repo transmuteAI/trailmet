@@ -76,7 +76,7 @@ class BaseAlgorithm(object):
             raise ValueError('Unknown optimizer: %s' % optimizer_name)
         return optimizer
 
-    def train_one_epoch(self, model, dataloader, loss_fn, optimizer):
+    def train_one_epoch(self, model, dataloader, loss_fn, optimizer, extra_functionality = None):
         model.train()
         counter = 0
         tk1 = tqdm_notebook(dataloader, total=len(dataloader))
@@ -93,6 +93,8 @@ class BaseAlgorithm(object):
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+            if extra_functionality is not None:
+                extra_functionality()
         return running_loss/counter
 
     def test(self, model, dataloader, loss_fn):

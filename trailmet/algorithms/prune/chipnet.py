@@ -166,7 +166,7 @@ class ChipNet(BasePruning):
             for epoch in range(num_epochs):
                 print(f'Starting epoch {epoch + 1} / {num_epochs}')
                 self.unprune_model()
-                self.train_one_epoch(model, dataloaders['train'], criterion, optimizer, epoch)
+                self.train_one_epoch(model, dataloaders['train'], criterion, optimizer, epoch, self.steepness_update_function(5./len(dataloaders['train'])))
                 print(f'[{epoch + 1} / {num_epochs}] Validation before pruning')
                 acc = self.test(model, dataloaders['val'], criterion)
                 remaining = self.get_remaining(self.steepness, self.budget_type).item()
@@ -207,9 +207,10 @@ class ChipNet(BasePruning):
                 df = pd.DataFrame(df_data,columns = ['Remaining before pruning', 'Remaining after pruning', 'Valid accuracy', 'Pruning accuracy', 'Pruning threshold', 'problems'])
                 df.to_csv(f"logs/{self.log_name}.csv")
 
-    def train_one_epoch(self, model, dataloader, loss_fn, optimizer, scheduler):
-        super().train_one_epoch(model, dataloader, loss_fn, optimizer, scheduler)
-        self.steepness=min(60,self.steepness+5./len(dataloader))
+    def steepness_update_function(self, step):
+        def update():
+            self.steepness = min(60, self.steepness+step)
+        return update
 
     def prepare_model_for_compression(self):
         ModuleInjection.pruning_method='prune'
