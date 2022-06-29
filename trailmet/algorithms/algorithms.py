@@ -76,7 +76,7 @@ class BaseAlgorithm(object):
             raise ValueError('Unknown optimizer: %s' % optimizer_name)
         return optimizer
 
-    def train_one_epoch(self, model, dataloader, loss_fn, optimizer, scheduler = None):
+    def train_one_epoch(self, model, dataloader, loss_fn, optimizer):
         model.train()
         counter = 0
         tk1 = tqdm_notebook(dataloader, total=len(dataloader))

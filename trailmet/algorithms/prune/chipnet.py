@@ -122,9 +122,11 @@ class ChipNet(BasePruning):
 
     def compress_model(self):
         self.model.to(self.device)
+
         if 'PRETRAIN' in self.kwargs:
+            print('starting pretraining')
             self.log_name = self.log_name + '_pretrained'
-            super().pretrain(self.model, self.dataloaders, **self.kwargs['PRETRAIN'])
+            self.pretrain(self.model, self.dataloaders, **self.kwargs['PRETRAIN'])
         if 'PRUNE' in self.kwargs:
             self.log_name = self.log_name + '_pruning'
             self.prepare_model_for_compression()
