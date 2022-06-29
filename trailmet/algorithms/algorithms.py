@@ -62,7 +62,7 @@ class BaseAlgorithm(object):
                 df = pd.DataFrame(df_data, columns = ['train_losses','valid_losses','valid_accuracy'])
                 df.to_csv(f'logs/{self.log_name}.csv')
 
-        state = torch.load(f"checkpoints/{self.log_name}_pretrained.pth")
+        state = torch.load(f"checkpoints/{self.log_name}.pth")
         model.load_state_dict(state['state_dict'],strict=True)
         acc, v_loss = self.test(model, dataloaders['test'], criterion)
         print(f"Test Accuracy: {acc} | Valid Accuracy: {state['acc']}")

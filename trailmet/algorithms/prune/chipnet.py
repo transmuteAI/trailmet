@@ -127,14 +127,21 @@ class ChipNet(BasePruning):
             print('starting pretraining')
             self.log_name = self.log_name + '_pretrained'
             self.pretrain(self.model, self.dataloaders, **self.kwargs['PRETRAIN'])
+            print('pretraining done')
         if 'PRUNE' in self.kwargs:
+            print('starting pruning')
             self.log_name = self.log_name + '_pruning'
+            print('preparing model for pruning')
             self.prepare_model_for_compression()
             self.prune(self.model, self.dataloaders, **self.kwargs['PRUNE'])
+            print('pruning done')
         if 'FINETUNE' in self.kwargs:
+            print('starting finetuning')
+            print('preparing model for finetuning')
             self.prepare_for_finetuning(self.target_budget.item(), self.budget_type)
             self.log_name = self.log_name + '_finetuned'
             super().pretrain(self.model, self.dataloaders, **self.kwargs['FINETUNE'])
+            print('finetuning done')
 
     def prune(self, model, dataloaders, **kwargs):
         num_epochs = kwargs.get('EPOCHS', 20)
