@@ -136,6 +136,26 @@ class ResNetCifar(BaseModel):
         
         return x
 
+    def removable_orphans(self):
+        num_removed = 0
+        for l_blocks in [self.layer1, self.layer2, self.layer3]:
+            for b in l_blocks:
+                m1, m2 = b.bn1, b.bn2
+                if self.is_all_pruned(m1) or self.is_all_pruned(m2):
+                    num_removed += self.n_remaining(m1) + self.n_remaining(m2)
+        return num_removed
+
+    def remove_orphans(self):
+        num_removed = 0
+        for l_blocks in [self.layer1, self.layer2, self.layer3]:
+            for b in l_blocks:
+                m1, m2 = b.bn1, b.bn2
+                if self.is_all_pruned(m1) or self.is_all_pruned(m2):
+                    num_removed += self.n_remaining(m1) + self.n_remaining(m2)
+                    m1.pruned_zeta.data.copy_(torch.zeros_like(m1.pruned_zeta))
+                    m2.pruned_zeta.data.copy_(torch.zeros_like(m2.pruned_zeta))
+        return num_removed
+
     
 class ResNet(BaseModel):
     def __init__(self, block, layers, width=1, num_classes=1000, produce_vectors=False, init_weights=True, insize=32):
@@ -202,6 +222,39 @@ class ResNet(BaseModel):
             return x, feature_vectors
         else:
             return x
+
+    def removable_orphans(self):
+        num_removed = 0
+        for l_blocks in [self.layer1, self.layer2, self.layer3, self.layer4]:
+            for b in l_blocks:
+                if self.block_type == 'Bottleneck':
+                    m1, m2, m3 = b.bn1, b.bn2, b.bn3
+                    if self.is_all_pruned(m1) or self.is_all_pruned(m2) or self.is_all_pruned(m3):
+                        num_removed += self.n_remaining(m1) + self.n_remaining(m2) + self.n_remaining(m3)
+                else:
+                    m1, m2 = b.bn1, b.bn2
+                    if self.is_all_pruned(m1) or self.is_all_pruned(m2):
+                        num_removed += self.n_remaining(m1) + self.n_remaining(m2)
+        return num_removed
+
+    def remove_orphans(self):
+        num_removed = 0
+        for l_blocks in [self.layer1, self.layer2, self.layer3, self.layer4]:
+            for b in l_blocks:
+                if self.block_type == 'Bottleneck':
+                    m1, m2, m3 = b.bn1, b.bn2, b.bn3
+                    if self.is_all_pruned(m1) or self.is_all_pruned(m2) or self.is_all_pruned(m3):
+                        num_removed += self.n_remaining(m1) + self.n_remaining(m2) + self.n_remaining(m3)
+                        m1.pruned_zeta.data.copy_(torch.zeros_like(m1.pruned_zeta))
+                        m2.pruned_zeta.data.copy_(torch.zeros_like(m2.pruned_zeta))
+                        m3.pruned_zeta.data.copy_(torch.zeros_like(m3.pruned_zeta))
+                else:
+                    m1, m2 = b.bn1, b.bn2
+                    if self.is_all_pruned(m1) or self.is_all_pruned(m2):
+                        num_removed += self.n_remaining(m1) + self.n_remaining(m2)
+                        m1.pruned_zeta.data.copy_(torch.zeros_like(m1.pruned_zeta))
+                        m2.pruned_zeta.data.copy_(torch.zeros_like(m2.pruned_zeta))
+        return num_removed
 
 def make_wide_resnet(num_classes, insize):
     model = ResNetCifar(BasicBlock, [4, 4, 4], width=12, num_classes=num_classes, insize=insize)

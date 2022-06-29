@@ -341,7 +341,7 @@ class ChipNet(BasePruning):
                 threshold = zetas[mid]
                 for l_block in self.prunable_modules:
                     l_block.prune(threshold)
-                self.remove_orphans()
+                self.model.remove_orphans()
                 if self.params()<target_budget:
                     high = mid-1
                 else:
@@ -355,7 +355,7 @@ class ChipNet(BasePruning):
                 threshold = zetas[mid]
                 for l_block in self.prunable_modules:
                     l_block.prune(threshold)
-                self.remove_orphans()
+                self.model.remove_orphans()
                 if self.flops()<target_budget:
                     high = mid-1
                 else:
@@ -369,7 +369,7 @@ class ChipNet(BasePruning):
             l_block.prune(threshold)
 
         if finetuning:
-            self.remove_orphans()
+            self.model.remove_orphans()
             return threshold
         else:
             problem = self.check_abnormality()
@@ -441,7 +441,7 @@ class ChipNet(BasePruning):
     
     def check_abnormality(self):
         """checks for any abnormality in the pruning process"""
-        n_removable = self.removable_orphans()
+        n_removable = self.model.removable_orphans()
         isbroken = self.check_if_broken()
         if n_removable!=0. and isbroken:
             return f'both rem_{n_removable} and broken'
