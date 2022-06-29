@@ -160,7 +160,7 @@ class ChipNet(BasePruning):
         criterion = self.prune_criterion
         best_acc = 0
         beta, gamma = 1., 2.
-        model.set_beta_gamma(beta, gamma)
+        self.set_beta_gamma(beta, gamma)
 
         remaining_before_pruning = []
         remaining_after_pruning = []
@@ -195,7 +195,7 @@ class ChipNet(BasePruning):
                 # 
                 beta=min(6., beta+(0.1/self.b_inc))
                 gamma=min(256, gamma*(2**(1./self.g_inc)))
-                model.set_beta_gamma(beta, gamma)
+                self.set_beta_gamma(beta, gamma)
                 print("Changed beta to", beta, "changed gamma to", gamma)     
                 
                 if acc>best_acc:
