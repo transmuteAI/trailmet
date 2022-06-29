@@ -166,7 +166,7 @@ class ChipNet(BasePruning):
             for epoch in range(num_epochs):
                 print(f'Starting epoch {epoch + 1} / {num_epochs}')
                 self.unprune_model()
-                self.train_one_epoch(model, dataloaders['train'], criterion, optimizer, epoch, self.steepness_update_function(5./len(dataloaders['train'])))
+                self.train_one_epoch(model, dataloaders['train'], criterion, optimizer, self.steepness_update_function(5./len(dataloaders['train'])))
                 print(f'[{epoch + 1} / {num_epochs}] Validation before pruning')
                 acc = self.test(model, dataloaders['val'], criterion)
                 remaining = self.get_remaining(self.steepness, self.budget_type).item()
