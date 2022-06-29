@@ -133,6 +133,7 @@ class ChipNet(BasePruning):
             self.log_name = self.log_name + '_pruning'
             print('preparing model for pruning')
             self.prepare_model_for_compression()
+            self.model.to(self.device)
             self.prune(self.model, self.dataloaders, **self.kwargs['PRUNE'])
             print('pruning done')
         if 'FINETUNE' in self.kwargs:
@@ -184,7 +185,7 @@ class ChipNet(BasePruning):
                 # exact_ones.append(exactly_ones)
                 
                 print(f'[{epoch + 1} / {num_epochs}] Validation after pruning')
-                threshold, problem = model.prune(self.target_budget, self.budget_type)
+                threshold, problem = self.prune_model(self.target_budget, self.budget_type)
                 acc = self.test(model, dataloaders['val'], criterion)
                 remaining = self.get_remaining(self.steepness, self.budget_type).item()
                 pruning_accuracy.append(acc)
