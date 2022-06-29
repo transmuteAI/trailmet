@@ -177,7 +177,7 @@ class ChipNet(BasePruning):
                 self.unprune_model()
                 self.train_one_epoch(model, dataloaders['train'], criterion, optimizer, self.steepness_update_function(5./len(dataloaders['train'])))
                 print(f'[{epoch + 1} / {num_epochs}] Validation before pruning')
-                acc = self.test(model, dataloaders['val'], criterion)
+                acc, _ = self.test(model, dataloaders['val'], criterion)
                 remaining = self.get_remaining(self.steepness, self.budget_type).item()
                 remaining_before_pruning.append(remaining)
                 valid_accuracy.append(acc)
@@ -187,7 +187,7 @@ class ChipNet(BasePruning):
                 
                 print(f'[{epoch + 1} / {num_epochs}] Validation after pruning')
                 threshold, problem = self.prune_model(self.target_budget, self.budget_type)
-                acc = self.test(model, dataloaders['val'], criterion)
+                acc, _ = self.test(model, dataloaders['val'], criterion)
                 remaining = self.get_remaining(self.steepness, self.budget_type).item()
                 pruning_accuracy.append(acc)
                 pruning_threshold.append(threshold)
