@@ -1,3 +1,4 @@
+# importing the required packages
 from enum import Flag
 from trailmet.utils import seed_everything
 from trailmet.algorithms.prune.prune import BasePruning
@@ -9,6 +10,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 seed_everything(43)
+
 
 class PrunableBatchNorm2d(torch.nn.BatchNorm2d):
     def __init__(self, num_features, conv_module=None):
@@ -24,34 +26,37 @@ class PrunableBatchNorm2d(torch.nn.BatchNorm2d):
                 module.output_area = out_tensor.size(2) * out_tensor.size(3)
             conv_module.register_forward_hook(fo_hook)
         self._conv_module = conv_module
-        beta=1.
-        gamma=2.
+        beta = 1.
+        gamma = 2.
         for n, x in zip(('beta', 'gamma'), (torch.tensor([x], requires_grad=False) for x in (beta, gamma))):
             self.register_buffer(n, x)  # self.beta will be created (same for gamma, zeta)        
-    
-    def forward(self, input):
-        out = super(PrunableBatchNorm2d, self).forward(input)
+
+    def forward(self, input_data):
+        out = super(PrunableBatchNorm2d, self).forward(input_data)
         z = self.pruned_zeta if self.is_pruned else self.get_zeta_t()
         out *= z[None, :, None, None] # broadcast the mask to all samples in the batch, and all locations
         return out
-    
+
     def get_zeta_i(self):
+        '''
+
+        '''
         return self.__generalized_logistic(self.zeta)
-    
+
     def get_zeta_t(self):
         zeta_i = self.get_zeta_i()
-        return self.__continous_heavy_side(zeta_i)
+        return self.__continuous_heavy_side(zeta_i)
 
     def set_beta_gamma(self, beta, gamma):
         self.beta.data.copy_(torch.Tensor([beta]))
         self.gamma.data.copy_(torch.Tensor([gamma]))
-      
+
     def __generalized_logistic(self, x):
         return 1./(1.+torch.exp(-self.beta*x))
-    
-    def __continous_heavy_side(self, x):
+
+    def __continuous_heavy_side(self, x):
         return 1-torch.exp(-self.gamma*x)+x*torch.exp(-self.gamma)
-    
+
     def prune(self, threshold):
         self.is_pruned = True
         self.pruned_zeta = (self.get_zeta_t()>threshold).float()
@@ -72,7 +77,7 @@ class PrunableBatchNorm2d(torch.nn.BatchNorm2d):
         total_volume = self._conv_module.output_area*self.num_gates
         active_volume = self._conv_module.output_area*self.pruned_zeta.sum().item()
         return active_volume, total_volume
-    
+
     def get_flops(self):
         k_area = self._conv_module.kernel_size[0]*self._conv_module.kernel_size[1]
         total_flops = self._conv_module.output_area*self.num_gates*self._conv_module.in_channels*k_area
@@ -171,7 +176,7 @@ class ChipNet(BasePruning):
         pruning_threshold = []
         problems = []
 
-        if test_only == False:
+        if test_only is False:
             for epoch in range(num_epochs):
                 print(f'Starting epoch {epoch + 1} / {num_epochs}')
                 self.unprune_model()
@@ -184,7 +189,7 @@ class ChipNet(BasePruning):
                 # exactly_zeros, exactly_ones = model.plot_zt()
                 # exact_zeros.append(exactly_zeros)
                 # exact_ones.append(exactly_ones)
-                
+
                 print(f'[{epoch + 1} / {num_epochs}] Validation after pruning')
                 threshold, problem = self.prune_model(self.target_budget, self.budget_type)
                 acc, _ = self.test(model, dataloaders['val'], criterion)
@@ -193,23 +198,23 @@ class ChipNet(BasePruning):
                 pruning_threshold.append(threshold)
                 remaining_after_pruning.append(remaining)
                 problems.append(problem)
-                
+
                 # 
                 beta=min(6., beta+(0.1/self.b_inc))
                 gamma=min(256, gamma*(2**(1./self.g_inc)))
                 self.set_beta_gamma(beta, gamma)
-                print("Changed beta to", beta, "changed gamma to", gamma)     
-                
-                if acc>best_acc:
+                print("Changed beta to", beta, "changed gamma to", gamma)
+
+                if acc > best_acc:
                     print("**Saving checkpoint**")
-                    best_acc=acc
+                    best_acc = acc
                     torch.save({
-                        "epoch" : epoch+1,
-                        "beta" : beta,
-                        "gamma" : gamma,
-                        "prune_threshold":threshold,
-                        "state_dict" : model.state_dict(),
-                        "accuracy" : acc,
+                        "epoch": epoch+1,
+                        "beta": beta,
+                        "gamma": gamma,
+                        "prune_threshold": threshold,
+                        "state_dict": model.state_dict(),
+                        "accuracy": acc,
                     }, f"checkpoints/{self.log_name}.pth")
 
                 df_data=np.array([remaining_before_pruning, remaining_after_pruning, valid_accuracy, pruning_accuracy, pruning_threshold, problems]).T
@@ -235,8 +240,8 @@ class ChipNet(BasePruning):
                 replace_bn(ch)
         self.prunable_modules = ModuleInjection.prunable_modules
         replace_bn(self.model)
-        
-    
+
+
     def prune_criterion(self, y_pred, y_true):
         ce_loss = self.ceLoss(y_pred, y_true)
         budget_loss = ((self.get_remaining(self.steepness, self.budget_type).to(self.device)-self.target_budget.to(self.device))**2).to(self.device)
@@ -262,17 +267,17 @@ class ChipNet(BasePruning):
 
     def smoothRound(self, x, steepness=20.):
         return 1./(1.+torch.exp(-1*steepness*(x-0.5)))
-    
+
     def n_remaining(self, module, steepness=20.):
         """returns the remaining number of channels"""
         return (module.pruned_zeta if module.is_pruned else self.smoothRound(module.get_zeta_t(), steepness)).sum()
-    
+
     def is_all_pruned(self, module):
         """checks if the whole block is pruned"""
         return self.n_remaining(module) == 0
-    
+
     def get_remaining(self, steepness=20., budget_type = 'channel_ratio'):
-        """return the fraction of active zeta_t (i.e > 0.5)""" 
+        """return the fraction of active zeta_t (i.e > 0.5)"""
         n_rem = 0
         n_total = 0
         for l_block in self.prunable_modules:
@@ -285,14 +290,14 @@ class ChipNet(BasePruning):
             elif budget_type == 'parameter_ratio':
                 k = l_block._conv_module.kernel_size[0]
                 prev_total = 3 if self.prev_module[l_block] is None else self.prev_module[l_block].num_gates
-                prev_remaining = 3 if self.prev_module[l_block] is None else self.n_remaining(self.prev_module[l_block], steepness) 
+                prev_remaining = 3 if self.prev_module[l_block] is None else self.n_remaining(self.prev_module[l_block], steepness)
                 n_rem += self.n_remaining(l_block, steepness)*prev_remaining*k*k
                 n_total += l_block.num_gates*prev_total*k*k
             elif budget_type == 'flops_ratio':
                 k = l_block._conv_module.kernel_size[0]
                 output_area = l_block._conv_module.output_area
                 prev_total = 3 if self.prev_module[l_block] is None else self.prev_module[l_block].num_gates
-                prev_remaining = 3 if self.prev_module[l_block] is None else self.n_remaining(self.prev_module[l_block], steepness) 
+                prev_remaining = 3 if self.prev_module[l_block] is None else self.n_remaining(self.prev_module[l_block], steepness)
                 curr_remaining = self.n_remaining(l_block, steepness)
                 n_rem += curr_remaining*prev_remaining*k*k*output_area + curr_remaining*output_area
                 n_total += l_block.num_gates*prev_total*k*k*output_area + l_block.num_gates*output_area
@@ -322,7 +327,7 @@ class ChipNet(BasePruning):
         plt.hist(zetas)
         plt.show()
         return exactly_zeros, exactly_ones
-    
+
     def get_crispnessLoss(self):
         """loss reponsible for making zeta_t 1 or 0"""
         loss = torch.FloatTensor([]).to(self.device)
@@ -365,7 +370,7 @@ class ChipNet(BasePruning):
             if threshold==None:
                 self.prune_threshold = self.calculate_prune_threshold(target_budget, budget_type)
                 threshold = min(self.prune_threshold, 0.9)
-                
+
         for l_block in self.prunable_modules:
             l_block.prune(threshold)
 
@@ -380,7 +385,7 @@ class ChipNet(BasePruning):
         """unprunes the network to again make pruning gates continuous"""
         for l_block in self.prunable_modules:
             l_block.unprune()
-    
+
     def prepare_for_finetuning(self, budget, budget_type = 'channel_ratio'):
         """freezes zeta"""
         self.model(torch.rand(2,3,32,32).to(self.device))
@@ -389,7 +394,7 @@ class ChipNet(BasePruning):
             while self.get_remaining(steepness=20., budget_type=budget_type)<budget:
                 threshold-=0.0001
                 self.prune_model(budget, finetuning=True, budget_type=budget_type, threshold=threshold)
-        return threshold      
+        return threshold
 
     def get_params_count(self):
         """returns the number of active and total parameters in the network"""
@@ -398,7 +403,7 @@ class ChipNet(BasePruning):
         for l_block in self.modules():
             if isinstance(l_block, PrunableBatchNorm2d):
                 active_param, total_param = l_block.get_params_count()
-                active_params+=active_param 
+                active_params+=active_param
                 total_params+=total_param
             if isinstance(l_block, nn.Linear):
                 linear_params = l_block.weight.view(-1).shape[0]
@@ -412,7 +417,7 @@ class ChipNet(BasePruning):
         active_volume = 0.
         for l_block in self.prunable_modules:
             active_volume_, total_volume_ = l_block.get_volume()
-            active_volume+=active_volume_ 
+            active_volume+=active_volume_
             total_volume+=total_volume_
         return active_volume, total_volume
 
@@ -422,10 +427,10 @@ class ChipNet(BasePruning):
         active_flops = 0.
         for l_block in self.prunable_modules:
             active_flops_, total_flops_ = l_block.get_flops()
-            active_flops+=active_flops_ 
+            active_flops+=active_flops_
             total_flops+=total_flops_
         return active_flops, total_flops
-    
+
     def get_channels(self):
         """returns the active and total number of channels in the network"""
         total_channels = 0.
@@ -439,7 +444,7 @@ class ChipNet(BasePruning):
         """explicitly sets the values of beta and gamma parameters"""
         for l_block in self.prunable_modules:
             l_block.set_beta_gamma(beta, gamma)
-    
+
     def check_abnormality(self):
         """checks for any abnormality in the pruning process"""
         n_removable = self.removable_orphans()
@@ -454,11 +459,14 @@ class ChipNet(BasePruning):
     def check_if_broken(self):
         """checks if the network is broken due to abnormal pruning"""
         for bn in self.prunable_modules:
-            if bn.is_imp and bn.pruned_zeta.sum()==0:
+            if bn.is_imp and bn.pruned_zeta.sum() == 0:
                 return True
         return False
 
     def removable_orphans(self):
+        '''
+        Description here
+        '''
         num_removed = 0
         bn_layers = self.model.get_bn_layers()
         for l_blocks in bn_layers:
@@ -468,6 +476,9 @@ class ChipNet(BasePruning):
         return num_removed
 
     def remove_orphans(self):
+        '''
+        Description here
+        '''
         num_removed = 0
         bn_layers = self.model.get_bn_layers()
         for l_blocks in bn_layers:

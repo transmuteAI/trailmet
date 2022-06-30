@@ -14,13 +14,14 @@ class BaseAlgorithm(object):
         self.cuda_id = kwargs.get('cuda_id', 0) 
         self.device = torch.device(f"cuda:{str(self.cuda_id)}")
         self.log_name = kwargs.get('log_dir', 'abc')
-        if os.path.exists('logs') == False:
+        if os.path.exists('logs') is False:
             os.mkdir('logs')
 
-        if os.path.exists('checkpoints') == False:
+        if os.path.exists('checkpoints') is False:
             os.mkdir('checkpoints')
 
     def compress_model(self):
+        '''Template function to be overwritten for each model compression method'''
         pass
 
     def pretrain(self, model, dataloaders, **kwargs):
