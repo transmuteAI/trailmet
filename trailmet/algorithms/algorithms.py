@@ -24,7 +24,7 @@ class BaseAlgorithm(object):
         '''Template function to be overwritten for each model compression method'''
         pass
 
-    def pretrain(self, model, dataloaders, **kwargs):
+    def base_train(self, model, dataloaders, **kwargs):
         best_acc = 0
         num_epochs = kwargs.get('EPOCHS', self.pretraining_epochs)
         test_only = kwargs.get('TEST_ONLY', False)

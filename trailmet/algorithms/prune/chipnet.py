@@ -132,8 +132,9 @@ class ChipNet(BasePruning):
         if 'PRETRAIN' in self.kwargs:
             print('starting pretraining')
             self.log_name = self.log_name + '_pretrained'
-            self.pretrain(self.model, self.dataloaders, **self.kwargs['PRETRAIN'])
+            self.base_train(self.model, self.dataloaders, **self.kwargs['PRETRAIN'])
             print('pretraining done')
+
         if 'PRUNE' in self.kwargs:
             print('starting pruning')
             self.log_name = self.log_name + '_pruning'
@@ -142,12 +143,13 @@ class ChipNet(BasePruning):
             self.model.to(self.device)
             self.prune(self.model, self.dataloaders, **self.kwargs['PRUNE'])
             print('pruning done')
+
         if 'FINETUNE' in self.kwargs:
             print('starting finetuning')
             print('preparing model for finetuning')
             self.prepare_for_finetuning(self.target_budget.item(), self.budget_type)
             self.log_name = self.log_name + '_finetuned'
-            super().pretrain(self.model, self.dataloaders, **self.kwargs['FINETUNE'])
+            self.base_train(self.model, self.dataloaders, **self.kwargs['FINETUNE'])
             print('finetuning done')
 
     def prune(self, model, dataloaders, **kwargs):
