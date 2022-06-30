@@ -7,7 +7,17 @@ import torch.optim as optim
 import torch.nn as nn
 from tqdm import tqdm as tqdm_notebook
 class BaseAlgorithm(object):
+    '''
+    Base Algorithm class that defines the structure of each model compression algorithm implemented in this library.
+    Every new algorithm is expected to directly use or overwrite the template functions defined below.
 
+    The root command to invoke the compression of any model is .compress_model(). Thus, it is required that all
+    algorithms complete this template function and use it as the first point of invoking the model compression process.
+
+    For methods that require to perform pretraining and fine-tuning, the implementation of base_train() method can
+    directly be used for both the tasks. In case of modifications, overwrite this function based on the needs.
+
+    '''
     def __init__(self, **kwargs):
 
         self.pretraining_epochs = 200
