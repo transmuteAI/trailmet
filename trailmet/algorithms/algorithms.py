@@ -30,12 +30,24 @@ class BaseAlgorithm(object):
         if os.path.exists('checkpoints') is False:
             os.mkdir('checkpoints')
 
-    def compress_model(self):
+    def compress_model(self) -> None:
         '''Template function to be overwritten for each model compression method'''
         pass
 
-    def base_train(self, model, dataloaders, **kwargs):
-        best_acc = 0
+    def base_train(self, model: , dataloaders: , **kwargs) -> None:
+        '''
+        This function is used to perform standard model training and can be used for various purposes, such as model
+        pretraining, fine-tuning of compressed models, among others. For cases, where base_train is not directly
+        applicable, feel free to overwrite wherever this parent class is inherited.
+
+        Params:
+            model:
+            dataloaders:
+            kwargs:
+
+        Returns:
+        '''
+        best_acc = 0    # setting to lowest possible value
         num_epochs = kwargs.get('EPOCHS', self.pretraining_epochs)
         test_only = kwargs.get('TEST_ONLY', False)
 
@@ -53,12 +65,12 @@ class BaseAlgorithm(object):
         valid_losses = []
         valid_accuracy = []
         
-        if test_only == False:
+        if test_only is False:
             for epoch in range(num_epochs):
                 adjust_learning_rate(optimizer, epoch, num_epochs, scheduler_type, lr)
                 t_loss = self.train_one_epoch(model, dataloaders['train'], criterion, optimizer)
                 acc, v_loss = self.test(model, dataloaders['val'], criterion)
-                if acc>best_acc:
+                if acc > best_acc:
                     print("**Saving model**")
                     best_acc=acc
                     torch.save({
@@ -80,7 +92,8 @@ class BaseAlgorithm(object):
 
     
 
-    def get_optimizer(self, optimizer_name, model, lr, weight_decay):
+    def get_optimizer(self, optimizer_name: str, model, lr, weight_decay):
+
         if optimizer_name == 'SGD':
             optimizer = optim.SGD(model.parameters(), lr=lr, weight_decay=weight_decay)
         else:
