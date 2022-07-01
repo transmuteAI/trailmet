@@ -44,8 +44,6 @@ class BaseAlgorithm(object):
             model:
             dataloaders:
             kwargs:
-
-        Returns:
         '''
         best_acc = 0    # setting to lowest possible value
         num_epochs = kwargs.get('EPOCHS', self.pretraining_epochs)
