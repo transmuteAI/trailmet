@@ -120,6 +120,14 @@ class BaseAlgorithm(object):
         return running_loss/counter
 
     def test(self, model, dataloader, loss_fn):
+        '''
+        This method is used to test the performance of the trained model.
+
+        Params:
+
+        Returns:
+
+        '''
         model.eval()
         counter = 0
         tk1 = tqdm_notebook(dataloader, total=len(dataloader))
