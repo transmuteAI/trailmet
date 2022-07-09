@@ -13,7 +13,8 @@ seed_everything(43)
 
 
 class PrunableBatchNorm2d(torch.nn.BatchNorm2d):
-    def __init__(self, num_features, conv_module=None):
+    """wrapper class for batch norm layer to make it prunable"""
+    def __init__(self, num_features: int, conv_module:nn.Conv2d = None):
         super(PrunableBatchNorm2d, self).__init__(num_features=num_features)
         self.is_imp = False
         self.is_pruned = False
@@ -38,16 +39,16 @@ class PrunableBatchNorm2d(torch.nn.BatchNorm2d):
         return out
 
     def get_zeta_i(self):
-        '''
-
-        '''
+        """returns the zeta_i by applying generalized logistic transformation on zeta"""
         return self.__generalized_logistic(self.zeta)
 
     def get_zeta_t(self):
+        """returns zeta_t by applying continuous heaviside tranformation on zeta_i"""
         zeta_i = self.get_zeta_i()
         return self.__continuous_heavy_side(zeta_i)
 
     def set_beta_gamma(self, beta, gamma):
+        """sets the values of beta and gamma"""
         self.beta.data.copy_(torch.Tensor([beta]))
         self.gamma.data.copy_(torch.Tensor([gamma]))
 
@@ -109,7 +110,7 @@ class ModuleInjection:
         return conv_module, new_bn
 
 class ChipNet(BasePruning):
-    "class to compress models using chipnet method"
+    """class to compress models using chipnet method"""
     def __init__(self, model, dataloaders, **kwargs):
         super(ChipNet, self).__init__(**kwargs)
         self.model = model
@@ -127,6 +128,7 @@ class ChipNet(BasePruning):
         self.ceLoss = nn.CrossEntropyLoss()
 
     def compress_model(self):
+        """function to compress model using chipnet method."""
         self.model.to(self.device)
 
         if 'PRETRAIN' in self.kwargs:
@@ -153,6 +155,7 @@ class ChipNet(BasePruning):
             print('finetuning done')
 
     def prune(self, model, dataloaders, **kwargs):
+        """function to prune a pretrained model using chipnet method"""
         num_epochs = kwargs.get('EPOCHS', 20)
         test_only = kwargs.get('TEST_ONLY', False)
         #### preparing optimizer ####
@@ -188,9 +191,6 @@ class ChipNet(BasePruning):
                 remaining = self.get_remaining(self.steepness, self.budget_type).item()
                 remaining_before_pruning.append(remaining)
                 valid_accuracy.append(acc)
-                # exactly_zeros, exactly_ones = model.plot_zt()
-                # exact_zeros.append(exactly_zeros)
-                # exact_ones.append(exactly_ones)
 
                 print(f'[{epoch + 1} / {num_epochs}] Validation after pruning')
                 threshold, problem = self.prune_model(self.target_budget, self.budget_type)
@@ -224,11 +224,13 @@ class ChipNet(BasePruning):
                 df.to_csv(f"logs/{self.log_name}.csv")
 
     def steepness_update_function(self, step):
+        """returns function to update steepness in budget loss of chipnet"""
         def update():
             self.steepness = min(60, self.steepness+step)
         return update
 
     def prepare_model_for_compression(self):
+        """prepares model for compression by replacing batchnorm layers"""
         ModuleInjection.pruning_method='prune'
         def replace_bn(m):
             for attr_str in dir(m):
@@ -245,12 +247,14 @@ class ChipNet(BasePruning):
 
 
     def prune_criterion(self, y_pred, y_true):
+        """loss function for pruning"""
         ce_loss = self.ceLoss(y_pred, y_true)
         budget_loss = ((self.get_remaining(self.steepness, self.budget_type).to(self.device)-self.target_budget.to(self.device))**2).to(self.device)
         crispness_loss = self.get_crispnessLoss()
         return budget_loss*self.budget_loss_weightage + crispness_loss*self.crispness_loss_weightage + ce_loss
 
     def calculate_prune_threshold(self, target_budget, budget_type):
+        """calculates the prune threshold for different budget types"""
         zetas = self.give_zetas()
         if budget_type in ['volume_ratio']:
             zeta_weights = self.give_zeta_weights()
@@ -466,9 +470,7 @@ class ChipNet(BasePruning):
         return False
 
     def removable_orphans(self):
-        '''
-        Description here
-        '''
+        """checks for orphan nodes from the network that are not being used in the computation graph"""
         num_removed = 0
         bn_layers = self.model.get_bn_layers()
         for l_blocks in bn_layers:
@@ -478,9 +480,7 @@ class ChipNet(BasePruning):
         return num_removed
 
     def remove_orphans(self):
-        '''
-        Description here
-        '''
+        """removes orphan nodes from the network that are not being used in the computation graph"""
         num_removed = 0
         bn_layers = self.model.get_bn_layers()
         for l_blocks in bn_layers:

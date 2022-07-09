@@ -7,7 +7,7 @@ import torch.optim as optim
 import torch.nn as nn
 from tqdm import tqdm as tqdm_notebook
 class BaseAlgorithm(object):
-    '''
+    """
     Base Algorithm class that defines the structure of each model compression algorithm implemented in this library.
     Every new algorithm is expected to directly use or overwrite the template functions defined below.
 
@@ -16,8 +16,7 @@ class BaseAlgorithm(object):
 
     For methods that require to perform pretraining and fine-tuning, the implementation of base_train() method can
     directly be used for both the tasks. In case of modifications, overwrite this function based on the needs.
-
-    '''
+    """
     def __init__(self, **kwargs):
 
         self.pretraining_epochs = 200
@@ -31,20 +30,15 @@ class BaseAlgorithm(object):
             os.mkdir('checkpoints')
 
     def compress_model(self) -> None:
-        '''Template function to be overwritten for each model compression method'''
+        """Template function to be overwritten for each model compression method"""
         pass
 
-    def base_train(self, model: , dataloaders: , **kwargs) -> None:
-        '''
+    def base_train(self, model, dataloaders, **kwargs) -> None:
+        """
         This function is used to perform standard model training and can be used for various purposes, such as model
         pretraining, fine-tuning of compressed models, among others. For cases, where base_train is not directly
         applicable, feel free to overwrite wherever this parent class is inherited.
-
-        Params:
-            model:
-            dataloaders:
-            kwargs:
-        '''
+        """
         best_acc = 0    # setting to lowest possible value
         num_epochs = kwargs.get('EPOCHS', self.pretraining_epochs)
         test_only = kwargs.get('TEST_ONLY', False)
@@ -91,7 +85,7 @@ class BaseAlgorithm(object):
     
 
     def get_optimizer(self, optimizer_name: str, model, lr, weight_decay):
-
+        """returns the optimizer with the given name"""
         if optimizer_name == 'SGD':
             optimizer = optim.SGD(model.parameters(), lr=lr, weight_decay=weight_decay)
         else:
@@ -99,6 +93,7 @@ class BaseAlgorithm(object):
         return optimizer
 
     def train_one_epoch(self, model, dataloader, loss_fn, optimizer, extra_functionality = None):
+        """standard training loop which can be used for various purposes with an extra functionality function to add to its working at the end of the loop."""
         model.train()
         counter = 0
         tk1 = tqdm_notebook(dataloader, total=len(dataloader))
@@ -120,14 +115,7 @@ class BaseAlgorithm(object):
         return running_loss/counter
 
     def test(self, model, dataloader, loss_fn):
-        '''
-        This method is used to test the performance of the trained model.
-
-        Params:
-
-        Returns:
-
-        '''
+        """This method is used to test the performance of the trained model."""
         model.eval()
         counter = 0
         tk1 = tqdm_notebook(dataloader, total=len(dataloader))
