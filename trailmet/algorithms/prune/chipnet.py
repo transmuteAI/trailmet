@@ -45,7 +45,7 @@ class PrunableBatchNorm2d(torch.nn.BatchNorm2d):
     def get_zeta_t(self):
         """returns zeta_t by applying continuous heaviside tranformation on zeta_i"""
         zeta_i = self.get_zeta_i()
-        return self.__continuous_heavy_side(zeta_i)
+        return self.__continuous_heaviside(zeta_i)
 
     def set_beta_gamma(self, beta, gamma):
         """sets the values of beta and gamma"""
@@ -55,7 +55,7 @@ class PrunableBatchNorm2d(torch.nn.BatchNorm2d):
     def __generalized_logistic(self, x):
         return 1./(1.+torch.exp(-self.beta*x))
 
-    def __continuous_heavy_side(self, x):
+    def __continuous_heaviside(self, x):
         return 1-torch.exp(-self.gamma*x)+x*torch.exp(-self.gamma)
 
     def prune(self, threshold):
@@ -132,27 +132,20 @@ class ChipNet(BasePruning):
         self.model.to(self.device)
 
         if 'PRETRAIN' in self.kwargs:
-            print('starting pretraining')
             self.log_name = self.log_name + '_pretrained'
             self.base_train(self.model, self.dataloaders, **self.kwargs['PRETRAIN'])
-            print('pretraining done')
 
         if 'PRUNE' in self.kwargs:
-            print('starting pruning')
             self.log_name = self.log_name + '_pruning'
             print('preparing model for pruning')
             self.prepare_model_for_compression()
             self.model.to(self.device)
             self.prune(self.model, self.dataloaders, **self.kwargs['PRUNE'])
-            print('pruning done')
 
         if 'FINETUNE' in self.kwargs:
-            print('starting finetuning')
-            print('preparing model for finetuning')
             self.prepare_for_finetuning(self.target_budget.item(), self.budget_type)
             self.log_name = self.log_name + '_finetuned'
             self.base_train(self.model, self.dataloaders, **self.kwargs['FINETUNE'])
-            print('finetuning done')
 
     def prune(self, model, dataloaders, **kwargs):
         """function to prune a pretrained model using chipnet method"""
@@ -226,7 +219,7 @@ class ChipNet(BasePruning):
     def steepness_update_function(self, step):
         """returns function to update steepness in budget loss of chipnet"""
         def update():
-            self.steepness = min(60, self.steepness+step)
+            self.steepness = min(60, self.steepness+step) # increasing schedule of steepness to a maximum value of 60 to avoid gradient explosion.
         return update
 
     def prepare_model_for_compression(self):
@@ -272,6 +265,7 @@ class ChipNet(BasePruning):
         return prune_threshold
 
     def smoothRound(self, x, steepness=20.):
+        """function to apply smooth rounding on zeta for more accurate budget calculation"""
         return 1. / (1. + torch.exp(-1 * steepness*(x - 0.5)))
 
     def n_remaining(self, module, steepness=20.):
@@ -406,7 +400,7 @@ class ChipNet(BasePruning):
         """returns the number of active and total parameters in the network"""
         total_params = 0
         active_params = 0
-        for l_block in self.modules():
+        for l_block in self.model.modules():
             if isinstance(l_block, PrunableBatchNorm2d):
                 active_param, total_param = l_block.get_params_count()
                 active_params += active_param
