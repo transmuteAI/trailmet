@@ -1,10 +1,10 @@
 
 import os
 import torchvision
-from ..dataset import Dataset
+from .dataset import BaseDataset
 
 
-class ImageNetDataset(Dataset):
+class ImageNetDataset(BaseDataset):
 
     def __init__(self, name=None, root=None,
                  train=True, transform=None,
