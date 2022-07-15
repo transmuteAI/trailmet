@@ -1,0 +1,119 @@
+
+import torch
+import torch.nn as nn
+from trailmet.utils import seed_everything
+from trailmet.algorithms.quantize.quantize import BaseQuantization
+from trailmet.algorithms.quantize.q_utils import get_train_samples, validate_model
+from trailmet.algorithms.quantize.quant_module import *
+from trailmet.algorithms.quantize.recon_module import *
+
+seed_everything(42)
+
+
+class BRECQ(BaseQuantization):
+    """
+    class to quantize models using block reconstruction method
+    :param W_BITS: bitwidth for weight quantization
+    :param A_BITS: bitwidth for activation quantization
+    :param CHANNEL_WISE: apply channel_wise quantization for weights
+    :param ACT_QUANT: apply activation quantization
+    :param SET_8BIT_HEAD_STEM: Set the first and the last layer to 8-bit
+    :param NUM_SAMPLES: size of calibration dataset
+    :param WEIGHT: weight of rounding cost vs the reconstruction loss
+    :param ITERS_W: number of iteration for AdaRound
+    :param ITERS_A: number of iteration for LSQ
+    :params LR: learning rate for LSQ
+    """
+    def __init__(self, model: nn.Module, dataloaders, **kwargs):
+        super(BRECQ, self).__init__(**kwargs)
+        self.model = model
+        self.train_loader = dataloaders['train']
+        self.val_loader = dataloaders['val']
+        self.kwargs = kwargs
+        self.w_bits = self.kwargs.get('W_BITS', 8)
+        self.a_bits = self.kwargs.get('A_BITS', 8)
+        self.channel_wise = self.kwargs.get('CHANNEL_WISE', True)
+        self.act_quant = self.kwargs.get('ACT_QUANT', True)
+        self.set_8bit_head_stem = self.kwargs.get('SET_8BIT_HEAD_STEM', True)
+        self.num_samples = self.kwargs.get('NUM_SAMPLES', 1024)
+        self.weight = self.kwargs.get('WEIGHT', 0.01)
+        self.iters_w = self.kwargs.get('ITERS_W', 2000)
+        self.iters_a = self.kwargs.get('ITERS_A', 2000)
+        self.lr = self.kwargs.get('LR', 4e-4)
+        self.p = 2.4         # Lp norm minimization for LSQ
+        self.b_start = 20    # temperature at the beginning of calibration
+        self.b_end = 2       # temperature at the end of calibration
+        self.test_before_calibration = True
+
+
+    def compress_classifier(self):
+        """function to build quantization parameters"""
+        wq_params = {'n_bits': self.w_bits, 'channel_wise': self.channel_wise, 'scale_method': 'mse'}
+        aq_params = {'n_bits': self.a_bits, 'channel_wise': False, 'scale_method': 'mse', 'leaf_param': self.act_quant}
+        self.model.cuda()
+        self.model.eval()
+        self.qnn = QuantModel(model=self.model, weight_quant_params=wq_params, act_quant_params=aq_params)
+        self.qnn.cuda()
+        self.qnn.eval()
+        
+        if self.set_8bit_head_stem:
+            print('Setting the first and the last layer to 8-bit')
+            self.qnn.set_first_last_layer_to_8bit()
+        
+        self.cali_data = get_train_samples(self.train_loader, self.num_samples)
+        device = next(self.qnn.parameters()).device
+        
+        # Initialiaze weight quantization parameters 
+        self.qnn.set_quant_state(True, False)
+        _ = self.qnn(self.cali_data[:64].to(device))
+        if self.test_before_calibration:
+            print('Quantized accuracy before brecq: {}'.format(validate_model(self.val_loader, self.qnn)))
+        
+        # Start weight calibration
+        kwargs_opt = dict(cali_data=self.cali_data, iters=self.iters_w, weight=self.weight, asym=True,
+                  b_range=(self.b_start, self.b_end), warmup=0.2, act_quant=False, opt_mode='mse')
+        self.recon_model(self.qnn, kwargs_opt=kwargs_opt)
+        self.qnn.set_quant_state(weight_quant=True, act_quant=False)
+        print('Weight quantization accuracy: {}'.format(validate_model(self.val_loader, self.qnn)))
+
+        if self.act_quant:
+            # Initialize activation quantization parameters
+            self.qnn.set_quant_state(True, True)
+            with torch.no_grad():
+                _ = self.qnn(self.cali_data[:64].to(device))
+            
+            # Disable output quantization because network output
+            # does not get involved in further computation
+            self.qnn.disable_network_output_quantization()
+            
+            # Start activation rounding calibration
+            kwargs_opt = dict(cali_data=self.cali_data, iters=self.iters_a, act_quant=True, opt_mode='mse', lr=self.lr, p=self.p)
+            self.recon_model(self.qnn, kwargs_opt=kwargs_opt)
+            self.qnn.set_quant_state(weight_quant=True, act_quant=True)
+            print('Full quantization (W{}A{}) accuracy: {}'.format(self.w_bits, self.a_bits, validate_model(self.val_loader, self.qnn))) 
+
+
+    def recon_model(self, model: nn.Module, **kwargs_opt):
+        """
+        Block reconstruction. For the first and last layers, we can only apply layer reconstruction.
+        """
+        for name, module in model.named_children():
+            if isinstance(module, QuantModule):
+                if module.ignore_reconstruction is True:
+                    print('Ignore reconstruction of layer {}'.format(name))
+                    continue
+                else:
+                    print('Reconstruction for layer {}'.format(name))
+                    layer_reconstruction(self.qnn, module, **kwargs_opt)
+            elif isinstance(module, BaseQuantBlock):
+                if module.ignore_reconstruction is True:
+                    print('Ignore reconstruction of block {}'.format(name))
+                    continue
+                else:
+                    print('Reconstruction for block {}'.format(name))
+                    block_reconstruction(self.qnn, module, **kwargs_opt)
+            else:
+                self.recon_model(self, module, **kwargs_opt)
+
+
+    
