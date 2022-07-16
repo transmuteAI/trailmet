@@ -109,7 +109,7 @@ class UniformAffineQuantizer(nn.Module):
                     if score < best_score:
                         best_score = score
                         delta = (new_max - new_min) / (2 ** self.n_bits - 1)
-                        zero_point = (- new_min / delta).round()
+                        zero_point = round(- new_min / delta)
             else:
                 raise NotImplementedError
 
@@ -117,7 +117,7 @@ class UniformAffineQuantizer(nn.Module):
 
     def quantize(self, x, max, min):
         delta = (max - min) / (2 ** self.n_bits - 1)
-        zero_point = (- min / delta).round()
+        zero_point = round(- min / delta)
         # we assume weight quantization is always signed
         x_int = torch.round(x / delta)
         x_quant = torch.clamp(x_int + zero_point, 0, self.n_levels - 1)
@@ -242,7 +242,7 @@ class AdaRoundQuantizer(nn.Module):
             if self.soft_targets:
                 x_int = x_floor + self.get_soft_targets()
             else:
-                x_int = x_floor + (self.alpha >= 0).float()
+                x_int = x_floor + float(self.alpha >= 0)
         else:
             raise ValueError('Wrong rounding mode')
 
@@ -302,11 +302,11 @@ class QuantBasicBlock(BaseQuantBlock):
     def __init__(self, basic_block: BasicBlock, weight_quant_params: dict = {}, act_quant_params: dict = {}):
         super().__init__(act_quant_params)
         self.conv1 = QuantModule(basic_block.conv1, weight_quant_params, act_quant_params)
-        self.conv1.activation_function = basic_block.relu1
+        self.conv1.activation_function = basic_block.activ
         self.conv2 = QuantModule(basic_block.conv2, weight_quant_params, act_quant_params, disable_act_quant=True)
 
         # modify the activation function to ReLU
-        self.activation_function = basic_block.relu2
+        self.activation_function = basic_block.activ
 
         if basic_block.downsample is None:
             self.downsample = None
@@ -334,13 +334,13 @@ class QuantBottleneck(BaseQuantBlock):
     def __init__(self, bottleneck: Bottleneck, weight_quant_params: dict = {}, act_quant_params: dict = {}):
         super().__init__(act_quant_params)
         self.conv1 = QuantModule(bottleneck.conv1, weight_quant_params, act_quant_params)
-        self.conv1.activation_function = bottleneck.relu1
+        self.conv1.activation_function = bottleneck.activ
         self.conv2 = QuantModule(bottleneck.conv2, weight_quant_params, act_quant_params)
-        self.conv2.activation_function = bottleneck.relu2
+        self.conv2.activation_function = bottleneck.activ
         self.conv3 = QuantModule(bottleneck.conv3, weight_quant_params, act_quant_params, disable_act_quant=True)
 
         # modify the activation function to ReLU
-        self.activation_function = bottleneck.relu3
+        self.activation_function = bottleneck.activ
 
         if bottleneck.downsample is None:
             self.downsample = None
@@ -401,7 +401,6 @@ class QuantInvertedResidual(BaseQuantBlock):
 specials = {
     BasicBlock: QuantBasicBlock,
     Bottleneck: QuantBottleneck,
-    # ResBottleneckBlock: QuantResBottleneckBlock,
     InvertedResidual: QuantInvertedResidual,
 }
 
