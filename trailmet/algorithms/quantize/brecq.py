@@ -46,14 +46,14 @@ class BRECQ(BaseQuantization):
         self.b_start = 20    # temperature at the beginning of calibration
         self.b_end = 2       # temperature at the end of calibration
         self.test_before_calibration = True
-
-
-    def compress_classifier(self):
-        """function to build quantization parameters"""
-        wq_params = {'n_bits': self.w_bits, 'channel_wise': self.channel_wise, 'scale_method': 'mse'}
-        aq_params = {'n_bits': self.a_bits, 'channel_wise': False, 'scale_method': 'mse', 'leaf_param': self.act_quant}
         self.device = torch.device('cuda:{}'.format(self.gpu_id))
         torch.cuda.set_device(self.gpu_id)
+
+
+    def compress_model(self):
+        """method to build quantization parameters and calibrate weights and/or activations"""
+        wq_params = {'n_bits': self.w_bits, 'channel_wise': self.channel_wise, 'scale_method': 'mse'}
+        aq_params = {'n_bits': self.a_bits, 'channel_wise': False, 'scale_method': 'mse', 'leaf_param': self.act_quant}
         self.model = self.model.to(self.device)
         self.model.eval()
         self.qnn = QuantModel(model=self.model, weight_quant_params=wq_params, act_quant_params=aq_params)
@@ -101,7 +101,9 @@ class BRECQ(BaseQuantization):
 
     def recon_model(self, model: nn.Module, **kwargs):
         """
-        Block reconstruction. For the first and last layers, we can only apply layer reconstruction.
+        Method for model parameters reconstruction. Takes in quantized model
+        and optimizes weights by applying layer-wise reconstruction for first 
+        and last layer, and block reconstruction otherwise.
         """
         for name, module in model.named_children():
             if isinstance(module, QuantModule):
