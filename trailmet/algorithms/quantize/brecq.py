@@ -37,9 +37,11 @@ class BRECQ(BaseQuantization):
         self.set_8bit_head_stem = self.kwargs.get('SET_8BIT_HEAD_STEM', True)
         self.num_samples = self.kwargs.get('NUM_SAMPLES', 1024)
         self.weight = self.kwargs.get('WEIGHT', 0.01)
-        self.iters_w = self.kwargs.get('ITERS_W', 2000)
-        self.iters_a = self.kwargs.get('ITERS_A', 2000)
+        self.iters_w = self.kwargs.get('ITERS_W', 20000)
+        self.iters_a = self.kwargs.get('ITERS_A', 20000)
         self.lr = self.kwargs.get('LR', 4e-4)
+        self.gpu_id = self.kwargs.get('GPU_ID', 0)
+        self.calib_bs = self.kwargs.get('CALIB_BS', 64)
         self.p = 2.4         # Lp norm minimization for LSQ
         self.b_start = 20    # temperature at the beginning of calibration
         self.b_end = 2       # temperature at the end of calibration
@@ -50,50 +52,54 @@ class BRECQ(BaseQuantization):
         """function to build quantization parameters"""
         wq_params = {'n_bits': self.w_bits, 'channel_wise': self.channel_wise, 'scale_method': 'mse'}
         aq_params = {'n_bits': self.a_bits, 'channel_wise': False, 'scale_method': 'mse', 'leaf_param': self.act_quant}
-        self.model.cuda()
+        self.device = torch.device('cuda:{}'.format(self.gpu_id))
+        torch.cuda.set_device(self.gpu_id)
+        self.model = self.model.to(self.device)
         self.model.eval()
         self.qnn = QuantModel(model=self.model, weight_quant_params=wq_params, act_quant_params=aq_params)
-        self.qnn.cuda()
+        self.qnn = self.qnn.to(self.device)
         self.qnn.eval()
         
         if self.set_8bit_head_stem:
-            print('Setting the first and the last layer to 8-bit')
+            print('==> Setting the first and the last layer to 8-bit')
             self.qnn.set_first_last_layer_to_8bit()
         
         self.cali_data = get_train_samples(self.train_loader, self.num_samples)
-        device = next(self.qnn.parameters()).device
+        # device = next(self.qnn.parameters()).device
         
         # Initialiaze weight quantization parameters 
         self.qnn.set_quant_state(True, False)
-        _ = self.qnn(self.cali_data[:64].to(device))
+        print('==> Initializing weight quantization parameters')
+        _ = self.qnn(self.cali_data[:self.calib_bs].to(self.device))
         if self.test_before_calibration:
-            print('Quantized accuracy before brecq: {}'.format(validate_model(self.val_loader, self.qnn)))
+            print('Quantized accuracy before brecq: {}'.format(validate_model(self.val_loader, self.qnn, device=self.device)))
         
         # Start weight calibration
-        kwargs_opt = dict(cali_data=self.cali_data, iters=self.iters_w, weight=self.weight, asym=True,
+        kwargs = dict(cali_data=self.cali_data, iters=self.iters_w, weight=self.weight, asym=True,
                   b_range=(self.b_start, self.b_end), warmup=0.2, act_quant=False, opt_mode='mse')
-        self.recon_model(self.qnn, kwargs_opt=kwargs_opt)
+        print('==> Starting weight calibration')
+        self.recon_model(self.qnn, **kwargs)
         self.qnn.set_quant_state(weight_quant=True, act_quant=False)
-        print('Weight quantization accuracy: {}'.format(validate_model(self.val_loader, self.qnn)))
+        print('Weight quantization accuracy: {}'.format(validate_model(self.val_loader, self.qnn, device=self.device)))
 
         if self.act_quant:
             # Initialize activation quantization parameters
             self.qnn.set_quant_state(True, True)
             with torch.no_grad():
-                _ = self.qnn(self.cali_data[:64].to(device))
+                _ = self.qnn(self.cali_data[:self.calib_bs].to(self.device))
             
             # Disable output quantization because network output
             # does not get involved in further computation
             self.qnn.disable_network_output_quantization()
             
             # Start activation rounding calibration
-            kwargs_opt = dict(cali_data=self.cali_data, iters=self.iters_a, act_quant=True, opt_mode='mse', lr=self.lr, p=self.p)
-            self.recon_model(self.qnn, kwargs_opt=kwargs_opt)
+            kwargs = dict(cali_data=self.cali_data, iters=self.iters_a, act_quant=True, opt_mode='mse', lr=self.lr, p=self.p)
+            self.recon_model(self.qnn, **kwargs)
             self.qnn.set_quant_state(weight_quant=True, act_quant=True)
-            print('Full quantization (W{}A{}) accuracy: {}'.format(self.w_bits, self.a_bits, validate_model(self.val_loader, self.qnn))) 
+            print('Full quantization (W{}A{}) accuracy: {}'.format(self.w_bits, self.a_bits, validate_model(self.val_loader, self.qnn, device=self.device))) 
 
 
-    def recon_model(self, model: nn.Module, **kwargs_opt):
+    def recon_model(self, model: nn.Module, **kwargs):
         """
         Block reconstruction. For the first and last layers, we can only apply layer reconstruction.
         """
@@ -104,16 +110,16 @@ class BRECQ(BaseQuantization):
                     continue
                 else:
                     print('Reconstruction for layer {}'.format(name))
-                    layer_reconstruction(self.qnn, module, **kwargs_opt)
+                    layer_reconstruction(self.qnn, module, **kwargs)
             elif isinstance(module, BaseQuantBlock):
                 if module.ignore_reconstruction is True:
                     print('Ignore reconstruction of block {}'.format(name))
                     continue
                 else:
                     print('Reconstruction for block {}'.format(name))
-                    block_reconstruction(self.qnn, module, **kwargs_opt)
+                    block_reconstruction(self.qnn, module, **kwargs)
             else:
-                self.recon_model(self, module, **kwargs_opt)
+                self.recon_model(module, **kwargs)
 
 
     
