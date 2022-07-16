@@ -92,7 +92,7 @@ class UniformAffineQuantizer(nn.Module):
                     warnings.warn('Quantization range close to zero: [{}, {}]'.format(x_min, x_max))
                     delta = 1e-8
 
-                zero_point = round(-x_min / delta)
+                zero_point = torch.round(-x_min / delta)
                 delta = torch.tensor(delta).type_as(x)
 
             elif self.scale_method == 'mse':
@@ -109,7 +109,7 @@ class UniformAffineQuantizer(nn.Module):
                     if score < best_score:
                         best_score = score
                         delta = (new_max - new_min) / (2 ** self.n_bits - 1)
-                        zero_point = round(- new_min / delta)
+                        zero_point = torch.round(- new_min / delta)
             else:
                 raise NotImplementedError
 
@@ -117,7 +117,7 @@ class UniformAffineQuantizer(nn.Module):
 
     def quantize(self, x, max, min):
         delta = (max - min) / (2 ** self.n_bits - 1)
-        zero_point = round(- min / delta)
+        zero_point = torch.round(- min / delta)
         # we assume weight quantization is always signed
         x_int = torch.round(x / delta)
         x_quant = torch.clamp(x_int + zero_point, 0, self.n_levels - 1)
@@ -242,7 +242,7 @@ class AdaRoundQuantizer(nn.Module):
             if self.soft_targets:
                 x_int = x_floor + self.get_soft_targets()
             else:
-                x_int = x_floor + float(self.alpha >= 0)
+                x_int = x_floor + (self.alpha >= 0).float()
         else:
             raise ValueError('Wrong rounding mode')
 
