@@ -1,3 +1,5 @@
+# wrapper classes for building quantization modules
+# source: https://github.com/yhhhli/BRECQ/tree/main/quant
 
 import torch
 import torch.nn as nn
@@ -7,7 +9,7 @@ import warnings
 from typing import Union
 from trailmet.models.resnet import BasicBlock, Bottleneck
 from trailmet.models.mobilenetv2 import InvertedResidual
-from trailmet.algorithms.quantize.q_utils import lp_loss, search_fold_and_remove_bn, round_ste, StraightThrough
+from trailmet.algorithms.quantize.quantize import BaseQuantization as BQ
 
 #=========================
 ##### Quantize Layer #####
@@ -50,7 +52,7 @@ class UniformAffineQuantizer(nn.Module):
             self.inited = True
 
         # start quantization
-        x_int = round_ste(x / self.delta) + self.zero_point
+        x_int = BQ.round_ste(x / self.delta) + self.zero_point
         x_quant = torch.clamp(x_int, 0, self.n_levels - 1)
         x_dequant = (x_quant - self.zero_point) * self.delta
         return x_dequant
@@ -105,7 +107,7 @@ class UniformAffineQuantizer(nn.Module):
                     x_q = self.quantize(x, new_max, new_min)
                     # Lp norm minimization as described in LAPQ
                     # https://arxiv.org/abs/1911.07190
-                    score = lp_loss(x, x_q, p=2.4, reduction='all')
+                    score = BQ.lp_loss(x, x_q, p=2.4, reduction='all')
                     if score < best_score:
                         best_score = score
                         delta = (new_max - new_min) / (2 ** self.n_bits - 1)
@@ -165,7 +167,7 @@ class QuantModule(nn.Module):
         self.weight_quantizer = UniformAffineQuantizer(**weight_quant_params)
         self.act_quantizer = UniformAffineQuantizer(**act_quant_params)
 
-        self.activation_function = StraightThrough()
+        self.activation_function = BQ.StraightThrough()
         self.ignore_reconstruction = False
 
         self.se_module = se_module
@@ -231,7 +233,7 @@ class AdaRoundQuantizer(nn.Module):
         if self.round_mode == 'nearest':
             x_int = torch.round(x / self.delta)
         elif self.round_mode == 'nearest_ste':
-            x_int = round_ste(x / self.delta)
+            x_int = BQ.round_ste(x / self.delta)
         elif self.round_mode == 'stochastic':
             x_floor = torch.floor(x / self.delta)
             rest = (x / self.delta) - x_floor  # rest of rounding
@@ -283,7 +285,7 @@ class BaseQuantBlock(nn.Module):
         # initialize quantizer
 
         self.act_quantizer = UniformAffineQuantizer(**act_quant_params)
-        self.activation_function = StraightThrough()
+        self.activation_function = BQ.StraightThrough()
 
         self.ignore_reconstruction = False
 
@@ -411,7 +413,7 @@ specials = {
 class QuantModel(nn.Module):
     def __init__(self, model: nn.Module, weight_quant_params: dict = {}, act_quant_params: dict = {}):
         super().__init__()
-        search_fold_and_remove_bn(model)
+        BQ.FoldBN.search_fold_and_remove_bn(model)
         self.model = model
         self.quant_module_refactor(self.model, weight_quant_params, act_quant_params)
 
@@ -434,11 +436,11 @@ class QuantModel(nn.Module):
             elif isinstance(child_module, (nn.ReLU, nn.ReLU6)):
                 if prev_quantmodule is not None:
                     prev_quantmodule.activation_function = child_module
-                    setattr(module, name, StraightThrough())
+                    setattr(module, name, BQ.StraightThrough())
                 else:
                     continue
 
-            elif isinstance(child_module, StraightThrough):
+            elif isinstance(child_module, BQ.StraightThrough):
                 continue
 
             else:

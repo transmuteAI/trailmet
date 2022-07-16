@@ -1,9 +1,10 @@
+# source: https://github.com/yhhhli/BRECQ/tree/main/quant
 
 import torch
 import torch.nn.functional as F
 import torch.distributed as dist
 from typing import Union
-from trailmet.algorithms.quantize.q_utils import lp_loss, StraightThrough
+from trailmet.algorithms.quantize.quantize import BaseQuantization as BQ
 from trailmet.algorithms.quantize.quant_module import AdaRoundQuantizer, QuantModule, BaseQuantBlock, QuantModel
 
 
@@ -268,7 +269,7 @@ class LayerLossFunction:
         """
         self.count += 1
         if self.rec_loss == 'mse':
-            rec_loss = lp_loss(pred, tgt, p=self.p)
+            rec_loss = BQ.lp_loss(pred, tgt, p=self.p)
         elif self.rec_loss == 'fisher_diag':
             rec_loss = ((pred - tgt).pow(2) * grad.pow(2)).sum(1).mean()
         elif self.rec_loss == 'fisher_full':
@@ -326,7 +327,7 @@ def layer_reconstruction(model: QuantModel, layer: QuantModule, cali_data: torch
 
     if not include_act_func:
         org_act_func = layer.activation_function
-        layer.activation_function = StraightThrough()
+        layer.activation_function = BQ.StraightThrough()
 
     if not act_quant:
         # Replace weight quantizer to AdaRoundQuantizer
@@ -425,7 +426,7 @@ class BlockLossFunction:
         """
         self.count += 1
         if self.rec_loss == 'mse':
-            rec_loss = lp_loss(pred, tgt, p=self.p)
+            rec_loss = BQ.lp_loss(pred, tgt, p=self.p)
         elif self.rec_loss == 'fisher_diag':
             rec_loss = ((pred - tgt).pow(2) * grad.pow(2)).sum(1).mean()
         elif self.rec_loss == 'fisher_full':
@@ -484,7 +485,7 @@ def block_reconstruction(model: QuantModel, block: BaseQuantBlock, cali_data: to
 
     if not include_act_func:
         org_act_func = block.activation_function
-        block.activation_function = StraightThrough()
+        block.activation_function = BQ.StraightThrough()
 
     if not act_quant:
         # Replace weight quantizer to AdaRoundQuantizer
