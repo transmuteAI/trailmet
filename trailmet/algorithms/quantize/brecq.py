@@ -3,12 +3,11 @@ import torch
 import torch.nn as nn
 from trailmet.utils import seed_everything
 from trailmet.algorithms.quantize.quantize import BaseQuantization
-from trailmet.algorithms.quantize.q_utils import get_train_samples, validate_model
-from trailmet.algorithms.quantize.quant_module import *
-from trailmet.algorithms.quantize.recon_module import *
+from trailmet.algorithms.quantize.quant_model import QuantModel, BaseQuantBlock, QuantModule
+from trailmet.algorithms.quantize.reconstruct import layer_reconstruction, block_reconstruction
+
 
 seed_everything(42)
-
 
 class BRECQ(BaseQuantization):
     """
@@ -51,7 +50,9 @@ class BRECQ(BaseQuantization):
 
 
     def compress_model(self):
-        """method to build quantization parameters and calibrate weights and/or activations"""
+        """
+        method to build quantization parameters and finetune weights and/or activations
+        """
         wq_params = {'n_bits': self.w_bits, 'channel_wise': self.channel_wise, 'scale_method': 'mse'}
         aq_params = {'n_bits': self.a_bits, 'channel_wise': False, 'scale_method': 'mse', 'leaf_param': self.act_quant}
         self.model = self.model.to(self.device)
@@ -64,7 +65,7 @@ class BRECQ(BaseQuantization):
             print('==> Setting the first and the last layer to 8-bit')
             self.qnn.set_first_last_layer_to_8bit()
         
-        self.cali_data = get_train_samples(self.train_loader, self.num_samples)
+        self.cali_data = self.get_calib_samples(self.train_loader, self.num_samples)
         # device = next(self.qnn.parameters()).device
         
         # Initialiaze weight quantization parameters 
@@ -72,15 +73,15 @@ class BRECQ(BaseQuantization):
         print('==> Initializing weight quantization parameters')
         _ = self.qnn(self.cali_data[:self.calib_bs].to(self.device))
         if self.test_before_calibration:
-            print('Quantized accuracy before brecq: {}'.format(validate_model(self.val_loader, self.qnn, device=self.device)))
+            print('Quantized accuracy before brecq: {}'.format(self.test(self.qnn, self.val_loader, device=self.device)))
         
         # Start weight calibration
         kwargs = dict(cali_data=self.cali_data, iters=self.iters_w, weight=self.weight, asym=True,
                   b_range=(self.b_start, self.b_end), warmup=0.2, act_quant=False, opt_mode='mse')
         print('==> Starting weight calibration')
-        self.recon_model(self.qnn, **kwargs)
+        self.reconstruct_model(self.qnn, **kwargs)
         self.qnn.set_quant_state(weight_quant=True, act_quant=False)
-        print('Weight quantization accuracy: {}'.format(validate_model(self.val_loader, self.qnn, device=self.device)))
+        print('Weight quantization accuracy: {}'.format(self.test(self.qnn, self.val_loader, device=self.device)))
 
         if self.act_quant:
             # Initialize activation quantization parameters
@@ -94,12 +95,12 @@ class BRECQ(BaseQuantization):
             
             # Start activation rounding calibration
             kwargs = dict(cali_data=self.cali_data, iters=self.iters_a, act_quant=True, opt_mode='mse', lr=self.lr, p=self.p)
-            self.recon_model(self.qnn, **kwargs)
+            self.reconstruct_model(self.qnn, **kwargs)
             self.qnn.set_quant_state(weight_quant=True, act_quant=True)
-            print('Full quantization (W{}A{}) accuracy: {}'.format(self.w_bits, self.a_bits, validate_model(self.val_loader, self.qnn, device=self.device))) 
+            print('Full quantization (W{}A{}) accuracy: {}'.format(self.w_bits, self.a_bits, self.test(self.qnn, self.val_loader, device=self.device))) 
 
 
-    def recon_model(self, model: nn.Module, **kwargs):
+    def reconstruct_model(self, model: nn.Module, **kwargs):
         """
         Method for model parameters reconstruction. Takes in quantized model
         and optimizes weights by applying layer-wise reconstruction for first 
@@ -121,7 +122,7 @@ class BRECQ(BaseQuantization):
                     print('Reconstruction for block {}'.format(name))
                     block_reconstruction(self.qnn, module, **kwargs)
             else:
-                self.recon_model(module, **kwargs)
+                self.reconstruct_model(module, **kwargs)
 
 
     

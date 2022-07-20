@@ -9,11 +9,8 @@ import warnings
 from typing import Union
 from trailmet.models.resnet import BasicBlock, Bottleneck
 from trailmet.models.mobilenetv2 import InvertedResidual
-from trailmet.algorithms.quantize.quantize import BaseQuantization as BQ
+from trailmet.algorithms.quantize.quantize import StraightThrough, FoldBN, BaseQuantization as BQ
 
-#=========================
-##### Quantize Layer #####
-#=========================
 
 class UniformAffineQuantizer(nn.Module):
     """
@@ -98,6 +95,8 @@ class UniformAffineQuantizer(nn.Module):
                 delta = torch.tensor(delta).type_as(x)
 
             elif self.scale_method == 'mse':
+                # For Lp norm minimization as described in LAPQ
+                # https://arxiv.org/abs/1911.07190
                 x_max = x.max()
                 x_min = x.min()
                 best_score = 1e+10
@@ -105,8 +104,6 @@ class UniformAffineQuantizer(nn.Module):
                     new_max = x_max * (1.0 - (i * 0.01))
                     new_min = x_min * (1.0 - (i * 0.01))
                     x_q = self.quantize(x, new_max, new_min)
-                    # Lp norm minimization as described in LAPQ
-                    # https://arxiv.org/abs/1911.07190
                     score = BQ.lp_loss(x, x_q, p=2.4, reduction='all')
                     if score < best_score:
                         best_score = score
@@ -136,76 +133,13 @@ class UniformAffineQuantizer(nn.Module):
             ' leaf_param={leaf_param}'
         return s.format(**self.__dict__)
 
-class QuantModule(nn.Module):
-    """
-    Quantized Module that can perform quantized convolution or normal convolution.
-    To activate quantization, please use set_quant_state function.
-    """
-    def __init__(self, org_module: Union[nn.Conv2d, nn.Linear], weight_quant_params: dict = {},
-                 act_quant_params: dict = {}, disable_act_quant: bool = False, se_module=None):
-        super(QuantModule, self).__init__()
-        if isinstance(org_module, nn.Conv2d):
-            self.fwd_kwargs = dict(stride=org_module.stride, padding=org_module.padding,
-                                   dilation=org_module.dilation, groups=org_module.groups)
-            self.fwd_func = F.conv2d
-        else:
-            self.fwd_kwargs = dict()
-            self.fwd_func = F.linear
-        self.weight = org_module.weight
-        self.org_weight = org_module.weight.data.clone()
-        if org_module.bias is not None:
-            self.bias = org_module.bias
-            self.org_bias = org_module.bias.data.clone()
-        else:
-            self.bias = None
-            self.org_bias = None
-        # de-activate the quantized forward default
-        self.use_weight_quant = False
-        self.use_act_quant = False
-        self.disable_act_quant = disable_act_quant
-        # initialize quantizer
-        self.weight_quantizer = UniformAffineQuantizer(**weight_quant_params)
-        self.act_quantizer = UniformAffineQuantizer(**act_quant_params)
-
-        self.activation_function = BQ.StraightThrough()
-        self.ignore_reconstruction = False
-
-        self.se_module = se_module
-        self.extra_repr = org_module.extra_repr
-
-    def forward(self, input: torch.Tensor):
-        if self.use_weight_quant:
-            weight = self.weight_quantizer(self.weight)
-            bias = self.bias
-        else:
-            weight = self.org_weight
-            bias = self.org_bias
-        out = self.fwd_func(input, weight, bias, **self.fwd_kwargs)
-        # disable act quantization is designed for convolution before elemental-wise operation,
-        # in that case, we apply activation function and quantization after ele-wise op.
-        if self.se_module is not None:
-            out = self.se_module(out)
-        out = self.activation_function(out)
-        if self.disable_act_quant:
-            return out
-        if self.use_act_quant:
-            out = self.act_quantizer(out)
-        return out
-
-    def set_quant_state(self, weight_quant: bool = False, act_quant: bool = False):
-        self.use_weight_quant = weight_quant
-        self.use_act_quant = act_quant
-
-#===================
-##### AdaRound #####
-#===================
 
 class AdaRoundQuantizer(nn.Module):
     """
     Adaptive Rounding Quantizer, used to optimize the rounding policy
     by reconstructing the intermediate output.
     Based on
-     Up or Down? Adaptive Rounding for Post-Training Quantization: https://arxiv.org/abs/2004.10568
+    Up or Down? Adaptive Rounding for Post-Training Quantization: https://arxiv.org/abs/2004.10568
     :param uaq: UniformAffineQuantizer, used to initialize quantization parameters in this quantizer
     :param round_mode: controls the forward pass in this quantizer
     :param weight_tensor: initialize alpha
@@ -268,6 +202,71 @@ class AdaRoundQuantizer(nn.Module):
 
 
 #=========================
+##### Quantize Layer #####
+#=========================
+
+class QuantModule(nn.Module):
+    """
+    Quantized Module that can perform quantized convolution or normal convolution.
+    To activate quantization, please use set_quant_state function.
+    """
+    def __init__(self, org_module: Union[nn.Conv2d, nn.Linear], weight_quant_params: dict = {},
+                 act_quant_params: dict = {}, disable_act_quant: bool = False, se_module=None):
+        super(QuantModule, self).__init__()
+        if isinstance(org_module, nn.Conv2d):
+            self.fwd_kwargs = dict(stride=org_module.stride, padding=org_module.padding,
+                                   dilation=org_module.dilation, groups=org_module.groups)
+            self.fwd_func = F.conv2d
+        else:
+            self.fwd_kwargs = dict()
+            self.fwd_func = F.linear
+        self.weight = org_module.weight
+        self.org_weight = org_module.weight.data.clone()
+        if org_module.bias is not None:
+            self.bias = org_module.bias
+            self.org_bias = org_module.bias.data.clone()
+        else:
+            self.bias = None
+            self.org_bias = None
+        # de-activate the quantized forward default
+        self.use_weight_quant = False
+        self.use_act_quant = False
+        self.disable_act_quant = disable_act_quant
+        # initialize quantizer
+        self.weight_quantizer = UniformAffineQuantizer(**weight_quant_params)
+        self.act_quantizer = UniformAffineQuantizer(**act_quant_params)
+
+        self.activation_function = StraightThrough()
+        self.ignore_reconstruction = False
+
+        self.se_module = se_module
+        self.extra_repr = org_module.extra_repr
+
+    def forward(self, input: torch.Tensor):
+        if self.use_weight_quant:
+            weight = self.weight_quantizer(self.weight)
+            bias = self.bias
+        else:
+            weight = self.org_weight
+            bias = self.org_bias
+        out = self.fwd_func(input, weight, bias, **self.fwd_kwargs)
+        # disable act quantization is designed for convolution before elemental-wise operation,
+        # in that case, we apply activation function and quantization after ele-wise op.
+        if self.se_module is not None:
+            out = self.se_module(out)
+        out = self.activation_function(out)
+        if self.disable_act_quant:
+            return out
+        if self.use_act_quant:
+            out = self.act_quantizer(out)
+        return out
+
+    def set_quant_state(self, weight_quant: bool = False, act_quant: bool = False):
+        self.use_weight_quant = weight_quant
+        self.use_act_quant = act_quant
+
+
+#=========================
 ##### Quantize Block #####
 #=========================
 
@@ -285,7 +284,7 @@ class BaseQuantBlock(nn.Module):
         # initialize quantizer
 
         self.act_quantizer = UniformAffineQuantizer(**act_quant_params)
-        self.activation_function = BQ.StraightThrough()
+        self.activation_function = StraightThrough()
 
         self.ignore_reconstruction = False
 
@@ -413,7 +412,7 @@ specials = {
 class QuantModel(nn.Module):
     def __init__(self, model: nn.Module, weight_quant_params: dict = {}, act_quant_params: dict = {}):
         super().__init__()
-        BQ.FoldBN.search_fold_and_remove_bn(model)
+        FoldBN.search_fold_and_remove_bn(model)
         self.model = model
         self.quant_module_refactor(self.model, weight_quant_params, act_quant_params)
 
@@ -436,11 +435,11 @@ class QuantModel(nn.Module):
             elif isinstance(child_module, (nn.ReLU, nn.ReLU6)):
                 if prev_quantmodule is not None:
                     prev_quantmodule.activation_function = child_module
-                    setattr(module, name, BQ.StraightThrough())
+                    setattr(module, name, StraightThrough())
                 else:
                     continue
 
-            elif isinstance(child_module, BQ.StraightThrough):
+            elif isinstance(child_module, StraightThrough):
                 continue
 
             else:
