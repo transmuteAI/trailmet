@@ -11,7 +11,9 @@ seed_everything(42)
 
 class BRECQ(BaseQuantization):
     """
-    class to quantize models using block reconstruction method
+    Class for post-training quantization of models using block reconstruction 
+    method based on - BRECQ: PUSHING THE LIMIT OF POST-TRAINING QUANTIZATION 
+    BY BLOCK RECONSTRUCTION :- https://arxiv.org/abs/2102.05426 
     :param W_BITS: bitwidth for weight quantization
     :param A_BITS: bitwidth for activation quantization
     :param CHANNEL_WISE: apply channel_wise quantization for weights

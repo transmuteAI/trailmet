@@ -193,7 +193,7 @@ class AdaRoundQuantizer(nn.Module):
     def init_alpha(self, x: torch.Tensor):
         x_floor = torch.floor(x / self.delta)
         if self.round_mode == 'learned_hard_sigmoid':
-            print('Init alpha to be FP32')
+            # print('Init alpha to be FP32')
             rest = (x / self.delta) - x_floor  # rest of rounding [0, 1)
             alpha = -torch.log((self.zeta - self.gamma) / (rest - self.gamma) - 1)  # => sigmoid(alpha) = rest
             self.alpha = nn.Parameter(alpha)
@@ -412,8 +412,9 @@ specials = {
 class QuantModel(nn.Module):
     def __init__(self, model: nn.Module, weight_quant_params: dict = {}, act_quant_params: dict = {}):
         super().__init__()
-        FoldBN.search_fold_and_remove_bn(model)
         self.model = model
+        bn = FoldBN()
+        bn.search_fold_and_remove_bn(self.model)
         self.quant_module_refactor(self.model, weight_quant_params, act_quant_params)
 
     def quant_module_refactor(self, module: nn.Module, weight_quant_params: dict = {}, act_quant_params: dict = {}):

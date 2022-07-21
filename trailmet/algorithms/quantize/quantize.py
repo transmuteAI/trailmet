@@ -20,7 +20,7 @@ class BaseQuantization(BaseAlgorithm):
         """
         return (x.round() - x).detach() + x
 
-    def get_calib_samples(train_loader, num_samples):
+    def get_calib_samples(self, train_loader, num_samples):
         """
         Get calibration-set samples for finetuning weights and clipping parameters
         """
@@ -68,7 +68,6 @@ class BaseQuantization(BaseAlgorithm):
         running_acc1=0
         running_acc5=0
         running_loss=0
-        total=0
         with torch.no_grad():
             for images, targets in tk1:
                 counter+=1
@@ -76,17 +75,15 @@ class BaseQuantization(BaseAlgorithm):
                 targets = targets.to(device)
                 outputs = model(images)
                 acc1, acc5 = self.accuracy(outputs, targets, topk=(1,5))
+                running_acc1+=acc1[0].item()
+                running_acc5+=acc5[0].item()
                 if loss_fn is not None:
                     loss = loss_fn(outputs, targets)
-                running_acc1+=acc1[0]
-                running_acc5+=acc5[0]
-                running_loss+=loss.item()
-                total+=outputs.shape[0]
-                if loss_fn is None:
-                    tk1.set_postfix(acc1=running_acc1/total, acc5=running_acc5/total)
+                    running_loss+=loss.item()
+                    tk1.set_postfix(loss=running_loss/counter, acc1=running_acc1/counter, acc5=running_acc5/counter)
                 else:
-                    tk1.set_postfix(loss=running_loss/counter, acc1=running_acc1/total, acc5=running_acc5/total)
-        return running_acc1/total, running_loss/counter
+                    tk1.set_postfix(acc1=running_acc1/counter, acc5=running_acc5/counter)
+        return running_acc1/counter, running_acc5/counter, running_loss/counter
 
 
 class StraightThrough(nn.Module):
@@ -98,9 +95,8 @@ class StraightThrough(nn.Module):
     def forward(self, input):
         return input
     
-# To-Do : add param list in docstring
 class FoldBN():
-    """class to help fold batch norm to prev layer activations"""
+    """used to help fold batch norm to prev layer activations"""
     def __init__(self):
         pass
 
