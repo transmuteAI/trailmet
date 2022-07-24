@@ -1,10 +1,10 @@
 
-from trailmet.algorithms.algorithms import Algorithms
+from trailmet.algorithms.algorithms import BaseAlgorithm
 
-class Distillation(Algorithms):
+class Distillation(BaseAlgorithm):
 
-    def __init__(self):
-        super(Distillation, self).__init__()
+    def __init__(self,**kwargs):
+        super(Distillation, self).__init__(**kwargs)
 
         pass
 
