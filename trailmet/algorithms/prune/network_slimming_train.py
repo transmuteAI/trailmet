@@ -234,7 +234,9 @@ class NetworkSlimming:
     self.args.weight_decay = self.kwargs['NETWORK_SLIMMING_ARGS'].get('WEIGHT_DECAY' ,1e-4)
     self.args.log_interval = self.kwargs['NETWORK_SLIMMING_ARGS'].get('LOG_INTERVAL' , 100)     # number of intervals after which accuracy and loss values are printed during training
     self.args.arch = self.kwargs['NETWORK_SLIMMING_ARGS'].get('ARCH' ,'vgg16')      # model architecture
-    self.args.depth = self.kwargs['NETWORK_SLIMMING_ARGS'].get('DEPTH' , 164)        # depth of model (if resnet is being used)
+    self.args.depth = self.kwargs['NETWORK_SLIMMING_ARGS'].get('DEPTH' , 164) 
+    self.args.percent = self.kwargs['NETWORK_SLIMMING_ARGS'].get('PERCENT' , 0.6)
+           # depth of model (if resnet is being used)
     if(self.args.fine_tune):
       self.args.file_name = './{}/Fine_tuned/{}_checkpoint.pth.tar'.format(self.args.data,self.args.arch)
     else:
