@@ -133,6 +133,13 @@ class UniformAffineQuantizer(nn.Module):
             ' leaf_param={leaf_param}'
         return s.format(**self.__dict__)
 
+    def get_scales(self):
+        return self.delta, self.zero_point
+
+    def set_scales(self, delta_val, zp_val):
+        self.delta = delta_val
+        self.zero_point = zp_val
+
 
 class AdaRoundQuantizer(nn.Module):
     """
@@ -481,3 +488,14 @@ class QuantModel(nn.Module):
                     m.act_quantizer.delta.data /= dist.get_world_size()
                     dist.all_reduce(m.act_quantizer.delta.data)
 
+    def set_quant_params(self, scales: list):
+        module_list = []
+        for name, module in self.model.named_modules():
+            if isinstance(module, QuantModule):
+                module_list.append(name)
+        assert len(scales) == 2*len(module_list), 'scaling params not matching with modules'
+        i = 0
+        for module in self.model.modules():
+            if isinstance(module, QuantModule):
+                module.weight_quantizer.set_scales(scales[i], scales[i+1])
+                i+=1 
