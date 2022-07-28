@@ -4,7 +4,7 @@ from torch.autograd import Variable
 import math
 
 class vgg(nn.Module):
-    def __init__(self, dataset='cifar10', init_weights=True, cfg=None):
+    def __init__(self, dataset='cifar10', init_weights=True, cfg=None , num_classes = 10):
         super(vgg, self).__init__()
         if cfg is None:
             cfg = [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 256, 'M', 512, 512, 512, 512, 'M', 512, 512, 512, 512]

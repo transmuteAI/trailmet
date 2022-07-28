@@ -77,6 +77,10 @@ class Process(BaseAlgorithm):
                                   transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
                               ])),
                             batch_size=args.test_bs, shuffle=True, **kwargs)
+            else:
+              assert(args.train_loader is not None and args.test_loader is not None)
+              train_loader = args.train_loader 
+              test_loader = args.test_loader
 
             ########################################################################
             device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -95,10 +99,10 @@ class Process(BaseAlgorithm):
                 checkpoint = torch.load(args.path)
                 cfg = checkpoint['cfg']
                 if (args.arch == 'vgg'):
-                    model = models.vgg(cfg=cfg)
+                    model = models.vgg(cfg=cfg , num_classes = args.num_classes )
                     model = model.to(device)
                 elif(args.arch== 'resnet'):
-                    model = models.__dict__[args.arch](dataset=args.data, depth=args.depth, cfg=cfg)
+                    model = models.__dict__[args.arch](dataset=args.data, depth=args.depth, cfg=cfg , num_classes = args.num_classes)
                     model = model.to(device)
                 #checkpoint = torch.load(args.path)
                 model.load_state_dict(checkpoint['state_dict'])
@@ -219,9 +223,12 @@ class OfNoUse:
 class NetworkSlimming:
   def __init__(self , **kwargs):
     self.args = OfNoUse()
-    self.args.data = self.kwargs['NETWORK_SLIMMING_ARGS'].get('DATA' ,'cifar10')       # dataset on which model is trained
+    self.args.data = self.kwargs['NETWORK_SLIMMING_ARGS'].get('DATA' ,None)
+    self.args.num_classes = self.kwargs['NETWORK_SLIMMING_ARGS'].get('NUM_CLASSES' , 10)      # dataset on which model is trained
     self.args.sparsity_reg = self.kwargs['NETWORK_SLIMMING_ARGS'].get('SPARSITY_REG' , True)    # true if training is done with sparsity regularization
     self.args.thr = self.kwargs['NETWORK_SLIMMING_ARGS'].get('THR' ,1e-5)      # the sparsity regularization hyperparameter value
+    self.args.train_loader = self.kwargs['NETWORK_SLIMMING_ARGS'].get('TRAIN_LOADER' , None)
+    self.args.test_loader = self.kwargs['NETWORK_SLIMMING_ARGS'].get('TEST_LOADER' , None)
     self.args.fine_tune = self.kwargs['NETWORK_SLIMMING_ARGS'].get('FINE_TUNE' ,False)        # true if pruned model is being fine-tuned
     self.args.path = self.kwargs['NETWORK_SLIMMING_ARGS'].get('PATH' ,None)      # path from where the pruned model is loaded
     self.args.resume = self.kwargs['NETWORK_SLIMMING_ARGS'].get('RESUME' ,False)      # true of we have to resume training of some model whose checkpoint is saved

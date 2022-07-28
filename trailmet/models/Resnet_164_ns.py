@@ -51,7 +51,7 @@ class Bottleneck(nn.Module):
         return out
 
 class resnet(nn.Module):
-    def __init__(self, depth=164, dataset='cifar10', cfg=None):
+    def __init__(self, depth=164, dataset='cifar10', cfg=None , num_classes = 10):
         super(resnet, self).__init__()
         assert (depth - 2) % 9 == 0, 'depth should be 9n+2'
 
@@ -79,6 +79,8 @@ class resnet(nn.Module):
             self.fc = nn.Linear(cfg[-1], 10)
         elif dataset == 'cifar100':
             self.fc = nn.Linear(cfg[-1], 100)
+        else:
+            self.fc = nn.Linear(cfg[-1],num_classes)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
