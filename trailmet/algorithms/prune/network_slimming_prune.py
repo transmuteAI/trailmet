@@ -4,13 +4,12 @@ import torch.nn as nn
 from torch.autograd import Variable
 from torchvision import datasets,transforms
 import sys
-sys.path.append('C:\\Users\\wolfi\\trailmet\\trailmet\\models')
-sys.path.append('C:\\Users\\wolfi\\trailmet\\trailmet')
+sys.path.append("../../../../")
 import numpy as np
-from ...models import channel_selection
-from ...models import models
-########################################################################
-
+from trailmet.trailmet.models import channel_selection
+import trailmet.trailmet.models as models
+#from ...models import models
+""
 class get_params():
   def __init__(self,dataset,test_bs,percent,model,save,depth,arch):
     self.dataset=dataset
@@ -20,11 +19,11 @@ class get_params():
     self.save=save        # path where pruned model will be saved
     self.depth=depth      # depth of model if arch is resnet
     self.arch=arch        # vgg-16 and resnet family is supported
-
 initial=get_params('cifar10',64,0.6,'/content/drive/MyDrive/VGG-16 NS/CIFAR-10/trained/resnet_model_best.pth.tar','/content/drive/MyDrive/VGG-16 NS/CIFAR-10/pruned/resnet_pruned1.pth.tar',164,'resnet')
-
-##########################################################################
-"""defining model architecture"""
+""
+"""
+defining model architecture
+"""
 class prune_it:
     def __init__(self,params = initial):
                 args = params
@@ -88,24 +87,24 @@ class prune_it:
 
                 ##############################################################################
 
-                def test():
-                    kwargs = {'num_workers': 2, 'pin_memory': True}
-                    test_loader = torch.utils.data.DataLoader(
-                        datasets.CIFAR10('./data', train=False,download=True, transform=transforms.Compose([
-                            transforms.ToTensor(),
-                            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])),
-                        batch_size=args.test_bs, shuffle=True, **kwargs)
-                    model.eval()
-                    correct = 0
-                    for data, target in test_loader:
-                        data, target = data.cuda(), target.cuda()
-                        data, target = Variable(data, volatile=True), Variable(target)
-                        output = model(data)
-                        pred = output.data.max(1, keepdim=True)[1]
-                        correct += pred.eq(target.data.view_as(pred)).cpu().sum()
+#                 def test():
+#                     kwargs = {'num_workers': 2, 'pin_memory': True}
+#                     test_loader = torch.utils.data.DataLoader(
+#                         datasets.CIFAR10('./data', train=False,download=True, transform=transforms.Compose([
+#                             transforms.ToTensor(),
+#                             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])),
+#                         batch_size=args.test_bs, shuffle=True, **kwargs)
+#                     model.eval()
+#                     correct = 0
+#                     for data, target in test_loader:
+#                         data, target = data.cuda(), target.cuda()
+#                         data, target = Variable(data, volatile=True), Variable(target)
+#                         output = model(data)
+#                         pred = output.data.max(1, keepdim=True)[1]
+#                         correct += pred.eq(target.data.view_as(pred)).cpu().sum()
 
-                    print('\nTest set: Accuracy: {}/{} ({:.1f}%)\n'.format(correct, len(test_loader.dataset), 100. * correct / len(test_loader.dataset)))
-                    return correct / float(len(test_loader.dataset))
+#                     print('\nTest set: Accuracy: {}/{} ({:.1f}%)\n'.format(correct, len(test_loader.dataset), 100. * correct / len(test_loader.dataset)))
+#                     return correct / float(len(test_loader.dataset))
 
                 ############################################################################
                 """defining a pruned model"""
@@ -230,4 +229,4 @@ class prune_it:
                 ##################################################################################
                 print(newmodel)
                 model = newmodel
-                test()
+                #test()

@@ -1,60 +1,22 @@
-""" importing all the necessary libraries"""
 from __future__ import print_function
-from lib2to3.pytree import Base
-###################################################################
+""
 import sys
-sys.path.append('C:\\Users\wolfi\\trailmet\\trailmet\\models')
-sys.path.append('C:\\Users\\wolfi\\trailmet\\trailmet')
-sys.path.append('C:\\Users\\wolfi\\trailmet\\trailmet\\algorithms')
-
+sys.path.append("../../../../")
 import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torchvision import datasets, transforms
-from ...models import models
+#from ...models import models
 import shutil
-from network_slimming_prune import prune_it
-from ..algorithms import BaseAlgorithm
-
-#####################################################################
-
-"""class get_params to store all the training hyper parameters and other details."""
-
-#####################################################################
-
-# class GetParams():
-#   def __init__(self,dataset,sparsity_reg,reg_value,fine_tune,path,train_bs,test_bs,epochs,lr,momentum,weight_decay,intervals,arch,depth,resume):
-#     self.data=dataset       # dataset on which model is trained
-#     self.sparsity_reg=sparsity_reg      # true if training is done with sparsity regularization
-#     self.thr=reg_value      # the sparsity regularization hyperparameter value
-#     self.fine_tune=fine_tune        # true if pruned model is being fine-tuned
-#     self.path=path      # path from where the pruned model is loaded
-#     self.resume=resume      # true of we have to resume training of some model whose checkpoint is saved
-#     self.train_bs=train_bs      # training batch size
-#     self.test_bs=test_bs        # test batch size
-#     self.epochs=epochs
-#     self.lr=lr
-#     self.momentum=momentum
-#     self.weight_decay=weight_decay
-#     self.log_interval=intervals     # number of intervals after which accuracy and loss values are printed during training
-#     self.arch=arch      # model architecture
-#     self.depth=depth        # depth of model (if resnet is being used)
-#     if(self.fine_tune):
-#       self.file_name = './{}/Fine_tuned/{}_checkpoint.pth.tar'.format(self.data,self.arch)
-#     else:
-#       self.file_name = './{}/Base_line/{}_checkpoint.pth.tar'.format(self.data,self.arch)
-#       self.model = './{}/Base_line/{}_checkpoint.pth.tar'.format(self.data,self.arch)
-      
-
-# initial =GetParams('CIFAR10',False,0.00001,True,'/content/drive/MyDrive/VGG-16 NS/CIFAR-10/pruned/resnet_pruned1.pth.tar',64,256,100,1e-1,0.9,1e-4,100,'resnet',164,False)
-
-####################################################################
-
+from trailmet.trailmet.algorithms.prune.network_slimming_prune import prune_it
+from trailmet.trailmet.algorithms import BaseAlgorithm
+import trailmet.trailmet.models as models
 torch.cuda.manual_seed(42)
-
-"""making train loaders and test loaders from given dataset"""
-####################################################################
+"""
+making train loaders and test loaders from given dataset
+"""
+""
 class Process(BaseAlgorithm):
         def __init__(self,params):
             super(Process,self).__init__()
@@ -113,7 +75,7 @@ class Process(BaseAlgorithm):
                 elif(args.arch=='resnet'):
                     model = models.__dict__[args.arch](dataset=args.data, depth=args.depth)
                     model = model.to(device)
-
+            print(model)
             optimizer = self.get_optimizer(optimizer_name=args.optimizer_name , model=model, lr=args.lr , weight_decay = args.weight_decay) if args.optimizer_name is not None else optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
             criteria= nn.CrossEntropyLoss()
             ############################################################################
@@ -139,50 +101,52 @@ class Process(BaseAlgorithm):
             ############################################################################
 
             """separate function to update the values of scaling parameter"""
-            def updateBN():
+            def updateBN(model= model):
+                
               for m in model.modules():
                 if isinstance(m, nn.BatchNorm2d):
                   m.weight.grad.data.add_(args.thr*torch.sign(m.weight.data))
+                
 
             ###########################################################################
 
             """training function"""
-            # def train(epoch):
-            #   model.train()
-            #   for batch_idx, (data, target) in enumerate(train_loader):
-            #     data=data.to(device)
-            #     target=target.to(device)
-            #     optimizer.zero_grad()
-            #     output = model(data)
-            #     loss = criteria(output, target)
-            #     loss.backward()
-            #     if args.sparsity_reg:  # here, we are updating the values of scaling parameter
-            #       updateBN()
-            #     optimizer.step()
-            #     if (batch_idx % args.log_interval) == 0:
-            #       print('Train Epoch: {} [{}/{} ({:.1f}%)]\tLoss: {:.6f}'.format(epoch, batch_idx * len(data), len(train_loader.dataset),100. * batch_idx / len(train_loader), loss))
+            def train(epoch):
+              model.train()
+              for batch_idx, (data, target) in enumerate(train_loader):
+                data=data.to(device)
+                target=target.to(device)
+                optimizer.zero_grad()
+                output = model(data)
+                loss = criteria(output, target)
+                loss.backward()
+                if args.sparsity_reg:  # here, we are updating the values of scaling parameter
+                  updateBN()
+                optimizer.step()
+                if (batch_idx % args.log_interval) == 0:
+                  print('Train Epoch: {} [{}/{} ({:.1f}%)]\tLoss: {:.6f}'.format(epoch, batch_idx * len(data), len(train_loader.dataset),100. * batch_idx / len(train_loader), loss))
 
             ###############################################################################
 
 
             """testing function"""
             ###############################################################################
-            # def test():
-            #   model.eval()
-            #   test_loss = 0
-            #   correct = 0
-            #   with torch.no_grad():
-            #     for data, target in test_loader:
-            #       data=data.to(device)
-            #       target=target.to(device)
-            #       output = model(data)
-            #       test_loss += criteria(output, target).item()
-            #       _,pred = torch.max(output,1)
-            #       correct+=(pred == target).sum().item()
+            def test():
+              model.eval()
+              test_loss = 0
+              correct = 0
+              with torch.no_grad():
+                for data, target in test_loader:
+                  data=data.to(device)
+                  target=target.to(device)
+                  output = model(data)
+                  test_loss += criteria(output, target).item()
+                  _,pred = torch.max(output,1)
+                  correct+=(pred == target).sum().item()
 
-            #   test_loss /= len(test_loader.dataset)
-            #   print('\nTest set: Average loss: {}, Accuracy: {}/{} ({:.1f}%)\n'.format(test_loss, correct, len(test_loader.dataset),100. * correct / len(test_loader.dataset)))
-            #   return correct / float(len(test_loader.dataset))
+              test_loss /= len(test_loader.dataset)
+              print('\nTest set: Average loss: {}, Accuracy: {}/{} ({:.1f}%)\n'.format(test_loss, correct, len(test_loader.dataset),100. * correct / len(test_loader.dataset)))
+              return correct / float(len(test_loader.dataset))
 
             ################################################################################
 
@@ -191,7 +155,7 @@ class Process(BaseAlgorithm):
             def save_checkpoint(state, is_best, filename=args.file_name):
                 torch.save(state, filename)
                 if is_best:
-                    shutil.copyfile(filename, args.file_name)
+                    shutil.copyfile(filename, 'model_best.pth.tar')
 
             #################################################################################
 
@@ -202,13 +166,16 @@ class Process(BaseAlgorithm):
               if epoch in [args.epochs*0.5, args.epochs*0.75]:
                 for param_group in optimizer.param_groups:
                   param_group['lr'] *= 0.1
-              #train(epoch)
-              loss = self.train_one_epoch(model=model , dataloader=train_loader , loss_fn=criteria , optimizer=optimizer , extra_functionality=updateBN() if args.sparsity_reg else None)
+              train(epoch)
+              loss = self.train_one_epoch(model=model , dataloader=train_loader , loss_fn=criteria , optimizer=optimizer , extra_functionality=None)
+              updateBN()
               prec1, loss_test = self.test(model = model , dataloader = test_loader , loss_fn = criteria)
               print("Train set :: Average loss: {} \n".format(loss))
               print('\nTest set: Average loss: {}, Accuracy: {} \n'.format(loss_test, prec1*100 , " "))
-              is_best = prec1 > best_prec1
-              best_prec1 = max(prec1, best_prec1)
+#               prec1 = test()
+#               is_best = prec1 > best_prec1
+#               best_prec1 = max(prec1, best_prec1)
+              is_best = prec1>best_prec1
               save_checkpoint({
                     'epoch': epoch + 1,
                     'state_dict': model.state_dict(),
@@ -222,35 +189,42 @@ class OfNoUse:
   pass
 class NetworkSlimming:
   def __init__(self , **kwargs):
+    #super(NetworkSlimming,self).__init__(**kwargs)
     self.args = OfNoUse()
-    self.args.data = self.kwargs['NETWORK_SLIMMING_ARGS'].get('DATA' ,None)
-    self.args.num_classes = self.kwargs['NETWORK_SLIMMING_ARGS'].get('NUM_CLASSES' , 10)      # dataset on which model is trained
-    self.args.sparsity_reg = self.kwargs['NETWORK_SLIMMING_ARGS'].get('SPARSITY_REG' , True)    # true if training is done with sparsity regularization
-    self.args.thr = self.kwargs['NETWORK_SLIMMING_ARGS'].get('THR' ,1e-5)      # the sparsity regularization hyperparameter value
-    self.args.train_loader = self.kwargs['NETWORK_SLIMMING_ARGS'].get('TRAIN_LOADER' , None)
-    self.args.test_loader = self.kwargs['NETWORK_SLIMMING_ARGS'].get('TEST_LOADER' , None)
-    self.args.fine_tune = self.kwargs['NETWORK_SLIMMING_ARGS'].get('FINE_TUNE' ,False)        # true if pruned model is being fine-tuned
-    self.args.path = self.kwargs['NETWORK_SLIMMING_ARGS'].get('PATH' ,None)      # path from where the pruned model is loaded
-    self.args.resume = self.kwargs['NETWORK_SLIMMING_ARGS'].get('RESUME' ,False)      # true of we have to resume training of some model whose checkpoint is saved
-    self.args.train_bs = self.kwargs['NETWORK_SLIMMING_ARGS'].get('TRAIN_BS' ,64)      # training batch size
-    self.args.test_bs = self.kwargs['NETWORK_SLIMMING_ARGS'].get('TEST_BS' ,256)        # test batch size
-    self.args.epochs = self.kwargs['NETWORK_SLIMMING_ARGS'].get('EPOCHS' ,100)
-    self.args.optimizer_name = self.kwargs['NETWORK_SLIMMING_ARGS'].get('OPTIMIZER_NAME', None)
-    self.args.lr = self.kwargs['NETWORK_SLIMMING_ARGS'].get('LR' ,1e-1)
-    self.args.momentum = self.kwargs['NETWORK_SLIMMING_ARGS'].get('MOMENTUM' ,0.9)
-    self.args.weight_decay = self.kwargs['NETWORK_SLIMMING_ARGS'].get('WEIGHT_DECAY' ,1e-4)
-    self.args.log_interval = self.kwargs['NETWORK_SLIMMING_ARGS'].get('LOG_INTERVAL' , 100)     # number of intervals after which accuracy and loss values are printed during training
-    self.args.arch = self.kwargs['NETWORK_SLIMMING_ARGS'].get('ARCH' ,'vgg16')      # model architecture
-    self.args.depth = self.kwargs['NETWORK_SLIMMING_ARGS'].get('DEPTH' , 164) 
-    self.args.percent = self.kwargs['NETWORK_SLIMMING_ARGS'].get('PERCENT' , 0.6)
+    self.kwargs = kwargs
+    self.args.data = self.kwargs.get('DATA' ,None)
+    self.args.num_classes = self.kwargs.get('NUM_CLASSES' , 10)      # dataset on which model is trained
+    self.args.sparsity_reg = self.kwargs.get('SPARSITY_REG' , True)    # true if training is done with sparsity regularization
+    self.args.thr = self.kwargs.get('THR' ,1e-5)      # the sparsity regularization hyperparameter value
+    self.args.train_loader = self.kwargs.get('TRAIN_LOADER' , None)
+    self.args.test_loader = self.kwargs.get('TEST_LOADER' , None)
+    self.args.fine_tune = self.kwargs.get('FINE_TUNE' ,False)        # true if pruned model is being fine-tuned
+    self.args.path = self.kwargs.get('PATH' ,None)      # path from where the pruned model is loaded
+    self.args.resume = self.kwargs.get('RESUME' ,False)      # true of we have to resume training of some model whose checkpoint is saved
+    self.args.train_bs = self.kwargs.get('TRAIN_BS' ,64)      # training batch size
+    self.args.test_bs = self.kwargs.get('TEST_BS' ,256)        # test batch size
+    self.args.epochs = self.kwargs.get('EPOCHS' ,100)
+    self.args.optimizer_name = self.kwargs.get('OPTIMIZER_NAME', None)
+    self.args.lr = self.kwargs.get('LR' ,1e-1)
+    self.args.momentum = self.kwargs.get('MOMENTUM' ,0.9)
+    self.args.weight_decay = self.kwargs.get('WEIGHT_DECAY' ,1e-4)
+    self.args.log_interval = self.kwargs.get('LOG_INTERVAL' , 100)     # number of intervals after which accuracy and loss values are printed during training
+    self.args.arch = self.kwargs.get('ARCH' ,'vgg')      # model architecture
+    self.args.depth = self.kwargs.get('DEPTH' , 164) 
+    self.args.percent = self.kwargs.get('PERCENT' , 0.6)
+    self.args.path = self.kwargs.get('PATH' , None)
+    self.args.save = self.kwargs.get('SAVE', None)
+    self.args.model = self.kwargs.get('MODEL',None)
            # depth of model (if resnet is being used)
     if(self.args.fine_tune):
-      self.args.file_name = './{}/Fine_tuned/{}_checkpoint.pth.tar'.format(self.args.data,self.args.arch)
+      assert(self.args.path is not None)
+      assert(self.args.save is not None)
+      self.args.file_name = './pruned_model_best.pth.tar'
     else:
-      self.args.save = './{}/pruned/{}_checkpoint.pth.tar'.format(self.args.data,self.args.arch)
-      self.args.file_name = './{}/Base_line/{}_checkpoint.pth.tar'.format(self.args.data,self.args.arch)
-      self.args.model = './{}/Base_line/{}_checkpoint.pth.tar'.format(self.args.data,self.args.arch)
-      self.args.path = './{}/pruned/{}_checkpoint.pth.tar'.format(self.args.data,self.args.arch)
+      self.args.save = './pruned_checkpoint.pth.tar'
+      self.args.file_name = './{}_checkpoint.pth.tar'.format(self.args.arch)
+      self.args.model = 'model_best.pth.tar' 
+      self.args.path = './pruned_checkpoint.pth.tar'.format(self.args.arch)
 
 
 
@@ -260,11 +234,13 @@ class NetworkSlimming:
     return x1
 
   def prune(self):
+    assert(self.args.save is not None)
+    assert(self.args.model is not None)
     x1 = prune_it(params=self.args)
     return x1
 
   def fine_tune(self):
-    assert(self.args.fine_tune == True and self.sparsity_reg == False)
+    assert(self.args.fine_tune == True and self.args.sparsity_reg == False)
     x1 = Process(params=self.args)
     return x1
 
@@ -275,6 +251,3 @@ class NetworkSlimming:
     self.args.sparsity_reg = False
     self.args.fine_tune = True
     return self.fine_tune()
-
-
-  
