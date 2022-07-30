@@ -15,7 +15,7 @@ from trailmet.algorithms.quantize.methods import UniformAffineQuantizer, LpNormQ
 quantization_mapping = {
     'uaq' : UniformAffineQuantizer,
     'lp_norm' : LpNormQuantizer,
-    'fixed_clip' : FixedClipValueQuantization
+    'fix_clip' : FixedClipValueQuantization
 }
 
 #=========================
@@ -29,7 +29,7 @@ class QuantModule(nn.Module):
     """
     def __init__(self, orig_module: Union[nn.Conv2d, nn.Linear], weight_quant_params: dict = {},
                  act_quant_params: dict = {}, disable_act_quant: bool = False, se_module=None, 
-                 qtype='lp_norm'):
+                 qtype='uaq'):
         super(QuantModule, self).__init__()
         if isinstance(orig_module, nn.Conv2d):
             self.fwd_kwargs = dict(stride=orig_module.stride, padding=orig_module.padding,
@@ -52,7 +52,8 @@ class QuantModule(nn.Module):
         self.disable_act_quant = disable_act_quant
         self.activation_function = StraightThrough()
         # initialize quantizer
-        self.qtype = qtype
+        assert weight_quant_params.get('qtype', 'uaq') == act_quant_params.get('qtype', 'uaq'), 'qtype mismatch'
+        self.qtype = weight_quant_params.get('qtype', 'uaq')
         self.bcorr = False if self.qtype=='uaq' else True
         if self.qtype=='uaq':
             self.bcorr = False
@@ -60,16 +61,14 @@ class QuantModule(nn.Module):
             self.act_quantizer = quantization_mapping[self.qtype](**act_quant_params)
         else:
             self.bcorr = True
-            self.weight_quantizer = quantization_mapping[self.qtype](self, self.weight, symmetric=True, **weight_quant_params) # must pass weight here
+            self.weight_quantizer = quantization_mapping[self.qtype](self, self.weight, **weight_quant_params) # must pass weight here
             self.act_quantizer = self.act_quantization_default = None
             def __init_out_quantization__(tensor):
-                self.act_quantization_default = quantization_mapping[self.qtype](self, tensor, symmetric=True, **act_quant_params) # To Do: make it assymmetric for ReLU
+                self.act_quantization_default = quantization_mapping[self.qtype](self, tensor, **act_quant_params) # To Do: make it assymmetric for ReLU
                 self.act_quantizer = self.act_quantization_default
             self.act_quantization_init_fn = __init_out_quantization__
 
-
         self.ignore_reconstruction = False
-
         self.se_module = se_module
         self.extra_repr = orig_module.extra_repr
 
@@ -115,11 +114,9 @@ class QuantModule(nn.Module):
     def get_quantization(self):
         return self.weight_quantizer
 
-    def set_quantization(self, qtype='fixed_clip', verbose=False, **kwargs):
-        self.weight_quantizer = quantization_mapping[qtype](kwargs)
-        if verbose:
-            print('something happening')
-
+    def set_quantization(self, clip_value=None, device=None, qtype='fix_clip', **kwargs):
+        assert self.qtype is not 'uaq', 'quant type not supported by LAPQ'
+        self.weight_quantizer = quantization_mapping[qtype](self, clip_value=clip_value, device=device, **kwargs)
 
 
 #=========================
@@ -337,12 +334,12 @@ class QuantModel(nn.Module):
                     m.act_quantizer.delta.data /= dist.get_world_size()
                     dist.all_reduce(m.act_quantizer.delta.data)
 
-    def set_quant_params(self, scales: list):
+    def set_quant_params(self, scales: list, device=None, **kwargs):
         i=0
         for module in self.model.modules():
             if isinstance(module, QuantModule):
-                kwargs = {scales[i], }
-                module.set_quantization(qtype='fixed_clip', kwargs=kwargs)
+                module.set_quantization(
+                    clip_value=scales[i], device=device, qtype='fixed_clip', **kwargs)
                 i+=1
         
     def get_quant_params(self):
@@ -350,6 +347,7 @@ class QuantModel(nn.Module):
         for module in self.model.modules():
             if isinstance(module, QuantModule):
                 q = module.get_quantization()
+                assert hasattr(q, 'alpha'), 'quant module has no atttribute alpha'
                 clip_value = getattr(q, 'alpha')
                 scales.append(clip_value.item())
         return scales

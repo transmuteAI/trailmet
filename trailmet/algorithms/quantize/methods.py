@@ -1,10 +1,8 @@
 import torch
 import torch.nn as nn
 import scipy.optimize as opt
-from typing import Union
 import warnings
-import torch.nn.functional as F
-from trailmet.algorithms.quantize.quantize import StraightThrough, RoundSTE, BaseQuantization as BQ
+from trailmet.algorithms.quantize.quantize import RoundSTE, BaseQuantization as BQ
 
 
 
@@ -205,28 +203,27 @@ class AdaRoundQuantizer(nn.Module):
 
 
 
-
 class UniformQuantization(nn.Module):
     param_name = 'alpha'
-    def __init__(self, module, n_bits, symm, uint, stochastic, tails):
+    def __init__(self, **kwargs):
         super(UniformQuantization, self).__init__()
         # self.module = module
-        self.n_bits = n_bits
-        assert 2 <= n_bits <= 8, 'bitwidth not supported'
+        self.n_bits = kwargs.get('num_bits', 8)
+        assert 2 <= self.n_bits <= 8, 'bitwidth not supported'
         self.n_bins = int(2**self.n_bits)       # n_levels
-        if not symm and not uint:
+        self.symm = kwargs.get('symm', True)
+        self.uint = kwargs.get('uint', True)
+        if not self.symm and not self.uint:
             raise RuntimeError("Cannot perform integer quantization on asymmetric distribution")
-        self.symm = symm
-        self.uint = uint
-        self.stochastic = stochastic
-        self.tails = tails
-        if uint:
+        self.stochastic = kwargs.get('stochastic', False)    # To do : add optional stochastic noise in __quantize__
+        self.tails = kwargs.get('tails', False)
+        if self.uint:
             self.qmax = 2 ** self.n_bits - 1
             self.qmin = 0
         else:
             self.qmax = 2 ** (self.n_bits - 1) - 1
             self.qmin = -self.qmax - 1
-        if tails:
+        if self.tails:
             self.qmax -= 0.5 + 1e-6
             self.qmin -= 0.5
         self.named_params = []
@@ -265,16 +262,18 @@ class UniformQuantization(nn.Module):
         self.named_params.append((name, getattr(self.module, name)))
 
 
-
-
 class LpNormQuantizer(UniformQuantization):
-    def __init__(self, module, tensor, num_bits, symm, uint, stochastic, tails, **kwargs):
-        super(LpNormQuantizer, self).__init__(module, num_bits, symm, uint, stochastic, tails)
+    def __init__(self, module, tensor, **kwargs):
+        super(LpNormQuantizer, self).__init__(module, **kwargs)
         self.p = kwargs.get('lp', 2.4)
         with torch.no_grad():
             opt_alpha = opt.minimize_scalar(lambda alpha: self.estimate_quant_error(
                 alpha, tensor), bounds=(tensor.min().item(), tensor.max().item())).x
         self.register_buffer(self.param_name, tensor.new_tensor([opt_alpha]))
+
+    def __call__(self, tensor):
+        t_q = self.__quantize__(tensor, self.alpha)
+        return t_q
 
     def estimate_quant_error(self, alpha, x):
         xq = self.__quantize__(x, alpha)
@@ -282,12 +281,13 @@ class LpNormQuantizer(UniformQuantization):
         return err.item()
 
 
-
 class FixedClipValueQuantization(UniformQuantization):
-    def __init__(self, module, num_bits, symmetric, uint=False, stochastic=False, kwargs={}):
-        super(FixedClipValueQuantization, self).__init__(module, num_bits, symmetric, uint, stochastic)
-        self.clip_value = kwargs['clip_value']
-        self.device = kwargs['device']
+    def __init__(self, module, clip_value, device, **kwargs):
+        super(FixedClipValueQuantization, self).__init__(module, **kwargs)
+        self.clip_value = clip_value
+        self.device = device
+        assert self.clip_value is not None, 'missing parameter - clip_value'
+        assert self.device is not None, 'missing parameter - device'
         with torch.no_grad():
             self.register_buffer(self.param_name, torch.tensor([self.clip_value], dtype=torch.float32).to(self.device))
 

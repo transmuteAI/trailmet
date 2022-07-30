@@ -29,8 +29,23 @@ class LAPQ(BaseQuantization):
         self.calib_data = self.get_calib_samples(self.train_loader, self.num_samples)
 
     def compress_model(self):
-        wq_params = {'n_bits': self.w_bits, 'channel_wise': self.channel_wise, 'scale_method': 'mse'}
-        aq_params = {'n_bits': self.a_bits, 'channel_wise': False, 'scale_method': 'mse', 'leaf_param': self.act_quant}
+        # quant params for LAPQ
+        wq_params = {
+            'num_bits': self.w_bits, 
+            'symm': True, 
+            'uint': True, 
+            'stochastic': False, 
+            'tails': False,
+            'q_type': 'lp_norm'
+            }
+        aq_params = {
+            'num_bits': self.a_bits, 
+            'symm': True, 
+            'uint': True, 
+            'stochastic': False, 
+            'tails': False,
+            'q_type': 'lp_norm'
+            }
         self.model = self.model.to(self.device)
         self.model.eval()
         self.qnn = QuantModel(model=self.model, weight_quant_params=wq_params, act_quant_params=aq_params)
