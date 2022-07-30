@@ -14,6 +14,7 @@ class BaseQuantization(BaseAlgorithm):
     def quantize(self, model, dataloaders, method, **kwargs):
         pass
     
+    # To do : refactor changes for round_ste -> class RoundSTE modification
     def round_ste(x: torch.Tensor):
         """
         Implement Straight-Through Estimator for rounding operation.
@@ -85,6 +86,17 @@ class BaseQuantization(BaseAlgorithm):
                     tk1.set_postfix(acc1=running_acc1/counter, acc5=running_acc5/counter)
         return running_acc1/counter, running_acc5/counter, running_loss/counter
 
+
+class RoundSTE(torch.autograd.Function):
+    """customized round function with enabled backpropagation"""
+    @staticmethod
+    def forward(ctx, input):
+        output = torch.round(input)
+        return output
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        return grad_output
 
 class StraightThrough(nn.Module):
     """used to place an identity function in place of a non-differentail operator for gradient calculation"""

@@ -14,7 +14,7 @@ class LAPQ(BaseQuantization):
         self.train_loader = dataloaders['train']
         self.val_loader = dataloaders['val']
         self.kwargs = kwargs
-        self.w_bits = 8
+        self.w_bits = 4
         self.a_bits = 8
         self.num_samples = 1024
         self.act_quant = True
@@ -25,7 +25,7 @@ class LAPQ(BaseQuantization):
         self.gpu_id = 0
         self.seed = 42
         seed_everything(self.seed)
-        self.device = torch.device('cuda.{}'.format(self.gpu_id))
+        self.device = torch.device('cuda:{}'.format(self.gpu_id))
         self.calib_data = self.get_calib_samples(self.train_loader, self.num_samples)
 
     def compress_model(self):
@@ -73,7 +73,27 @@ class LAPQ(BaseQuantization):
     def evaluate_calibration_clipped(self, scales, q_model: QuantModel):
         q_model.set_quant_params(scales)
         criterion = torch.nn.CrossEntropyLoss().to(self.device)
-        _, _, loss = self.test(q_model, self.calib_data, criterion, device=self.device)
+        loss = self.evaluate_loss(q_model, criterion)
         return loss
 
+    def evaluate_loss(self, q_model: QuantModel, criterion):
+        q_model.eval()
+        with torch.no_grad():
+            if not hasattr(self, 'cal_set'):
+                self.cal_set = []
+                for i, images, target in enumerate(self.train_loader):
+                    if i>=16:
+                        break
+                    images = images.to(self.device, non_blocking=True)
+                    target = target.to(self.device, non_blocking=True)
+                    self.cal_set.append((images, target))
+
+            res = torch.tensor([0.]).to(self.device)
+            for i in range(len(self.cal_set)):
+                images, target = self.cal_set[i]
+                output = self.model(images)
+                loss = criterion(output, target)
+                res += loss
+
+            return res / len(self.cal_set)
         
