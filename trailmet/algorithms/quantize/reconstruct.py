@@ -7,6 +7,12 @@ from trailmet.algorithms.quantize.quant_model import AdaRoundQuantizer, QuantMod
 from trailmet.algorithms.quantize.data_hooks import save_inp_oup_data, save_grad_data
 
 
+optimizer_map = {
+    'sgd' : torch.optim.SGD,
+    'adam' : torch.optim.Adam,
+    'adagrad' : torch.optim.Adagrad,
+    'adadelta' : torch.optim.adadelta
+}
 #============================
 ##### Reconstruct Layer #####
 #============================
@@ -97,7 +103,7 @@ def layer_reconstruction(model: QuantModel, layer: QuantModule, cali_data: torch
                          batch_size: int = 32, iters: int = 20000, weight: float = 0.001, opt_mode: str = 'mse',
                          asym: bool = False, include_act_func: bool = True, b_range: tuple = (20, 2),
                          warmup: float = 0.0, act_quant: bool = False, lr: float = 4e-5, p: float = 2.0,
-                         multi_gpu: bool = False):
+                         multi_gpu: bool = False, optim = 'adam'):
     """
     Block reconstruction to optimize the output from each layer.
     :param model: QuantModel
@@ -133,12 +139,12 @@ def layer_reconstruction(model: QuantModel, layer: QuantModule, cali_data: torch
 
         # Set up optimizer
         opt_params = [layer.weight_quantizer.alpha]
-        optimizer = torch.optim.Adam(opt_params)
+        optimizer = optimizer_map[optim](opt_params)
         scheduler = None
     else:
         # Use UniformAffineQuantizer to learn delta
         opt_params = [layer.act_quantizer.delta]
-        optimizer = torch.optim.Adam(opt_params, lr=lr)
+        optimizer = optimizer_map[optim](opt_params, lr=lr)
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=iters, eta_min=0.)
 
     loss_mode = 'none' if act_quant else 'relaxation'
@@ -256,7 +262,7 @@ def block_reconstruction(model: QuantModel, block: BaseQuantBlock, cali_data: to
                          batch_size: int = 32, iters: int = 20000, weight: float = 0.01, opt_mode: str = 'mse',
                          asym: bool = False, include_act_func: bool = True, b_range: tuple = (20, 2),
                          warmup: float = 0.0, act_quant: bool = False, lr: float = 4e-5, p: float = 2.0,
-                         multi_gpu: bool = False):
+                         multi_gpu: bool = False, optim = 'adam'):
     """
     Block reconstruction to optimize the output from each block.
     :param model: QuantModel
@@ -296,7 +302,7 @@ def block_reconstruction(model: QuantModel, block: BaseQuantBlock, cali_data: to
         for name, module in block.named_modules():
             if isinstance(module, QuantModule):
                 opt_params += [module.weight_quantizer.alpha]
-        optimizer = torch.optim.Adam(opt_params)
+        optimizer = optimizer_map[optim](opt_params)
         scheduler = None
     else:
         # Use UniformAffineQuantizer to learn delta
@@ -308,7 +314,7 @@ def block_reconstruction(model: QuantModel, block: BaseQuantBlock, cali_data: to
             if isinstance(module, QuantModule):
                 if module.act_quantizer.delta is not None:
                     opt_params += [module.act_quantizer.delta]
-        optimizer = torch.optim.Adam(opt_params, lr=lr)
+        optimizer = optimizer_map[optim](opt_params, lr=lr)
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=iters, eta_min=0.)
 
     loss_mode = 'none' if act_quant else 'relaxation'

@@ -83,8 +83,9 @@ class BaseQuantization(BaseAlgorithm):
                     tk1.set_postfix(loss=running_loss/counter, acc1=running_acc1/counter, acc5=running_acc5/counter)
                 else:
                     tk1.set_postfix(acc1=running_acc1/counter, acc5=running_acc5/counter)
-        return running_acc1/counter, running_acc5/counter, running_loss/counter
-
+        if loss_fn is not None:
+            return running_acc1/counter, running_acc5/counter, running_loss/counter
+        return running_acc1/counter, running_acc5/counter
 
 class StraightThrough(nn.Module):
     """used to place an identity function in place of a non-differentail operator for gradient calculation"""

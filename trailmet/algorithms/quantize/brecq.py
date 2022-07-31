@@ -40,6 +40,7 @@ class BRECQ(BaseQuantization):
         self.weight = self.kwargs.get('WEIGHT', 0.01)
         self.iters_w = self.kwargs.get('ITERS_W', 20000)
         self.iters_a = self.kwargs.get('ITERS_A', 20000)
+        self.optimizer = self.kwargs.get('OPTIMIZER', 'adam')
         self.lr = self.kwargs.get('LR', 4e-4)
         self.gpu_id = self.kwargs.get('GPU_ID', 0)
         self.calib_bs = self.kwargs.get('CALIB_BS', 64)
@@ -79,7 +80,7 @@ class BRECQ(BaseQuantization):
         
         # Start weight calibration
         kwargs = dict(cali_data=self.cali_data, iters=self.iters_w, weight=self.weight, asym=True,
-                  b_range=(self.b_start, self.b_end), warmup=0.2, act_quant=False, opt_mode='mse')
+                  b_range=(self.b_start, self.b_end), warmup=0.2, act_quant=False, opt_mode='mse', optim=self.optimizer)
         print('==> Starting weight calibration')
         self.reconstruct_model(self.qnn, **kwargs)
         self.qnn.set_quant_state(weight_quant=True, act_quant=False)
@@ -96,7 +97,7 @@ class BRECQ(BaseQuantization):
             self.qnn.disable_network_output_quantization()
             
             # Start activation rounding calibration
-            kwargs = dict(cali_data=self.cali_data, iters=self.iters_a, act_quant=True, opt_mode='mse', lr=self.lr, p=self.p)
+            kwargs = dict(cali_data=self.cali_data, iters=self.iters_a, act_quant=True, opt_mode='mse', lr=self.lr, p=self.p, optim=self.optimizer)
             self.reconstruct_model(self.qnn, **kwargs)
             self.qnn.set_quant_state(weight_quant=True, act_quant=True)
             print('Full quantization (W{}A{}) accuracy: {}'.format(self.w_bits, self.a_bits, self.test(self.qnn, self.val_loader, device=self.device))) 
