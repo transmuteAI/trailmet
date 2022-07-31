@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import scipy.optimize as optim
 import numpy as np
-from tqdm import tqdm
+from tqdm import tqdm_notebook
 from trailmet.utils import seed_everything
 from trailmet.algorithms.quantize.quantize import BaseQuantization
 from trailmet.algorithms.quantize.quant_model import QuantModel, QuantModule
@@ -21,8 +21,10 @@ class LAPQ(BaseQuantization):
         self.a_bits = kwargs.get('A_BITS', 8)
         self.num_samples = kwargs.get('NUM_SAMPLES', 1024)
         self.act_quant = kwargs.get('ACT_QUANT', True)
+        self.symm = kwargs.get('SYMM', True)
+        self.uint = kwargs.get('UINT', True)
         self.channel_wise = False   # lapq supports only layer-wise
-        self.set_8bit_head_stem = kwargs.get('SET_8BIT_HEAD_STEM', True)
+        self.set_8bit_head_stem = kwargs.get('SET_8BIT_HEAD_STEM', False)   # To do: make this bug free for True
         self.test_before_calibration = True
         self.maxiter = kwargs.get('MAX_ITER', None)
         self.verbose = kwargs.get('VERBOSE', True)
@@ -40,20 +42,20 @@ class LAPQ(BaseQuantization):
         # quant params for LAPQ
         wq_params = {
             'num_bits': self.w_bits, 
-            'symm': True, 
-            'uint': True, 
+            'symm': self.symm, 
+            'uint': self.uint, 
             'stochastic': False, 
             'tails': False,
-            'q_type': 'lp_norm',
+            'qtype': 'lp_norm',
             'lp': 2.0
             }
         aq_params = {
             'num_bits': self.a_bits, 
-            'symm': True, 
-            'uint': True, 
+            'symm': self.symm, 
+            'uint': self.uint, 
             'stochastic': False, 
             'tails': False,
-            'q_type': 'lp_norm',
+            'qtype': 'lp_norm',
             'lp': 2.0
             }
         self.model.to(self.device)
@@ -63,16 +65,19 @@ class LAPQ(BaseQuantization):
         # in each layer with respect to clipping values, with different values of p
         ps = np.linspace(2,4,10)
         losses = []
-        for p in tqdm():
+        tk1=tqdm_notebook(ps, total=len(ps))
+        for p in tk1:
             wq_params['lp'] = p
             aq_params['lp'] = p
             qm = QuantModel(model=self.model, weight_quant_params=wq_params, act_quant_params=aq_params)
             qm.to(self.device)
+            if self.set_8bit_head_stem:
+                qm.set_first_last_layer_to_8bit()                 
+            qm.set_quant_state(weight_quant=True, act_quant=True)
             loss = self.evaluate_loss(qm, self.device)
             losses.append(loss.item())
+            tk1.set_postfix(p_val=p, loss=loss.item())
             del qm
-            if self.verbose:
-                print("(p, loss) - ({}, {})".format(p, loss.item()))
         
         # use quadratic interpolation to approximate the optimal quantization step size ∆p∗
         z = np.polyfit(ps, losses, 2)
@@ -87,7 +92,7 @@ class LAPQ(BaseQuantization):
             self.qnn.set_first_last_layer_to_8bit()
         self.qnn.set_quant_state(weight_quant=True, act_quant=True)
 
-        lp_acc1, lp_acc5, lp_loss = self.test(self.qnn, self.val_loader, torch.nn.CrossEntropyLoss.to(self.device), self.device)
+        lp_acc1, lp_acc5, lp_loss = self.test(self.qnn, self.val_loader, torch.nn.CrossEntropyLoss().to(self.device), self.device)
         lp_point = self.qnn.get_quant_params()
         if self.verbose:
             print("==> p intr : {:.2f}".format(p_intr))
@@ -102,22 +107,23 @@ class LAPQ(BaseQuantization):
         if self.maxiter is not None:
             min_options['maxiter'] = self.maxiter
         res = optim.minimize(lambda scales: self.evaluate_calibration_clipped(scales, self.qnn, **wq_params),
-                             init_scales.cpu().numpy(), method=min_method, options=min_options)
+                             np.asarray(init_scales), method=min_method, options=min_options)
         scales = res.x
         self.qnn.set_quant_params(scales, self.device, **wq_params)
         print('Full quantization (W{}A{}) accuracy: {}'.format(self.w_bits, self.a_bits, 
                             self.test(self.qnn, self.val_loader, device=self.device))) 
 
 
-    def evaluate_calibration_clipped(self, scales, q_model: QuantModel, **qargs):
+    def evaluate_calibration_clipped(self, scales: np.ndarray, q_model: QuantModel, **qargs):
         eval_count = next(self.eval_count)
+        scales = scales.tolist()
         q_model.set_quant_params(scales, self.device, **qargs)
-        loss = self.evaluate_loss(q_model, self.device)
+        loss = self.evaluate_loss(q_model, self.device).item()
         if loss<self.min_loss:
             self.min_loss=loss
         if self.verbose and eval_count%self.print_freq==0:
-            print("==> eval iteration: {}, minimum loss of last {} iterations: {:.4f}".format(
-            eval_count, self.print_freq, self.min_loss))
+            print("==> iteration: {}, minimum loss so far: {:.4f}".format(
+            eval_count, self.min_loss))
         return loss
 
     def evaluate_loss(self, q_model: QuantModel, device):
@@ -126,7 +132,7 @@ class LAPQ(BaseQuantization):
         with torch.no_grad():
             if not hasattr(self, 'cal_set'):
                 self.cal_set = []
-                for i, images, target in enumerate(self.train_loader):
+                for i, (images, target) in enumerate(self.train_loader):
                     if i>=16:                       # To do: change this for variable batch size
                         break
                     images = images.to(device, non_blocking=True)
@@ -136,29 +142,9 @@ class LAPQ(BaseQuantization):
             res = torch.tensor([0.]).to(device)
             for i in range(len(self.cal_set)):
                 images, target = self.cal_set[i]
-                output = self.model(images)
+                output = q_model(images)
                 loss = criterion(output, target)
                 res += loss
 
             return res / len(self.cal_set)
         
-
-
-
-
-
-
-        # self.qnn.set_quant_state(True, False)
-        # print('==> Initializing weight quantization parameters')
-        # _ = self.qnn(self.calib_data[:16].to(self.device))
-        # if self.test_before_calibration:
-        #     print('Quantized accuracy before lapq: {}'.format(self.test(self.qnn, self.val_loader, device=self.device)))
-        
-        # To do : add support for scale initialization based on quadratic interpolation 
-        ######### of Lp norm instead of minimizing mse
-
-        # init_scales = []
-        # for module in self.qnn.modules():
-        #     if isinstance(module, QuantModule):
-        #         init_scales.append(torch.squeeze(module.weight_quantizer.get_scales()[0]).item()) 
-        #         init_scales.append(torch.squeeze(module.weight_quantizer.get_scales()[1]).item())

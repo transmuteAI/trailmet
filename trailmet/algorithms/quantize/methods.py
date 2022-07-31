@@ -17,8 +17,8 @@ class UniformAffineQuantizer(nn.Module):
     :param channel_wise: if True, compute scale and zero_point in each channel
     :param scale_method: determines the quantization scale and zero point
     """
-    def __init__(self, n_bits: int = 8, symmetric: bool = False, channel_wise: bool = False, scale_method: str = 'max',
-                 leaf_param: bool = False):
+    def __init__(self, n_bits: int = 8, symmetric: bool = False, channel_wise: bool = True, scale_method: str = 'mse',
+                 leaf_param: bool = False, **kwargs):
         super(UniformAffineQuantizer, self).__init__()
         self.sym = symmetric
         assert 2 <= n_bits <= 8, 'bitwidth not supported'
@@ -127,13 +127,6 @@ class UniformAffineQuantizer(nn.Module):
             ' leaf_param={leaf_param}'
         return s.format(**self.__dict__)
 
-    def get_scales(self):
-        return self.delta, self.zero_point
-
-    def set_scales(self, delta_val, zp_val):
-        self.delta = torch.tensor(delta_val).type_as(self.delta)
-        self.zero_point = torch.tensor(zp_val).type_as(self.zero_point)
-
 
 class AdaRoundQuantizer(nn.Module):
     """
@@ -203,11 +196,11 @@ class AdaRoundQuantizer(nn.Module):
 
 
 
-class UniformQuantization(nn.Module):
+class UniformQuantization(object):
     param_name = 'alpha'
-    def __init__(self, **kwargs):
+    def __init__(self, module, **kwargs):
         super(UniformQuantization, self).__init__()
-        # self.module = module
+        self.module = module
         self.n_bits = kwargs.get('num_bits', 8)
         assert 2 <= self.n_bits <= 8, 'bitwidth not supported'
         self.n_bins = int(2**self.n_bits)       # n_levels
@@ -246,6 +239,10 @@ class UniformQuantization(nn.Module):
         else:
             q_tensor = q_tensor * delta
         return q_tensor
+
+    def __repr__(self):
+        rpr = [('bits', self.n_bits), ('symmetric', self.symm), ('tails', self.tails)]
+        return [(self.param_name, '{:.4f}'.format(getattr(self, self.param_name).item()))] + rpr
     
     def register_buffer(self, name, value):
         if hasattr(self.module, name):

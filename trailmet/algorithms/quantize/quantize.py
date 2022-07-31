@@ -74,6 +74,8 @@ class BaseQuantization(BaseAlgorithm):
                 counter+=1
                 images = images.to(device)
                 targets = targets.to(device)
+                if len(images)!=64:                 # To do: fix this
+                    continue
                 outputs = model(images)
                 acc1, acc5 = self.accuracy(outputs, targets, topk=(1,5))
                 running_acc1+=acc1[0].item()

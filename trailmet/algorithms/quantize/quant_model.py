@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.distributed as dist
+import copy
 from typing import Union
 from trailmet.models.resnet import BasicBlock, Bottleneck
 from trailmet.models.mobilenetv2 import InvertedResidual
@@ -28,8 +29,7 @@ class QuantModule(nn.Module):
     To activate quantization, please use set_quant_state function.
     """
     def __init__(self, orig_module: Union[nn.Conv2d, nn.Linear], weight_quant_params: dict = {},
-                 act_quant_params: dict = {}, disable_act_quant: bool = False, se_module=None, 
-                 qtype='uaq'):
+                 act_quant_params: dict = {}, disable_act_quant: bool = False, se_module=None):
         super(QuantModule, self).__init__()
         if isinstance(orig_module, nn.Conv2d):
             self.fwd_kwargs = dict(stride=orig_module.stride, padding=orig_module.padding,
@@ -114,9 +114,9 @@ class QuantModule(nn.Module):
     def get_quantization(self):
         return self.weight_quantizer
 
-    def set_quantization(self, clip_value=None, device=None, qtype='fix_clip', **kwargs):
-        assert self.qtype is not 'uaq', 'quant type not supported by LAPQ'
-        self.weight_quantizer = quantization_mapping[qtype](self, clip_value=clip_value, device=device, **kwargs)
+    def set_quantization(self, clip_value=None, device=None, new_qtype='fix_clip', **kwargs):
+        assert self.qtype != 'uaq', 'quant type not supported by LAPQ'
+        self.weight_quantizer = quantization_mapping[new_qtype](self, clip_value=clip_value, device=device, **kwargs)
 
 
 #=========================
@@ -265,7 +265,7 @@ replacement_factory = {
 class QuantModel(nn.Module):
     def __init__(self, model: nn.Module, weight_quant_params: dict = {}, act_quant_params: dict = {}):
         super().__init__()
-        self.model = model
+        self.model = copy.deepcopy(model)
         bn = FoldBN()
         bn.search_fold_and_remove_bn(self.model)
         self.quant_module_refactor(self.model, weight_quant_params, act_quant_params)
@@ -339,7 +339,7 @@ class QuantModel(nn.Module):
         for module in self.model.modules():
             if isinstance(module, QuantModule):
                 module.set_quantization(
-                    clip_value=scales[i], device=device, qtype='fixed_clip', **kwargs)
+                    clip_value=scales[i], device=device, new_qtype='fix_clip', **kwargs)
                 i+=1
         
     def get_quant_params(self):
