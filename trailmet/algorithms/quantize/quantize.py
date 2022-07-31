@@ -96,7 +96,7 @@ class StraightThrough(nn.Module):
         return input
     
 class FoldBN():
-    """used to help fold batch norm to prev layer activations"""
+    """used to fold batch norm to prev linear or conv layer which helps reduce comutational overhead during quantization"""
     def __init__(self):
         pass
 
@@ -135,17 +135,6 @@ class FoldBN():
         bn_module.running_var = bn_module.weight.data ** 2
 
 
-    def reset_bn(self, module: nn.BatchNorm2d):
-        if module.track_running_stats:
-            module.running_mean.zero_()
-            module.running_var.fill_(1-module.eps)
-            # we do not reset number of tracked batches here
-            # self.num_batches_tracked.zero_()
-        if module.affine:
-            init.ones_(module.weight)
-            init.zeros_(module.bias)
-
-
     def is_bn(self, m):
         return isinstance(m, nn.BatchNorm2d) or isinstance(m, nn.BatchNorm1d)
 
@@ -155,6 +144,10 @@ class FoldBN():
 
 
     def search_fold_and_remove_bn(self, model: nn.Module):
+        """
+        method to recursively search for batch norm layers, absorb them into 
+        the previous linear or conv layers, and set it to an identity layer 
+        """
         model.eval()
         prev = None
         for n, m in model.named_children():
@@ -167,15 +160,3 @@ class FoldBN():
             else:
                 prev = self.search_fold_and_remove_bn(m)
         return prev
-
-
-    def search_fold_and_reset_bn(self, model: nn.Module):
-        model.eval()
-        prev = None
-        for n, m in model.named_children():
-            if self.is_bn(m) and self.is_absorbing(prev):
-                self.fold_bn_into_conv(prev, m)
-                # reset_bn(m)
-            else:
-                self.search_fold_and_reset_bn(m)
-            prev = m
