@@ -25,27 +25,9 @@ class Process(BaseAlgorithm):
             super(Process,self).__init__()
             args = params
             kwargs = {'num_workers': 2, 'pin_memory': True}
-            if(args.data=='CIFAR10'):
-                train_loader = torch.utils.data.DataLoader(
-                    datasets.CIFAR10('./data', train=True, download=True,
-                                  transform=transforms.Compose([
-                                      transforms.Pad(4),
-                                      transforms.RandomCrop(32),
-                                      transforms.RandomHorizontalFlip(),
-                                      transforms.ToTensor(),
-                                      transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-                                  ])),
-                batch_size=args.train_bs, shuffle=True, **kwargs)
-                test_loader = torch.utils.data.DataLoader(
-                    datasets.CIFAR10('./data', train=False, transform=transforms.Compose([
-                                  transforms.ToTensor(),
-                                  transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-                              ])),
-                            batch_size=args.test_bs, shuffle=True, **kwargs)
-            else:
-              assert(args.train_loader is not None and args.test_loader is not None)
-              train_loader = args.train_loader 
-              test_loader = args.test_loader
+            assert(args.train_loader is not None and args.test_loader is not None)
+            train_loader = args.train_loader 
+            test_loader = args.test_loader
 
             ########################################################################
             device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -183,8 +165,9 @@ class Process(BaseAlgorithm):
                     'optimizer': optimizer.state_dict(),
                 }, is_best)
             model.load_state_dict(torch.load(args.file_name)['state_dict'])
-            return model
-
+            self.model = model
+        def return_model(self):
+            return self.model
 #from ...models import models
 ""
 # class get_params():
@@ -404,9 +387,9 @@ class prune_it:
                 torch.save({'cfg': cfg, 'state_dict': newmodel.state_dict()}, args.save)
 
                 ##################################################################################
-                print(newmodel)
-                model = newmodel
-                return model
+                self.model = newmodel
+    def return_pruned_model(self):
+                return self.model
             ##################################################################################
 class OfNoUse:
   pass
@@ -454,23 +437,26 @@ class NetworkSlimming:
   def base_line(self):
     assert(self.args.fine_tune == False)
     x1 = Process(params=self.args)
-    return x1
+    model = x1.return_model()
+    return model
 
   def prune(self):
     assert(self.args.save is not None)
     assert(self.args.model is not None)
     x1 = prune_it(params=self.args)
-    return x1
+    model = x1.return_pruned_model()
+    return model
 
-  def fine_tune(self):
+  def compress(self):
     assert(self.args.fine_tune == True and self.args.sparsity_reg == False)
     x1 = Process(params=self.args)
-    return x1
+    model = x1.return_model()
+    return model
 
-  def do_all(self):
+  def train_compress(self):
     assert(self.args.fine_tune == False)
     m1 = self.base_line()
     m1 = self.prune()
     self.args.sparsity_reg = False
     self.args.fine_tune = True
-    return self.fine_tune()
+    return self.compress()
