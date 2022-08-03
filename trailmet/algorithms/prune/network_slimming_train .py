@@ -6,7 +6,7 @@ import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torchvision import datasets, transforms
+#from torchvision import datasets, transforms
 #from ...models import models
 from torch.autograd import Variable
 
@@ -16,197 +16,132 @@ from trailmet.models import channel_selection
 from trailmet.algorithms import BaseAlgorithm
 import trailmet.models as models
 torch.cuda.manual_seed(42)
-"""
-making train loaders and test loaders from given dataset
-"""
-""
+
 class Process(BaseAlgorithm):
-        def __init__(self,params):
-            super(Process,self).__init__()
-            args = params
-            kwargs = {'num_workers': 2, 'pin_memory': True}
-            assert(args.train_loader is not None and args.test_loader is not None)
-            train_loader = args.train_loader 
-            test_loader = args.test_loader
 
-            ########################################################################
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-
-            """the updated count of number of channels after pruning"""
-            # if(args.fine_tune):
-            #     from prunit import cfg
-            #     print(cfg)
-            #cfg=[6, 14, 8, 9, 6, 6, 8, 6, 4, 10, 14, 10, 5, 9, 4, 11, 9, 11, 7, 6, 8, 12, 11, 11, 11, 14, 6, 13, 16, 12, 4, 7, 5, 5, 7, 9, 13, 15, 14, 5, 9, 11, 6, 4, 8, 2, 2, 4, 5, 7, 10, 11, 11, 14, 35, 31, 31, 18, 18, 29, 23, 22, 30, 20, 24, 32, 11, 14, 31, 19, 24, 30, 22, 22, 29, 21, 27, 30, 20, 18, 29, 20, 21, 26, 17, 23, 29, 15, 17, 29, 27, 22, 28, 25, 24, 31, 25, 23, 28, 24, 23, 28, 19, 15, 30, 13, 15, 22, 108, 64, 64, 24, 40, 64, 26, 39, 64, 32, 53, 60, 38, 51, 62, 45, 60, 64, 53, 61, 64, 53, 59, 61, 58, 64, 63, 71, 62, 60, 55, 58, 54, 80, 62, 60, 59, 56, 53, 76, 61, 50, 73, 59, 50, 60, 51, 45, 69, 51, 42, 45, 38, 38, 68]
-
-
-            """loading the models to gpu"""
-            #########################################################################
-            if args.fine_tune:
-                checkpoint = torch.load(args.path)
-                cfg = checkpoint['cfg']
-                if (args.arch == 'vgg'):
-                    model = models.vgg(cfg=cfg , num_classes = args.num_classes )
-                    model = model.to(device)
-                elif(args.arch== 'resnet'):
-                    model = models.__dict__[args.arch](dataset=args.data, depth=args.depth, cfg=cfg , num_classes = args.num_classes)
-                    model = model.to(device)
-                #checkpoint = torch.load(args.path)
-                model.load_state_dict(checkpoint['state_dict'])
-            else:
-                if (args.arch == 'vgg'):
-                    model = models.vgg()
-                    model = model.to(device)
-                elif(args.arch=='resnet'):
-                    model = models.__dict__[args.arch](dataset=args.data, depth=args.depth)
-                    model = model.to(device)
-            print(model)
-            optimizer = self.get_optimizer(optimizer_name=args.optimizer_name , model=model, lr=args.lr , weight_decay = args.weight_decay) if args.optimizer_name is not None else optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
-            criteria= nn.CrossEntropyLoss()
-            ############################################################################
-
-
-            """resume training of saved checkpoint"""
-            ############################################################################
-
-            if args.resume:
-                if os.path.isfile(args.resume):
-                    model.to(device)
-                    print("=> loading checkpoint '{}'".format(args.resume))
-                    checkpoint = torch.load(args.resume)
-                    args.start_epoch = checkpoint['epoch']
-                    best_prec1 = checkpoint['best_prec1']
-                    model.load_state_dict(checkpoint['state_dict'])
-                    optimizer.load_state_dict(checkpoint['optimizer'])
-                    print("=> loaded checkpoint '{}' (epoch {}) Prec1: {:f}"
-                          .format(args.resume, checkpoint['epoch'], best_prec1))
-                else:
-                    print("=> no checkpoint found at '{}'".format(args.resume))
-
-            ############################################################################
-
-            """separate function to update the values of scaling parameter"""
-            def updateBN(model= model):
-                
-              for m in model.modules():
-                if isinstance(m, nn.BatchNorm2d):
-                  m.weight.grad.data.add_(args.thr*torch.sign(m.weight.data))
-                
-
-            ###########################################################################
-
-            """training function"""
-            # def train(epoch):
-            #   model.train()
-            #   for batch_idx, (data, target) in enumerate(train_loader):
-            #     data=data.to(device)
-            #     target=target.to(device)
-            #     optimizer.zero_grad()
-            #     output = model(data)
-            #     loss = criteria(output, target)
-            #     loss.backward()
-            #     if args.sparsity_reg:  # here, we are updating the values of scaling parameter
-            #       updateBN()
-            #     optimizer.step()
-            #     if (batch_idx % args.log_interval) == 0:
-            #       print('Train Epoch: {} [{}/{} ({:.1f}%)]\tLoss: {:.6f}'.format(epoch, batch_idx * len(data), len(train_loader.dataset),100. * batch_idx / len(train_loader), loss))
-
-            ###############################################################################
-
-
-            """testing function"""
-            ###############################################################################
-            # def test():
-            #   model.eval()
-            #   test_loss = 0
-            #   correct = 0
-            #   with torch.no_grad():
-            #     for data, target in test_loader:
-            #       data=data.to(device)
-            #       target=target.to(device)
-            #       output = model(data)
-            #       test_loss += criteria(output, target).item()
-            #       _,pred = torch.max(output,1)
-            #       correct+=(pred == target).sum().item()
-
-            #   test_loss /= len(test_loader.dataset)
-            #   print('\nTest set: Average loss: {}, Accuracy: {}/{} ({:.1f}%)\n'.format(test_loss, correct, len(test_loader.dataset),100. * correct / len(test_loader.dataset)))
-            #   return correct / float(len(test_loader.dataset))
-
-            ################################################################################
-
-            """save the details of current checkpoint and also saves information of best model """
-
-            def save_checkpoint(state, is_best, filename=args.file_name):
-                torch.save(state, filename)
-                if is_best:
-                    shutil.copyfile(filename, 'model_best.pth.tar')
-
-            #################################################################################
-
-            """putting it all together """
-            best_prec1 = 0.
-            for epoch in range(0, args.epochs):
-              print(epoch)
-              if epoch in [args.epochs*0.5, args.epochs*0.75]:
-                for param_group in optimizer.param_groups:
-                  param_group['lr'] *= 0.1
-              loss = self.train_one_epoch(model=model , dataloader=train_loader , loss_fn=criteria , optimizer=optimizer , extra_functionality=None)
-              updateBN()
-              prec1, loss_test = self.test(model = model , dataloader = test_loader , loss_fn = criteria)
-              print("Train set :: Average loss: {} \n".format(loss))
-              print('\nTest set: Average loss: {}, Accuracy: {} \n'.format(loss_test, prec1*100 , " "))
-#             
-              is_best = prec1>best_prec1
-              save_checkpoint({
-                    'epoch': epoch + 1,
-                    'state_dict': model.state_dict(),
-                    'best_prec1': best_prec1,
-                    'optimizer': optimizer.state_dict(),
-                }, is_best)
-            model.load_state_dict(torch.load(args.file_name)['state_dict'])
-            self.model = model
-        def return_model(self):
-            return self.model
-#from ...models import models
-""
-# class get_params():
-#   def __init__(self,dataset,test_bs,percent,model,save,depth,arch):
-#     self.dataset=dataset
-#     self.test_bs=test_bs
-#     self.percent=percent  # percentage of network to be pruned
-#     self.model=model      # path where the model to be pruned is saved
-#     self.save=save        # path where pruned model will be saved
-#     self.depth=depth      # depth of model if arch is resnet
-#     self.arch=arch        # vgg-16 and resnet family is supported
-# initial=get_params('cifar10',64,0.6,'/content/drive/MyDrive/VGG-16 NS/CIFAR-10/trained/resnet_model_best.pth.tar','/content/drive/MyDrive/VGG-16 NS/CIFAR-10/pruned/resnet_pruned1.pth.tar',164,'resnet')
-""
-"""
-defining model architecture
-"""
-class prune_it:
     def __init__(self,params):
-                args = params
-                if (args.arch == 'vgg'):
+        super(Process,self).__init__()
+        self.args = params
+        kwargs = {'num_workers': 2, 'pin_memory': True}
+        assert(self.args.train_loader is not None and self.args.test_loader is not None)
+        self.train_loader = self.args.train_loader 
+        self.test_loader = self.args.test_loader
+
+        ########################################################################
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+
+    def create_model(self,device):
+        #########################################################################
+        if self.args.fine_tune:
+            checkpoint = torch.load(self.args.path)
+            cfg = checkpoint['cfg']
+            if (self.args.arch == 'vgg'):
+                model = models.vgg(cfg=cfg , num_classes = self.args.num_classes )
+                model = model.to(device)
+            elif(self.args.arch== 'resnet'):
+                model = models.__dict__[self.args.arch](dataset=self.args.data, depth=self.args.depth, cfg=cfg , num_classes = self.args.num_classes)
+                model = model.to(device)
+            #checkpoint = torch.load(self.args.path)
+            model.load_state_dict(checkpoint['state_dict'])
+        else:
+            if (self.args.arch == 'vgg'):
+                model = models.vgg()
+                model = model.to(device)
+            elif(self.args.arch=='resnet'):
+                model = models.__dict__[self.args.arch](dataset=self.args.data, depth=self.args.depth)
+                model = model.to(device)
+        self.model = model
+        print(model)
+        optimizer = self.get_optimizer(optimizer_name=self.args.optimizer_name , model=model, lr=self.args.lr , weight_decay = self.args.weight_decay) if self.args.optimizer_name is not None else optim.SGD(model.parameters(), lr=self.args.lr, momentum=self.args.momentum, weight_decay=self.args.weight_decay)
+        criteria= nn.CrossEntropyLoss()
+        return optimizer,criteria
+
+    def resume(self,device,model,optimizer):
+        if self.args.resume:
+            if os.path.isfile(self.args.resume):
+                model.to(device)
+                print("=> loading checkpoint '{}'".format(self.args.resume))
+                checkpoint = torch.load(self.args.resume)
+                self.args.start_epoch = checkpoint['epoch']
+                best_prec1 = checkpoint['best_prec1']
+                model.load_state_dict(checkpoint['state_dict'])
+                optimizer.load_state_dict(checkpoint['optimizer'])
+                print("=> loaded checkpoint '{}' (epoch {}) Prec1: {:f}"
+                      .format(self.args.resume, checkpoint['epoch'], best_prec1))
+            else:
+                print("=> no checkpoint found at '{}'".format(self.args.resume))
+
+        return model
+    def updateBN(self,model):
+          
+          for m in model.modules():
+            if isinstance(m, nn.BatchNorm2d):
+              m.weight.grad.data.add_(self.args.thr*torch.sign(m.weight.data))
+          return model
+
+
+    def save_checkpoint(self,state, is_best, filename):
+            torch.save(state, filename)
+            if is_best:
+                shutil.copyfile(filename, 'model_best.pth.tar')
+
+
+    def train(self,model,optimizer,criteria,train_loader,test_loader):
+        best_prec1 = 0.
+        
+        for epoch in range(0, self.args.epochs):
+          print(epoch)
+          if epoch in [self.args.epochs*0.5, self.args.epochs*0.75]:
+            for param_group in optimizer.param_groups:
+              param_group['lr'] *= 0.1
+          loss = self.train_one_epoch(model=model , dataloader=train_loader , loss_fn=criteria , optimizer=optimizer , extra_functionality=None)
+          model = self.updateBN(model= model)
+          prec1, loss_test = self.test(model = model , dataloader = test_loader , loss_fn = criteria)
+          print("Train set :: Average loss: {} \n".format(loss))
+          print('\nTest set: Average loss: {}, Accuracy: {} \n'.format(loss_test, prec1*100 , " "))
+        
+          is_best = prec1>best_prec1
+          self.save_checkpoint({
+                'epoch': epoch + 1,
+                'state_dict': model.state_dict(),
+                'best_prec1': best_prec1,
+                'optimizer': optimizer.state_dict(),
+            }, is_best , filename= self.args.file_name)
+        model.load_state_dict(torch.load(self.args.file_name)['state_dict'])
+        return model
+        
+    def train_model(self):
+      optimizer, criteria = self.create_model(self.device)
+      if(self.args.resume):
+        self.model = self.resume(device = self.device , optimizer = optimizer, model = self.model)
+      self.model = self.train(model = self.model , optimizer = optimizer, criteria = criteria , train_loader = self.train_loader , test_loader = self.test_loader)
+      return self.model
+
+class prune_it:
+
+    def __init__(self,params):
+                self.args = params
+                if (self.args.arch == 'vgg'):
                     model = models.vgg()
-                elif (args.arch == 'resnet'):
-                    model = models.__dict__[args.arch](dataset=args.data, depth=args.depth)
-                device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-                model=model.to(device)
+                elif (self.args.arch == 'resnet'):
+                    model = models.__dict__[self.args.arch](dataset=self.args.data, depth=self.args.depth)
+                self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+                model=model.to(self.device)
 
                 ############################################################################
                 """loading model from path"""
 
-                if os.path.isfile(args.model):
-                    print("=> loading checkpoint '{}'".format(args.model))
-                    checkpoint = torch.load(args.model)
-                    args.start_epoch = checkpoint['epoch']
+                if os.path.isfile(self.args.model):
+                    print("=> loading checkpoint '{}'".format(self.args.model))
+                    checkpoint = torch.load(self.args.model)
+                    self.args.start_epoch = checkpoint['epoch']
                     best_prec1 = checkpoint['best_prec1']
                     model.load_state_dict(checkpoint['state_dict'])
-                    print("=> loaded checkpoint '{}' (epoch {}) Prec1: {:f}".format(args.model, checkpoint['epoch'], best_prec1))
+                    print("=> loaded checkpoint '{}' (epoch {}) Prec1: {:f}".format(self.args.model, checkpoint['epoch'], best_prec1))
+                self.model = model
 
-                ############################################################################
-
+    def threshold(self,model):
                 total = 0  # total number of scaling parameters
                 for m in model.modules():
                     if isinstance(m, nn.BatchNorm2d):
@@ -221,11 +156,11 @@ class prune_it:
                         index += size
 
                 y, i = torch.sort(bn)
-                thre_index = int(total * args.percent)
+                thre_index = int(total * self.args.percent)
                 thre = y[thre_index]   # the scaling threshold value, if a channel has scaling value lesser than threshold, it will be pruned
+                return thre,total
 
-                ##############################################################################
-
+    def config_create(self,model,thre,total):
                 pruned = 0     # total number of channels that are pruned
                 cfg = []       # list of number of channels that will be left after pruning
                 cfg_mask = []  # list that contains mask, in each mask we have information
@@ -244,42 +179,26 @@ class prune_it:
                         cfg.append('M')
 
                 pruned_ratio = pruned/total
+                print(f"The pruned_ratio is {pruned_ratio}")
+                return cfg,cfg_mask
 
-                ##############################################################################
-
-#                 def test():
-#                     kwargs = {'num_workers': 2, 'pin_memory': True}
-#                     test_loader = torch.utils.data.DataLoader(
-#                         datasets.CIFAR10('./data', train=False,download=True, transform=transforms.Compose([
-#                             transforms.ToTensor(),
-#                             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])),
-#                         batch_size=args.test_bs, shuffle=True, **kwargs)
-#                     model.eval()
-#                     correct = 0
-#                     for data, target in test_loader:
-#                         data, target = data.cuda(), target.cuda()
-#                         data, target = Variable(data, volatile=True), Variable(target)
-#                         output = model(data)
-#                         pred = output.data.max(1, keepdim=True)[1]
-#                         correct += pred.eq(target.data.view_as(pred)).cpu().sum()
-
-#                     print('\nTest set: Accuracy: {}/{} ({:.1f}%)\n'.format(correct, len(test_loader.dataset), 100. * correct / len(test_loader.dataset)))
-#                     return correct / float(len(test_loader.dataset))
-
-                ############################################################################
-                """defining a pruned model"""
+    def model_to_be_pruned(self,cfg , device):
+                device = self.device
                 print(cfg)
-                if (args.arch == 'vgg'):
+                if (self.args.arch == 'vgg'):
                     newmodel = models.vgg()
-                elif (args.arch == 'resnet'):
-                    newmodel = models.__dict__[args.arch](dataset=args.data, depth=args.depth)
+                elif (self.args.arch == 'resnet'):
+                    newmodel = models.__dict__[self.args.arch](dataset=self.args.data, depth=self.args.depth)
                 newmodel=newmodel.to(device)
                 print(len(cfg))
+                return newmodel
+
+    def prune(self,cfg,cfg_mask ,model , newmodel):
 
                 ############################################################################
                 """copying the weights corresponding to channels left after pruning in the new model"""
 
-                if(args.arch=="vgg"):
+                if(self.args.arch=="vgg"):
                     layer_id_in_cfg = 0
                     start_mask = torch.ones(3)
                     end_mask = cfg_mask[layer_id_in_cfg]
@@ -305,7 +224,7 @@ class prune_it:
                             idx0 = np.squeeze(np.argwhere(np.asarray(start_mask.cpu().numpy())))
                             m1.weight.data = m0.weight.data[:, idx0].clone()
 
-                elif(args.arch=='resnet'):
+                elif(self.args.arch=='resnet'):
                     old_modules = list(model.modules())
                     new_modules = list(newmodel.modules())
                     layer_id_in_cfg = 0
@@ -382,14 +301,20 @@ class prune_it:
                             m1.weight.data = m0.weight.data[:, idx0].clone()
                             m1.bias.data = m0.bias.data.clone()
 
-                ##################################################################################
+                
 
-                torch.save({'cfg': cfg, 'state_dict': newmodel.state_dict()}, args.save)
+                torch.save({'cfg': cfg, 'state_dict': newmodel.state_dict()}, self.args.save)
 
-                ##################################################################################
+                
                 self.model = newmodel
-    def return_pruned_model(self):
                 return self.model
+
+    def prune_model(self):
+                thre,total = self.threshold(self.model)
+                cfg,cfg_mask = self.config_create(self.model , thre ,total)
+                newmodel = self.model_to_be_pruned(cfg,self.device)
+                return self.prune(cfg,cfg_mask,self.model,newmodel)
+                
             ##################################################################################
 class OfNoUse:
   pass
@@ -437,20 +362,20 @@ class NetworkSlimming:
   def base_line(self):
     assert(self.args.fine_tune == False)
     x1 = Process(params=self.args)
-    model = x1.return_model()
+    model = x1.train_model()
     return model
 
   def prune(self):
     assert(self.args.save is not None)
     assert(self.args.model is not None)
     x1 = prune_it(params=self.args)
-    model = x1.return_pruned_model()
+    model = x1.prune_model()
     return model
 
   def compress(self):
     assert(self.args.fine_tune == True and self.args.sparsity_reg == False)
     x1 = Process(params=self.args)
-    model = x1.return_model()
+    model = x1.train_model()
     return model
 
   def train_compress(self):

@@ -2,7 +2,6 @@ from .resnet import get_resnet_model
 
 from .vgg_16_ns import *
 from .Resnet_164_ns import *
-from .channel_selection_ns import *
 class ModelsFactory(object):
     @staticmethod
     def create_model(name, num_classes=100, pretrained = False, **kwargs):
