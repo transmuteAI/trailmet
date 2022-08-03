@@ -1,3 +1,4 @@
+from tabnanny import verbose
 import numpy as np
 import pandas as pd
 import torch
@@ -28,7 +29,6 @@ class AttentionTransferLoss(nn.Module):
     def forward(self, feature_map_pairs):
         """feature_map_pairs: list of (teacher_feature_map, student_feature_map)"""
         loss = 0
-        batch_size = feature_map_pairs[0][0].size(0)
         for (teacher_feature_map, student_feature_map) in feature_map_pairs:
             loss += self.compute_loss(teacher_feature_map, student_feature_map)
         return loss
@@ -41,9 +41,8 @@ class AttentionTransfer(Distillation):
         self.student_model = student_model
         self.dataloaders = dataloaders
         self.kwargs = kwargs
-        self.device = kwargs['DEVICE']
         self.beta = self.kwargs['DISTILL_ARGS'].get('BETA', 1000);
-
+        
         #self.student_io_dict, self.teacher_io_dict = dict(), dict()
         self.teacher_layer_names = kwargs['DISTILL_ARGS'].get('TEACHER_LAYER_NAMES')
         self.student_layer_names = kwargs['DISTILL_ARGS'].get('STUDENT_LAYER_NAMES')
@@ -59,7 +58,10 @@ class AttentionTransfer(Distillation):
         self.distill(self.teacher_model, self.student_model, self.dataloaders, **self.kwargs['DISTILL_ARGS'])
 
     def distill(self, teacher_model, student_model, dataloaders, **kwargs):
-        print("=====TRAINING STUDENT NETWORK=====")
+        verbose = kwargs.get('VERBOSE', False)
+        if verbose:
+            print("=====TRAINING STUDENT NETWORK=====")
+
         self.register_hooks()
         num_epochs = kwargs.get('EPOCHS', 200)
         test_only = kwargs.get('TEST_ONLY', False)
@@ -78,7 +80,8 @@ class AttentionTransfer(Distillation):
 
         if test_only == False:
             for epoch in range(num_epochs):
-                print(f"Epoch: {epoch+1}")
+                if verbose:
+                    print(f"Epoch: {epoch+1}")
                 t_loss = self.train_one_epoch(teacher_model, student_model, dataloaders['train'], criterion, optimizer)
                 acc, v_loss = self.test(teacher_model, student_model, dataloaders['val'], criterion)
                 
@@ -86,13 +89,14 @@ class AttentionTransfer(Distillation):
                 scheduler.step()
                 
                 if acc > best_acc:
+                    if verbose:
                         print("**Saving checkpoint**")
-                        best_acc = acc
-                        torch.save({
-                            "epoch": epoch+1,
-                            "state_dict": student_model.state_dict(),
-                            "accuracy": acc,
-                        }, f"checkpoints/{self.log_name}.pth")
+                    best_acc = acc
+                    torch.save({
+                        "epoch": epoch+1,
+                        "state_dict": student_model.state_dict(),
+                        "accuracy": acc,
+                    }, f"checkpoints/{self.log_name}.pth")
                 train_losses.append(t_loss)
                 valid_losses.append(v_loss)
                 valid_accuracy.append(acc)
