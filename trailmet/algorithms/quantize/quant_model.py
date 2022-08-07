@@ -5,12 +5,19 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.distributed as dist
+import copy
 from typing import Union
 from trailmet.models.resnet import BasicBlock, Bottleneck
 from trailmet.models.mobilenetv2 import InvertedResidual
 from trailmet.algorithms.quantize.quantize import StraightThrough, FoldBN
-from trailmet.algorithms.quantize.methods import UniformAffineQuantizer
+from trailmet.algorithms.quantize.methods import UniformAffineQuantizer, LpNormQuantizer, FixQuantizationClipValue
 
+
+quantization_mapping = {
+    'uaq' : UniformAffineQuantizer,
+    'lp_norm' : LpNormQuantizer,
+    'fix_clip' : FixQuantizationClipValue
+}
 
 #=========================
 ##### Quantize Layer #####
@@ -21,45 +28,59 @@ class QuantModule(nn.Module):
     Quantized Module that can perform quantized convolution or normal convolution.
     To activate quantization, please use set_quant_state function.
     """
-    def __init__(self, org_module: Union[nn.Conv2d, nn.Linear], weight_quant_params: dict = {},
+    def __init__(self, orig_module: Union[nn.Conv2d, nn.Linear], weight_quant_params: dict = {},
                  act_quant_params: dict = {}, disable_act_quant: bool = False, se_module=None):
         super(QuantModule, self).__init__()
-        if isinstance(org_module, nn.Conv2d):
-            self.fwd_kwargs = dict(stride=org_module.stride, padding=org_module.padding,
-                                   dilation=org_module.dilation, groups=org_module.groups)
+        if isinstance(orig_module, nn.Conv2d):
+            self.fwd_kwargs = dict(stride=orig_module.stride, padding=orig_module.padding,
+                                   dilation=orig_module.dilation, groups=orig_module.groups)
             self.fwd_func = F.conv2d
         else:
             self.fwd_kwargs = dict()
             self.fwd_func = F.linear
-        self.weight = org_module.weight
-        self.org_weight = org_module.weight.data.clone()
-        if org_module.bias is not None:
-            self.bias = org_module.bias
-            self.org_bias = org_module.bias.data.clone()
+        self.weight = orig_module.weight
+        self.orig_weight = orig_module.weight.data.clone()
+        if orig_module.bias is not None:
+            self.bias = orig_module.bias
+            self.orig_bias = orig_module.bias.data.clone()
         else:
             self.bias = None
-            self.org_bias = None
+            self.orig_bias = None
         # de-activate the quantized forward default
         self.use_weight_quant = False
         self.use_act_quant = False
         self.disable_act_quant = disable_act_quant
-        # initialize quantizer
-        self.weight_quantizer = UniformAffineQuantizer(**weight_quant_params)
-        self.act_quantizer = UniformAffineQuantizer(**act_quant_params)
-
         self.activation_function = StraightThrough()
-        self.ignore_reconstruction = False
+        # initialize quantizer
+        assert weight_quant_params.get('qtype', 'uaq') == act_quant_params.get('qtype', 'uaq'), 'qtype mismatch'
+        self.qtype = weight_quant_params.get('qtype', 'uaq')
+        self.bcorr = False if self.qtype=='uaq' else True
+        if self.qtype=='uaq':
+            self.bcorr = False
+            self.weight_quantizer = quantization_mapping[self.qtype](**weight_quant_params)
+            self.act_quantizer = quantization_mapping[self.qtype](**act_quant_params)
+        else:
+            self.bcorr = True
+            self.weight_quantizer = quantization_mapping[self.qtype](self, self.weight, **weight_quant_params) # must pass weight here
+            self.act_quantizer = self.act_quantization_default = None
+            def __init_out_quantization__(tensor):
+                self.act_quantization_default = quantization_mapping[self.qtype](self, tensor, **act_quant_params) # To Do: make it assymmetric for ReLU
+                self.act_quantizer = self.act_quantization_default
+            self.act_quantization_init_fn = __init_out_quantization__
 
+        self.ignore_reconstruction = False
         self.se_module = se_module
-        self.extra_repr = org_module.extra_repr
+        self.extra_repr = orig_module.extra_repr
 
     def forward(self, input: torch.Tensor):
         if self.use_weight_quant:
             weight = self.weight_quantizer(self.weight)
             bias = self.bias
+            if self.bcorr:
+                weight = self.bias_corr(self.weight, weight)
         else:
-            weight = self.org_weight
-            bias = self.org_bias
+            weight = self.orig_weight
+            bias = self.orig_bias
         out = self.fwd_func(input, weight, bias, **self.fwd_kwargs)
         # disable act quantization is designed for convolution before elemental-wise operation,
         # in that case, we apply activation function and quantization after ele-wise op.
@@ -69,12 +90,33 @@ class QuantModule(nn.Module):
         if self.disable_act_quant:
             return out
         if self.use_act_quant:
+            if self.qtype!='uaq':
+                self.verify_initialized(self.act_quantizer, out, self.act_quantization_init_fn)
             out = self.act_quantizer(out)
         return out
+
+    def bias_corr(self, x: torch.Tensor, xq: torch.Tensor):
+        bias_q = xq.view(xq.shape[0], -1).mean(-1)
+        bias_orig = x.view(x.shape[0], -1).mean(-1)
+        bcorr = bias_q - bias_orig
+
+        return xq - bcorr.view(bcorr.numel(), 1, 1, 1) if len(x.shape) == 4 else xq - bcorr.view(bcorr.numel(), 1)
+
+    @staticmethod
+    def verify_initialized(quantization_handle, tensor, init_fn):
+        if quantization_handle is None:
+            init_fn(tensor)
 
     def set_quant_state(self, weight_quant: bool = False, act_quant: bool = False):
         self.use_weight_quant = weight_quant
         self.use_act_quant = act_quant
+    
+    def get_quantization(self):
+        return self.weight_quantizer
+
+    def set_quantization(self, clip_value=None, device=None, new_qtype='fix_clip', **kwargs):
+        assert self.qtype != 'uaq', 'quant type not supported by LAPQ'
+        self.weight_quantizer = quantization_mapping[new_qtype](self, clip_value=clip_value, device=device, **kwargs)
 
 
 #=========================
@@ -210,7 +252,7 @@ class QuantInvertedResidual(BaseQuantBlock):
         return out
 
 
-specials = {
+replacement_factory = {
     BasicBlock: QuantBasicBlock,
     Bottleneck: QuantBottleneck,
     InvertedResidual: QuantInvertedResidual,
@@ -223,7 +265,7 @@ specials = {
 class QuantModel(nn.Module):
     def __init__(self, model: nn.Module, weight_quant_params: dict = {}, act_quant_params: dict = {}):
         super().__init__()
-        self.model = model
+        self.model = copy.deepcopy(model)
         bn = FoldBN()
         bn.search_fold_and_remove_bn(self.model)
         self.quant_module_refactor(self.model, weight_quant_params, act_quant_params)
@@ -237,8 +279,8 @@ class QuantModel(nn.Module):
         """
         prev_quantmodule = None
         for name, child_module in module.named_children():
-            if type(child_module) in specials:
-                setattr(module, name, specials[type(child_module)](child_module, weight_quant_params, act_quant_params))
+            if type(child_module) in replacement_factory:
+                setattr(module, name, replacement_factory[type(child_module)](child_module, weight_quant_params, act_quant_params))
 
             elif isinstance(child_module, (nn.Conv2d, nn.Linear)):
                 setattr(module, name, QuantModule(child_module, weight_quant_params, act_quant_params))
@@ -292,3 +334,20 @@ class QuantModel(nn.Module):
                     m.act_quantizer.delta.data /= dist.get_world_size()
                     dist.all_reduce(m.act_quantizer.delta.data)
 
+    def set_quant_params(self, scales: list, device=None, **kwargs):
+        i=0
+        for module in self.model.modules():
+            if isinstance(module, QuantModule):
+                module.set_quantization(
+                    clip_value=scales[i], device=device, new_qtype='fix_clip', **kwargs)
+                i+=1
+        
+    def get_quant_params(self):
+        scales = []
+        for module in self.model.modules():
+            if isinstance(module, QuantModule):
+                q = module.get_quantization()
+                assert hasattr(q, 'alpha'), 'quant module has no atttribute alpha'
+                clip_value = getattr(q, 'alpha')
+                scales.append(clip_value.item())
+        return scales
