@@ -3,7 +3,8 @@
 import torch
 import torch.distributed as dist
 from trailmet.algorithms.quantize.quantize import StraightThrough, BaseQuantization as BQ
-from trailmet.algorithms.quantize.quant_model import AdaRoundQuantizer, QuantModule, BaseQuantBlock, QuantModel
+from trailmet.algorithms.quantize.quant_model import QuantModule, BaseQuantBlock, QuantModel
+from trailmet.algorithms.quantize.methods import AdaRoundQuantizer
 from trailmet.algorithms.quantize.data_hooks import save_inp_oup_data, save_grad_data
 
 
