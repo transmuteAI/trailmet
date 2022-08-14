@@ -4,7 +4,7 @@ including methods to load and fetch popular reference datasets.
 """
 import os
 #from .cifar import CIFAR10Dataset, CIFAR100Dataset, ImageNetDataset
-from .cifar import CIFAR10Dataset
+from .cifar import CIFAR10Dataset, CIFAR100Dataset
 from .imagenet import ImageNetDataset
 
 class DatasetFactory(object):
@@ -28,10 +28,12 @@ class DatasetFactory(object):
         if 'CIFAR10' == name:
             obj_dfactory = CIFAR10Dataset(**kwargs)
             dataset =  obj_dfactory.stack_dataset()
-        # elif 'CIFAR100' == name:
-            # dataset = CIFAR100Dataset(**kwargs)
+        elif 'CIFAR100' == name:
+            obj_dfactory = CIFAR100Dataset(**kwargs)
+            dataset =  obj_dfactory.stack_dataset()
         elif 'ImageNet' == name:
-            dataset = ImageNetDataset(**kwargs)
+            obj_dfactory = ImageNetDataset(**kwargs)
+            dataset = obj_dfactory.stack_dataset()
         else:
-            raise Exception("unknown dataset{}".format(kwargs['name']))
+            raise Exception(f"unknown dataset{kwargs['name']}")
         return dataset
