@@ -50,7 +50,8 @@ class BRECQ(BaseQuantization):
         self.test_before_calibration = True
         self.device = torch.device('cuda:{}'.format(self.gpu_id))
         torch.cuda.set_device(self.gpu_id)
-        seed_everything(42)
+        seed_everything(self.seed)
+        print('==> Using seed :',self.seed)
 
 
     def compress_model(self):
