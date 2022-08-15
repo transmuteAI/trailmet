@@ -1,7 +1,7 @@
 from __future__ import print_function
 ""
 import sys
-sys.path.append("../../../../../")
+sys.path.append("../../../../")
 import os
 import torch
 import torch.nn as nn
@@ -40,8 +40,9 @@ class Process(BaseAlgorithm):
                 model = models.vgg(cfg=cfg , num_classes = self.args.num_classes )
                 model = model.to(device)
             elif(self.args.arch== 'resnet'):
-                model = models.__dict__[self.args.arch](dataset=self.args.data, depth=self.args.depth, cfg=cfg , num_classes = self.args.num_classes)
-                model = model.to(device)
+                #model = models.__dict__[self.args.arch](dataset=self.args.data, depth=self.args.depth, cfg=cfg , num_classes = self.args.num_classes)
+                model = models.make_ns_resnet(num_classes=self.args.num_classes , cfg = cfg)
+                model = model.to(device) 
             #checkpoint = torch.load(self.args.path)
             model.load_state_dict(checkpoint['state_dict'])
         else:
@@ -49,7 +50,8 @@ class Process(BaseAlgorithm):
                 model = models.vgg()
                 model = model.to(device)
             elif(self.args.arch=='resnet'):
-                model = models.__dict__[self.args.arch](dataset=self.args.data, depth=self.args.depth)
+                #model = models.__dict__[self.args.arch](dataset=self.args.data, depth=self.args.depth)
+                model = models.make_ns_resnet(num_classes=self.args.num_classes)
                 model = model.to(device)
         self.model = model
         print(model)
@@ -95,8 +97,10 @@ class Process(BaseAlgorithm):
           if epoch in [self.args.epochs*0.5, self.args.epochs*0.75]:
             for param_group in optimizer.param_groups:
               param_group['lr'] *= 0.1
-          loss = self.train_one_epoch(model=model , dataloader=train_loader , loss_fn=criteria , optimizer=optimizer , extra_functionality=None)
-          model = self.updateBN(model= model)
+          loss = self.train_one_epoch(model=model , dataloader=train_loader , loss_fn=criteria , optimizer=optimizer , extra_functionality= None)
+          for m in model.modules():
+             if isinstance(m, nn.BatchNorm2d):
+               m.weight.grad.data.add_(self.args.thr*torch.sign(m.weight.data))
           prec1, loss_test = self.test(model = model , dataloader = test_loader , loss_fn = criteria)
           print("Train set :: Average loss: {} \n".format(loss))
           print('\nTest set: Average loss: {}, Accuracy: {} \n'.format(loss_test, prec1*100 , " "))
@@ -118,14 +122,15 @@ class Process(BaseAlgorithm):
       self.model = self.train(model = self.model , optimizer = optimizer, criteria = criteria , train_loader = self.train_loader , test_loader = self.test_loader)
       return self.model
 
-class prune_it:
+class PruneIt:
 
     def __init__(self,params):
                 self.args = params
                 if (self.args.arch == 'vgg'):
                     model = models.vgg()
                 elif (self.args.arch == 'resnet'):
-                    model = models.__dict__[self.args.arch](dataset=self.args.data, depth=self.args.depth)
+                    #model = models.__dict__[self.args.arch](dataset=self.args.data, depth=self.args.depth)
+                     model = models.make_ns_resnet(num_classes = self.args.num_classes)
                 self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
                 model=model.to(self.device)
 
@@ -188,7 +193,8 @@ class prune_it:
                 if (self.args.arch == 'vgg'):
                     newmodel = models.vgg()
                 elif (self.args.arch == 'resnet'):
-                    newmodel = models.__dict__[self.args.arch](dataset=self.args.data, depth=self.args.depth)
+                    #newmodel = models.__dict__[self.args.arch](dataset=self.args.data, depth=self.args.depth)
+                     newmodel = make_resnet_spl(self.args.num_classes , 32)
                 newmodel=newmodel.to(device)
                 print(len(cfg))
                 return newmodel
@@ -304,7 +310,7 @@ class prune_it:
                 
 
                 torch.save({'cfg': cfg, 'state_dict': newmodel.state_dict()}, self.args.save)
-
+                print("The new model" , newmodel)
                 
                 self.model = newmodel
                 return self.model
@@ -323,26 +329,26 @@ class NetworkSlimming:
     #super(NetworkSlimming,self).__init__(**kwargs)
     self.args = OfNoUse()
     self.kwargs = kwargs
-    self.args.data = self.kwargs['NETWORK_SLIMMING'].get('DATA' ,None)
-    self.args.num_classes = self.kwargs['NETWORK_SLIMMING'].get('NUM_CLASSES' , 10)      # dataset on which model is trained
-    self.args.sparsity_reg = self.kwargs['NETWORK_SLIMMING'].get('SPARSITY_REG' , True)    # true if training is done with sparsity regularization
-    self.args.thr = self.kwargs['NETWORK_SLIMMING'].get('THR' ,1e-5)      # the sparsity regularization hyperparameter value
+    self.args.data = self.kwargs['NETWORK_SLIMMING']['GENERAL'].get('DATA' ,None)
+    self.args.num_classes = self.kwargs['NETWORK_SLIMMING']['GENERAL'].get('NUM_CLASSES' , 10)      # dataset on which model is trained
+    self.args.sparsity_reg = self.kwargs['NETWORK_SLIMMING']['PRETRAIN'].get('SPARSITY_REG' , True)    # true if training is done with sparsity regularization
+    self.args.thr = self.kwargs['NETWORK_SLIMMING']['PRETRAIN'].get('THR' ,1e-5)      # the sparsity regularization hyperparameter value
     self.args.train_loader = data_loaders['train']
     self.args.test_loader = data_loaders['test']
-    self.args.fine_tune = self.kwargs['NETWORK_SLIMMING'].get('FINE_TUNE' ,False)        # true if pruned model is being fine-tuned
+    self.args.fine_tune = self.kwargs['NETWORK_SLIMMING']['PRETRAIN'].get('FINE_TUNE' ,False)        # true if pruned model is being fine-tuned
     self.args.path = self.kwargs['NETWORK_SLIMMING'].get('PATH' ,None)      # path from where the pruned model is loaded
-    self.args.resume = self.kwargs['NETWORK_SLIMMING'].get('RESUME' ,False)      # true of we have to resume training of some model whose checkpoint is saved
-    self.args.train_bs = self.kwargs['NETWORK_SLIMMING'].get('TRAIN_BS' ,64)      # training batch size
-    self.args.test_bs = self.kwargs['NETWORK_SLIMMING'].get('TEST_BS' ,256)        # test batch size
-    self.args.epochs = self.kwargs['NETWORK_SLIMMING'].get('EPOCHS' ,100)
-    self.args.optimizer_name = self.kwargs['NETWORK_SLIMMING'].get('OPTIMIZER_NAME', None)
-    self.args.lr = self.kwargs['NETWORK_SLIMMING'].get('LR' ,1e-1)
-    self.args.momentum = self.kwargs['NETWORK_SLIMMING'].get('MOMENTUM' ,0.9)
-    self.args.weight_decay = self.kwargs['NETWORK_SLIMMING'].get('WEIGHT_DECAY' ,1e-4)
+    self.args.resume = self.kwargs['NETWORK_SLIMMING']['PRETRAIN'].get('RESUME' ,False)      # true of we have to resume training of some model whose checkpoint is saved
+    self.args.train_bs = self.kwargs['NETWORK_SLIMMING']['PRETRAIN']['BATCH_SIZE'].get('TRAIN_BS' ,64)      # training batch size
+    self.args.test_bs = self.kwargs['NETWORK_SLIMMING']['PRETRAIN']['BATCH_SIZE'].get('TEST_BS' ,256)        # test batch size
+    self.args.epochs = self.kwargs['NETWORK_SLIMMING']['PRETRAIN'].get('EPOCHS' ,100)
+    self.args.optimizer_name = self.kwargs['NETWORK_SLIMMING']['GENERAL'].get('OPTIMIZER_NAME', None)
+    self.args.lr = self.kwargs['NETWORK_SLIMMING']['GENERAL'].get('LR' ,1e-1)
+    self.args.momentum = self.kwargs['NETWORK_SLIMMING']['GENERAL'].get('MOMENTUM' ,0.9)
+    self.args.weight_decay = self.kwargs['NETWORK_SLIMMING']['GENERAL'].get('WEIGHT_DECAY' ,1e-4)
     self.args.log_interval = self.kwargs['NETWORK_SLIMMING'].get('LOG_INTERVAL' , 100)     # number of intervals after which accuracy and loss values are printed during training
-    self.args.arch = self.kwargs['NETWORK_SLIMMING'].get('ARCH' ,'vgg')      # model architecture
-    self.args.depth = self.kwargs['NETWORK_SLIMMING'].get('DEPTH' , 164) 
-    self.args.percent = self.kwargs['NETWORK_SLIMMING'].get('PERCENT' , 0.6)
+    self.args.arch = self.kwargs['NETWORK_SLIMMING']['GENERAL'].get('ARCH' ,'vgg')      # model architecture
+    self.args.depth = self.kwargs['NETWORK_SLIMMING']['GENERAL'].get('DEPTH' , 164) 
+    self.args.percent = self.kwargs['NETWORK_SLIMMING']['GENERAL'].get('PERCENT' , 0.6)
     self.args.path = path
     self.args.save = save
     self.args.model = model
@@ -368,7 +374,7 @@ class NetworkSlimming:
   def prune(self):
     assert(self.args.save is not None)
     assert(self.args.model is not None)
-    x1 = prune_it(params=self.args)
+    x1 = PruneIt(params=self.args)
     model = x1.prune_model()
     return model
 

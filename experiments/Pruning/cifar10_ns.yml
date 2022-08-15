@@ -1,21 +1,36 @@
+
+# NETWORK_SLIMMING:
+
+
+#      PRETRAIN :
+#        SPARSITY_REG : True
+#        THR : 0.00001
+#        FINE_TUNE : False
+#        RESUME : False
+#        EPOCHS : 100
+#        BATCH_SIZE:
+#           TRAIN_BS : 64
+#           TEST_BS : 256
 NETWORK_SLIMMING:
-  DATA : cifar10
-  ARCH : vgg
-  NUM_CLASSES : 10
-  SPARSITY_REG : True
-  THR : 0.00001
-  FINE_TUNE : False
-  RESUME : False
-  TRAIN_BS : 64
-  TEST_BS : 256
-  EPOCHS : 100
-  OPTIMIZER_NAME : SGD
-  LR : 0.1
-  MOMENTUM : 0.9
-  WEIGHT_DECAY : 0.0001
-  LOG_INTERVAL : 100
-  DEPTH : 164
-  PERCENT : 0.6
-  
+       GENERAL : 
+           DATA : cifar10
+           ARCH : vgg
+           NUM_CLASSES : 10
+           LR : 0.1
+           MOMENTUM : 0.9
+           WEIGHT_DECAY : 0.0001
+           LOG_INTERVAL : 100
+           DEPTH : 164  
+           OPTIMIZER_NAME : SGD
+           PERCENT : 0.6
+ 
+       SPARSITY_REG : True
+       THR : 0.00001
+       FINE_TUNE : False
+       RESUME : False
+       TRAIN_BS : 64
+       TEST_BS : 256
+       EPOCHS : 100
+
 
 
