@@ -12,7 +12,7 @@ optimizer_map = {
     'sgd' : torch.optim.SGD,
     'adam' : torch.optim.Adam,
     'adagrad' : torch.optim.Adagrad,
-    'adadelta' : torch.optim.adadelta
+    'adadelta' : torch.optim.Adadelta
 }
 #============================
 ##### Reconstruct Layer #####

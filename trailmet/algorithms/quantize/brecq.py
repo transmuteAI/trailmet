@@ -7,7 +7,6 @@ from trailmet.algorithms.quantize.quant_model import QuantModel, BaseQuantBlock,
 from trailmet.algorithms.quantize.reconstruct import layer_reconstruction, block_reconstruction
 
 
-seed_everything(42)
 
 class BRECQ(BaseQuantization):
     """
@@ -44,12 +43,15 @@ class BRECQ(BaseQuantization):
         self.lr = self.kwargs.get('LR', 4e-4)
         self.gpu_id = self.kwargs.get('GPU_ID', 0)
         self.calib_bs = self.kwargs.get('CALIB_BS', 64)
+        self.seed = self.kwargs.get('SEED', 42)
         self.p = 2.4         # Lp norm minimization for LSQ
         self.b_start = 20    # temperature at the beginning of calibration
         self.b_end = 2       # temperature at the end of calibration
         self.test_before_calibration = True
         self.device = torch.device('cuda:{}'.format(self.gpu_id))
         torch.cuda.set_device(self.gpu_id)
+        seed_everything(self.seed)
+        print('==> Using seed :',self.seed)
 
 
     def compress_model(self):

@@ -1,9 +1,3 @@
-"""
-Author:
-"""
-import os
-import pickle
-import torch
 import numpy as np
 from torch.utils.data.sampler import SubsetRandomSampler
 
@@ -30,6 +24,7 @@ class BaseDataset:
         self.shuffle = shuffle
         self.random_seed = random_seed
         self.val_exists = False
+        self.dataset_dict = {}
 
     def stack_dataset(self):
         """
