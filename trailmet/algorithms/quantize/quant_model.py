@@ -473,6 +473,18 @@ class QuantModel(nn.Module):
                 module_list += [m]
         module_list[-1].disable_act_quant = True
 
+    def set_layer_precision(self, weight_bit=8, act_bit=8, start=1, end=-1):
+        module_list = []
+        for m in self.model.modules():
+            if isinstance(m, QuantModel):
+                module_list += [m]
+        assert start>=0 and end>=0, 'layer index cannot be negative'
+        assert start<len(module_list) and end<len(module_list), 'layer index out of range'
+        for i in range(start, end+1):
+            module_list[i].weight_quantizer.bitwidth_refactor(weight_bit)
+            if i==len(module_list)-1: continue
+            module_list[i].act_quantizer.bitwidth_refactor(act_bit)
+
     def synchorize_activation_statistics(self):
         # import linklink.dist_helper as dist
         for m in self.modules():

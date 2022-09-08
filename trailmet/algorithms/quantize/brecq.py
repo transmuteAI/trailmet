@@ -35,6 +35,7 @@ class BRECQ(BaseQuantization):
         self.channel_wise = self.kwargs.get('CHANNEL_WISE', True)
         self.act_quant = self.kwargs.get('ACT_QUANT', True)
         self.set_8bit_head_stem = self.kwargs.get('SET_8BIT_HEAD_STEM', True)
+        self.precision_config = self.kwargs.get('PREC_CONFIG', [])
         self.num_samples = self.kwargs.get('NUM_SAMPLES', 1024)
         self.weight = self.kwargs.get('WEIGHT', 0.01)
         self.iters_w = self.kwargs.get('ITERS_W', 20000)
@@ -65,6 +66,11 @@ class BRECQ(BaseQuantization):
         self.qnn = QuantModel(model=self.model, weight_quant_params=wq_params, act_quant_params=aq_params)
         self.qnn = self.qnn.to(self.device)
         self.qnn.eval()
+
+        for i in range(len(self.precision_config)):
+            conf = self.precision_config[i]
+            self.qnn.set_layer_precision(conf[2], conf[3], conf[0], conf[1])
+            print(f'==> Layers from {conf[0]} to {conf[1]} set to precision w{conf[2]}a{conf[3]}')
         
         if self.set_8bit_head_stem:
             print('==> Setting the first and the last layer to 8-bit')
