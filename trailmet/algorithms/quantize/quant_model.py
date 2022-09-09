@@ -476,7 +476,7 @@ class QuantModel(nn.Module):
     def set_layer_precision(self, weight_bit=8, act_bit=8, start=1, end=-1):
         module_list = []
         for m in self.model.modules():
-            if isinstance(m, QuantModel):
+            if isinstance(m, QuantModule):
                 module_list += [m]
         assert start>=0 and end>=0, 'layer index cannot be negative'
         assert start<len(module_list) and end<len(module_list), 'layer index out of range'
