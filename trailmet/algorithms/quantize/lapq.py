@@ -22,7 +22,7 @@ class LAPQ(BaseQuantization):
         self.a_bits = kwargs.get('A_BITS', 8)
         self.calib_batches = kwargs.get('CALIB_BATCHES', 16)
         self.act_quant = kwargs.get('ACT_QUANT', True)
-        self.test_before_calibration = True
+        self.test_before_calibration = kwargs.get('DRY_RUN', True)
         self.maxiter = kwargs.get('MAX_ITER', 1)
         self.maxfev = kwargs.get('MAX_FEV', 1)
         self.verbose = kwargs.get('VERBOSE', True)
@@ -51,13 +51,14 @@ class LAPQ(BaseQuantization):
             layers += [n for n, m in self.model.named_modules() if isinstance(m, nn.ReLU)][1:-1]
             layers += [n for n, m in self.model.named_modules() if isinstance(m, nn.ReLU6)][1:-1]
 
-        args['qtype'] = 'max_static'
-        cnn = copy.deepcopy(self.model)
-        mq = ModelQuantizer(cnn, args, layers)
-        print('Quantization (W{}A{}) accuracy before LAPQ: {}'.format(
-            self.w_bits, self.a_bits, 
-            self.test(mq.model, self.val_loader, device=self.device)))
-        del mq, cnn
+        if self.test_before_calibration:
+            args['qtype'] = 'max_static'
+            cnn = copy.deepcopy(self.model)
+            mq = ModelQuantizer(cnn, args, layers)
+            print('Quantization (W{}A{}) accuracy before LAPQ: {}'.format(
+                self.w_bits, self.a_bits, 
+                self.test(mq.model, self.val_loader, device=self.device)))
+            del mq, cnn
 
         ps = np.linspace(2,4,10)
         losses = []
@@ -96,8 +97,8 @@ class LAPQ(BaseQuantization):
         def local_search_callback(x):
             it = next(count_iter)
             quant_model.set_clipping(x, self.device)
-            loss = self.evaluate_loss(quant_model, self.device)
-            print('\n==> Loss at end of iter [{}] : {:.4f}\n'.format(it, loss))
+            loss = self.evaluate_loss(quant_model.model, self.device)
+            print('\n==> Loss at end of iter [{}] : {:.4f}\n'.format(it, loss.item()))
             if self.verbose:
                 print('==> Layer-wise Scales :\n', x)
 
@@ -109,7 +110,7 @@ class LAPQ(BaseQuantization):
         quant_model.set_clipping(scales, self.device)
         print('Full quantization (W{}A{}) accuracy: {}'.format(
             self.w_bits, self.a_bits, 
-            self.test(quant_model, self.val_loader, device=self.device)))
+            self.test(quant_model.model, self.val_loader, device=self.device)))
         self.qnn = copy.deepcopy(quant_model.model)
 
 
