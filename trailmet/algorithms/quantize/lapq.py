@@ -7,7 +7,7 @@ import scipy.optimize as optim
 from itertools import count
 from tqdm import tqdm_notebook
 from trailmet.utils import seed_everything
-from trailmet.algorithms.quantize.quantize import BaseQuantization, FoldBN
+from trailmet.algorithms.quantize.quantize import BaseQuantization
 from trailmet.algorithms.quantize.qmodel import ModelQuantizer
 
 
@@ -20,12 +20,8 @@ class LAPQ(BaseQuantization):
         self.kwargs = kwargs
         self.w_bits = kwargs.get('W_BITS', 8)
         self.a_bits = kwargs.get('A_BITS', 8)
-        self.num_samples = kwargs.get('NUM_SAMPLES', 1024)
+        self.calib_batches = kwargs.get('CALIB_BATCHES', 16)
         self.act_quant = kwargs.get('ACT_QUANT', True)
-        self.symm = kwargs.get('SYMM', True)
-        self.uint = kwargs.get('UINT', True)
-        self.channel_wise = False   # lapq supports only layer-wise
-        self.set_8bit_head_stem = kwargs.get('SET_8BIT_HEAD_STEM', False)   # To do: make this bug free for True
         self.test_before_calibration = True
         self.maxiter = kwargs.get('MAX_ITER', 1)
         self.maxfev = kwargs.get('MAX_FEV', 1)
@@ -35,15 +31,13 @@ class LAPQ(BaseQuantization):
         self.seed = kwargs.get('SEED', 42)
         seed_everything(self.seed)
         self.device = torch.device('cuda:{}'.format(self.gpu_id))
-        self.calib_data = self.get_calib_samples(self.train_loader, self.num_samples)
+        self.calib_data = self.get_calib_samples(self.train_loader, 64*self.calib_batches)
         self.eval_count = count(0)
-        # self._iter = count(0)
         self.min_loss = 1e6
 
     def compress_model(self):
         self.model.to(self.device)
-        fbn = FoldBN()
-        fbn.search_fold_and_remove_bn(self.model)
+        self.search_absorbe_bn(self.model)
         args = {
             'bit_weights' : self.w_bits,
             'bit_act' : self.a_bits,
@@ -137,7 +131,7 @@ class LAPQ(BaseQuantization):
             if not hasattr(self, 'cal_set'):
                 self.cal_set = []
                 for i, (images, target) in enumerate(self.train_loader):
-                    if i>=16:             # TODO: make this robust for variable batch size
+                    if i>=self.calib_batches:             # TODO: make this robust for variable batch size
                         break
                     images = images.to(device, non_blocking=True)
                     target = target.to(device, non_blocking=True)
