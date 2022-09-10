@@ -40,7 +40,39 @@ class StraightThrough(nn.Module):
 
     def forward(self, input):
         return input
-    
+
+
+class RoundSTE(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, input):
+        output = torch.round(input)
+        return output
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        return grad_output 
+
+
+class Conv2dFunctor:
+    def __init__(self, conv2d):
+        self.conv2d = conv2d
+    def __call__(self, *input, weight, bias):
+        res = torch.nn.functional.conv2d(
+            *input, weight, bias, 
+            self.conv2d.stride, self.conv2d.padding,
+            self.conv2d.dilation, self.conv2d.groups
+        )
+        return res
+
+class LinearFunctor:
+    def __init__(self, linear):
+        self.linear = linear
+
+    def __call__(self, *input, weight, bias):
+        res = torch.nn.functional.linear(*input, weight, bias)
+        return res
+
+
 class FoldBN():
     """used to fold batch norm to prev linear or conv layer which helps reduce comutational overhead during quantization"""
     def __init__(self):
