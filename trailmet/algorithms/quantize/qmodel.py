@@ -37,7 +37,7 @@ class ActivationModuleWrapper(nn.Module):
                     uint=True, kwargs=kwargs
                 )
                 self.out_quantization = self.out_quantization_default
-                print("ActivationModuleWrapperPost - {} | {} | {}".format(self.name, str(self.out_quantization), str(tensor.device)))
+                # print("ActivationModuleWrapperPost - {} | {} | {}".format(self.name, str(self.out_quantization), str(tensor.device)))
 
             self.out_quantization_init_fn = __init_out_quantization__
 
@@ -108,7 +108,7 @@ class ParameterModuleWrapper(nn.Module):
             if not self.dynamic_weight_quantization:
                 self.weight_q = self.weight_quantization(self.weight)
                 self.weight_mse = torch.mean((self.weight_q - self.weight)**2).item()
-            print("ParameterModuleWrapperPost - {} | {} | {}".format(self.name, str(self.weight_quantization),str(self.weight.device)))
+            # print("ParameterModuleWrapperPost - {} | {} | {}".format(self.name, str(self.weight_quantization),str(self.weight.device)))
 
     def __enabled__(self):
         return self.enabled and self.active and self.bit_weights is not None
@@ -147,8 +147,8 @@ class ModelQuantizer:
     def __init__(self, model, args, quantizable_layers, optimizer_bridge=None):
         self.model = model
         self.args = args
-        self.bit_weights = args.bit_weights
-        self.bit_act = args.bit_act
+        self.bit_weights = args['bit_weights']
+        self.bit_act = args['bit_act']
         self.post_relu = True
         
         self.replacement_factory = {

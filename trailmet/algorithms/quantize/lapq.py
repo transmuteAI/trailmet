@@ -7,7 +7,7 @@ import scipy.optimize as optim
 from itertools import count
 from tqdm import tqdm_notebook
 from trailmet.utils import seed_everything
-from trailmet.algorithms.quantize.quantize import BaseQuantization
+from trailmet.algorithms.quantize.quantize import BaseQuantization, FoldBN
 from trailmet.algorithms.quantize.qmodel import ModelQuantizer
 
 
@@ -42,9 +42,12 @@ class LAPQ(BaseQuantization):
 
     def compress_model(self):
         self.model.to(self.device)
+        fbn = FoldBN()
+        fbn.search_fold_and_remove_bn(self.model)
         args = {
             'bit_weights' : self.w_bits,
             'bit_act' : self.a_bits,
+            'bcorr_w' : True,
             'qtype' : 'lp_norm',
             'lp' : 2.0
         }
@@ -60,7 +63,7 @@ class LAPQ(BaseQuantization):
         print('Quantization (W{}A{}) accuracy before LAPQ: {}'.format(
             self.w_bits, self.a_bits, 
             self.test(mq.model, self.val_loader, device=self.device)))
-        del qm, cnn
+        del mq, cnn
 
         ps = np.linspace(2,4,10)
         losses = []
@@ -113,13 +116,13 @@ class LAPQ(BaseQuantization):
         print('Full quantization (W{}A{}) accuracy: {}'.format(
             self.w_bits, self.a_bits, 
             self.test(quant_model, self.val_loader, device=self.device)))
-        self.qnn = copy.deepcopy(quant_model)
+        self.qnn = copy.deepcopy(quant_model.model)
 
 
     def evaluate_calibration(self, scales, QM: ModelQuantizer, device):
         eval_count = next(self.eval_count)
         QM.set_clipping(scales, device)
-        loss = self.evaluate_loss(QM.model, device)
+        loss = self.evaluate_loss(QM.model, device).item()
         if loss < self.min_loss:
             self.min_loss = loss
         if self.verbose and eval_count%self.print_freq==0:
