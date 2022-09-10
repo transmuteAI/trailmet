@@ -5,7 +5,7 @@ import torch.nn as nn
 import numpy as np
 import scipy.optimize as optim
 from itertools import count
-from tqdm import tqdm_notebook
+from tqdm import tqdm as tqdm_notebook
 from trailmet.utils import seed_everything
 from trailmet.algorithms.quantize.quantize import BaseQuantization
 from trailmet.algorithms.quantize.qmodel import ModelQuantizer
