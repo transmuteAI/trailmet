@@ -30,7 +30,42 @@ class BaseQuantization(BaseAlgorithm):
             if len(calib_data)*batch[0].size(0) >= num_samples:
                 break
         return torch.cat(calib_data, dim=0)[:num_samples]
-    
+
+    def absorb_bn(self, module, bn_module):
+        w = module.weight.data
+        if module.bias is None:
+            zeros = torch.Tensor(module.out_channels).zero_().type(w.type())
+            module.bias = nn.Parameter(zeros)
+        b = module.bias.data
+        invstd = bn_module.running_var.clone().add_(bn_module.eps).pow_(-0.5)
+        w.mul_(invstd.view(w.size(0), 1, 1, 1).expand_as(w))
+        b.add_(-bn_module.running_mean).mul_(invstd)
+
+        if bn_module.affine:
+            w.mul_(bn_module.weight.data.view(w.size(0), 1, 1, 1).expand_as(w))
+            b.mul_(bn_module.weight.data).add_(bn_module.bias.data)
+
+        bn_module.register_buffer('running_mean', torch.zeros(module.out_channels).cuda())
+        bn_module.register_buffer('running_var', torch.ones(module.out_channels).cuda())
+        bn_module.register_parameter('weight', None)
+        bn_module.register_parameter('bias', None)
+        bn_module.affine = False
+
+    def is_bn(self, m):
+        return isinstance(m, nn.BatchNorm2d) or isinstance(m, nn.BatchNorm1d)
+
+    def is_absorbing(self, m):
+        return (isinstance(m, nn.Conv2d) and m.groups == 1) or isinstance(m, nn.Linear)
+
+    def search_absorbe_bn(self, model):
+        prev = None
+        for m in model.children():
+            if self.is_bn(m) and self.is_absorbing(prev):
+                m.absorbed = True
+                self.absorb_bn(prev, m)
+            self.search_absorbe_bn(m)
+            prev = m
+        
     
 class StraightThrough(nn.Module):
     """used to place an identity function in place of a non-differentail operator for gradient calculation"""
@@ -40,7 +75,39 @@ class StraightThrough(nn.Module):
 
     def forward(self, input):
         return input
-    
+
+
+class RoundSTE(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, input):
+        output = torch.round(input)
+        return output
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        return grad_output 
+
+
+class Conv2dFunctor:
+    def __init__(self, conv2d):
+        self.conv2d = conv2d
+    def __call__(self, *input, weight, bias):
+        res = torch.nn.functional.conv2d(
+            *input, weight, bias, 
+            self.conv2d.stride, self.conv2d.padding,
+            self.conv2d.dilation, self.conv2d.groups
+        )
+        return res
+
+class LinearFunctor:
+    def __init__(self, linear):
+        self.linear = linear
+
+    def __call__(self, *input, weight, bias):
+        res = torch.nn.functional.linear(*input, weight, bias)
+        return res
+
+
 class FoldBN():
     """used to fold batch norm to prev linear or conv layer which helps reduce comutational overhead during quantization"""
     def __init__(self):
