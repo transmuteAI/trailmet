@@ -370,32 +370,23 @@ class QuantInvertedResidual(BaseQuantBlock):
 
     def __init__(self, inv_res: InvertedResidual, weight_quant_params: dict = {}, act_quant_params: dict = {}):
         super().__init__(act_quant_params)
-
-        self.use_res_connect = inv_res.use_res_connect
-        self.expand_ratio = inv_res.expand_ratio
-        if self.expand_ratio == 1:
-            self.conv = nn.Sequential(
-                QuantModule(inv_res.conv[0], weight_quant_params, act_quant_params),
-                QuantModule(inv_res.conv[3], weight_quant_params, act_quant_params, disable_act_quant=True),
+        self.stride = inv_res.stride
+        self.conv1 = QuantModule(inv_res.conv1, weight_quant_params, act_quant_params)
+        self.conv1.activation_function = F.relu6
+        self.conv2 = QuantModule(inv_res.conv2, weight_quant_params, act_quant_params)
+        self.conv2.activation_function = F.relu6
+        self.conv3 = QuantModule(inv_res.conv3, weight_quant_params, act_quant_params)
+        self.shortcut = nn.Sequential()
+        if inv_res.stride==1 and inv_res.inp!=inv_res.oup:
+            self.shortcut = nn.Sequential(
+                QuantModule(inv_res.shortcut[0], weight_quant_params, act_quant_params)
             )
-            self.conv[0].activation_function = nn.ReLU6()
-        else:
-            self.conv = nn.Sequential(
-                QuantModule(inv_res.conv[0], weight_quant_params, act_quant_params),
-                QuantModule(inv_res.conv[3], weight_quant_params, act_quant_params),
-                QuantModule(inv_res.conv[6], weight_quant_params, act_quant_params, disable_act_quant=True),
-            )
-            self.conv[0].activation_function = nn.ReLU6()
-            self.conv[1].activation_function = nn.ReLU6()
-
+        
     def forward(self, x):
-        if self.use_res_connect:
-            out = x + self.conv(x)
-        else:
-            out = self.conv(x)
-        out = self.activation_function(out)
-        if self.use_act_quant:
-            out = self.act_quantizer(out)
+        out = self.conv1(x)
+        out = self.conv2(out)
+        out = self.conv3(out)
+        out = out + self.shortcut(x) if self.stride==1 else out
         return out
 
 
