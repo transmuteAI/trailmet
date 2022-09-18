@@ -8,7 +8,7 @@ import torch.distributed as dist
 import warnings
 from typing import Union
 from trailmet.models.resnet import BasicBlock, Bottleneck
-from trailmet.models.mobilenetv2 import InvertedResidual
+from trailmet.models.mobilenet import InvertedResidual
 from trailmet.algorithms.quantize.quantize import StraightThrough, FoldBN, BaseQuantization as BQ
 
 
