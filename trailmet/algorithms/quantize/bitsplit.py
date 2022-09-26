@@ -43,7 +43,7 @@ class BitSplit(BaseQuantization):
             os.makedirs(self.prefix)
         self.load_act_scales = self.kwargs.get('LOAD_ACT_SCALES', False)
         self.load_weight_scales = self.kwargs.get('LOAD_WEIGHT_SCALES', False)
-        self.calib_batches = self.kwargs.get('CALIB_BATCHES', 16)
+        self.calib_batches = self.kwargs.get('CALIB_BATCHES', 8)
         self.act_quant = self.kwargs.get('ACT_QUANT', True)
 
         
@@ -69,8 +69,7 @@ class BitSplit(BaseQuantization):
                 for index, q_module in enumerate(self.act_quant_modules):
                     q_module.set_scale(scales[index])
             else:
-                act_quantizer(self.train_loader, self.qmodel, self.a_bits, self.act_quant_modules,
-                        device=self.device, prefix=self.prefix, n_batches=self.calib_batches)
+                self.act_quantizer(self.qmodel, prefix=self.prefix, n_batches=self.calib_batches)
         save_state_dict(self.qmodel.state_dict(), self.prefix, filename='state_dict.pth')
     
     def weight_quantizer(self):
@@ -154,6 +153,46 @@ class BitSplit(BaseQuantization):
         conv = self.model.fc
         conv_quan = self.qmodel.fc[1]
         load_ofwa(conv, conv_quan, prefix=self.prefix+'/fc')
+
+    def act_quantizer(self, model, prefix, n_batches):
+        """
+        Find optimum activation quantization scale for ResNet model based on feature map
+        """
+        per_batch = 256
+        act_sta_len = (n_batches+1)*per_batch
+        feat_buf = np.zeros(act_sta_len)
+        scales = np.zeros(len(self.act_quant_modules))
+        
+        pbar = tqdm(self.act_quant_modules, total=len(self.act_quant_modules))
+        with torch.no_grad():
+            for index, q_module in enumerate(pbar):
+                batch_iterator = iter(self.train_loader)
+                images, targets = next(batch_iterator)
+                images = images.cuda()
+                targets = targets.cuda()
+
+                handle = q_module.register_forward_hook(hook)
+                model(images)
+                
+                for batch_idx in range(0, n_batches):
+                    images, targets = next(batch_iterator)
+                    images = images.cuda(device=self.device, non_blocking=True)
+                    model(images)
+                    if q_module.signed:
+                        feat_tmp = np.abs(feat).reshape(-1)
+                    else:
+                        feat_tmp = feat[feat>0].reshape(-1)
+                    np.random.shuffle(feat_tmp)
+                    feat_buf[batch_idx*per_batch:(batch_idx+1)*per_batch] = feat_tmp[0:per_batch]
+                
+                scales[index] = q_module.init_quantization(feat_buf)
+                pbar.set_postfix(curr_layer_scale=scales[index])
+                np.save(os.path.join(prefix, 'act_'+str(self.a_bits)+'_scales.npy'), scales)
+                handle.remove()
+        pbar.close()
+        np.save(os.path.join(prefix, 'act_' + str(self.a_bits) + '_scales.npy'), scales)
+        for index, q_module in enumerate(self.act_quant_modules):
+            q_module.set_scale(scales[index])
 
 
 def conduct_ofwa(train_loader, model_pretrained, model_quan, 
@@ -278,39 +317,3 @@ def save_state_dict(state_dict, path, filename='state_dict.pth'):
     torch.save(new_state_dict, saved_path)
 
 
-def act_quantizer(trainloader, model, a_bits, act_quant_modules, device, prefix, n_batches):
-    per_batch = 256
-    act_sta_len = (n_batches+1)*per_batch
-    feat_buf = np.zeros(act_sta_len)
-    scales = np.zeros(len(act_quant_modules))
-    
-    pbar = tqdm(act_quant_modules, total=len(act_quant_modules))
-    with torch.no_grad():
-        for index, q_module in enumerate(pbar):
-            batch_iterator = iter(trainloader)
-            images, targets = next(batch_iterator)
-            images = images.cuda()
-            targets = targets.cuda()
-
-            handle = q_module.register_forward_hook(hook)
-            model(images)
-            
-            for batch_idx in range(0, n_batches):
-                images, targets = next(batch_iterator)
-                images = images.cuda(device=device, non_blocking=True)
-                model(images)
-                if q_module.signed:
-                    feat_tmp = np.abs(feat).reshape(-1)
-                else:
-                    feat_tmp = feat[feat>0].reshape(-1)
-                np.random.shuffle(feat_tmp)
-                feat_buf[batch_idx*per_batch:(batch_idx+1)*per_batch] = feat_tmp[0:per_batch]
-            
-            scales[index] = q_module.init_quantization(feat_buf)
-            pbar.set_postfix(curr_layer_scale=scales[index])
-            np.save(os.path.join(prefix, 'act_'+str(a_bits)+'_scales.npy'), scales)
-            handle.remove()
-    pbar.close()
-    np.save(os.path.join(prefix, 'act_' + str(a_bits) + '_scales.npy'), scales)
-    for index, q_module in enumerate(act_quant_modules):
-        q_module.set_scale(scales[index])

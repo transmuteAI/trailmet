@@ -42,9 +42,9 @@ class Quantizer(nn.Module):
             self.out_scale = torch.tensor(self.out_scale).view(1, -1, 1, 1)
 
     def init_quantization(self, x):
-        print("x.max", np.max(x))
-        print("x.min", np.min(x))
-        print("max_val", self.max_val)
+        # print("x.max", np.max(x))
+        # print("x.min", np.min(x))
+        # print("max_val", self.max_val)
         assert(np.min(x)>=0)
     
         circle_detection_queue = [0,]*5
