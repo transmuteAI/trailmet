@@ -28,6 +28,7 @@ class BitSplit(BaseQuantization):
         if not os.path.exists(self.prefix):
             os.makedirs(self.prefix)
         self.scales = False
+        self.load_scales = self.kwargs.get('LOAD_SCALES', False)
 
         
     def compress_model(self):
@@ -48,7 +49,7 @@ class BitSplit(BaseQuantization):
         conv = self.model.conv1
         q_conv = self.qmodel.conv1
         conduct_ofwa(self.train_loader, self.model, self.qmodel, conv, q_conv, None, 8,
-                     prefix=self.prefix+'/fc', device=self.device, ec=False)
+                    prefix=self.prefix+'/conv1', device=self.device, ec=False)
         #### quantize 4 blocks
         for layer_idx in range(1, 5):
             current_layer_pretrained = eval('self.model.layer{}'.format(layer_idx))
@@ -60,13 +61,13 @@ class BitSplit(BaseQuantization):
                 # conv1
                 conv = current_block_pretrained.conv1
                 conv_quan = current_block_quan.conv1
-                q_module = current_block_quan.quan1
+                q_module = current_block_quan.quant1
                 conduct_ofwa(self.train_loader, self.model, self.qmodel, conv, conv_quan, q_module, 
                             self.w_bits, prefix=pkl_path+'_conv1', device=self.device, ec=False)
                 # conv2
                 conv = current_block_pretrained.conv2
                 conv_quan = current_block_quan.conv2
-                q_module = current_block_quan.quan2
+                q_module = current_block_quan.quant2
                 conduct_ofwa(self.train_loader, self.model, self.qmodel, conv, conv_quan, q_module, 
                             self.w_bits, prefix=pkl_path+'_conv2', device=self.device, ec=False)
                 # downsample
@@ -77,10 +78,10 @@ class BitSplit(BaseQuantization):
                                 self.w_bits, prefix=pkl_path+'_downsample', device=self.device, ec=False)
         ## quantize last fc
         conv = self.model.fc
-        conv_quan = self.qmodel.fc
-        q_module = self.qmodel.quan
+        conv_quan = self.qmodel.fc[1]
+        q_module = self.qmodel.quant
         conduct_ofwa(self.train_loader, self.model, self.qmodel, conv, conv_quan, q_module, 8, 
-                     prefix=self.prefix+'/fc', device=self.device, ec=False)
+                    prefix=self.prefix+'/fc', device=self.device, ec=False)
         
         ##################################
         #### Load Weight Quantization ####
@@ -97,12 +98,12 @@ class BitSplit(BaseQuantization):
                 # conv1
                 conv = current_block_pretrained.conv1
                 conv_quan = current_block_quan.conv1
-                q_module = current_block_quan.quan1
+                q_module = current_block_quan.quant1
                 load_ofwa(conv, conv_quan, q_module, self.w_bits, prefix=self.prefix+'/layer'+str(layer_idx)+'_block'+str(block_idx)+'_conv1')
                 # conv2
                 conv = current_block_pretrained.conv2
                 conv_quan = current_block_quan.conv2
-                q_module = current_block_quan.quan2
+                q_module = current_block_quan.quant2
                 load_ofwa(conv, conv_quan, q_module, self.w_bits, prefix=self.prefix+'/layer'+str(layer_idx)+'_block'+str(block_idx)+'_conv2')
                 # downsample
                 if current_block_pretrained.downsample is not None:
@@ -110,8 +111,8 @@ class BitSplit(BaseQuantization):
                     conv_quan = current_block_quan.downsample[0]
                     load_ofwa(conv, conv_quan, None, self.w_bits, prefix=self.prefix+'/layer'+str(layer_idx)+'_block'+str(block_idx)+'_downsample')
         conv = self.model.fc
-        conv_quan = self.model.fc
-        q_module = self.qmodel.quan
+        conv_quan = self.qmodel.fc[1]
+        q_module = self.qmodel.quant
         load_ofwa(conv, conv_quan, q_module, 8, prefix=self.prefix+'/fc')
         
         #################################
@@ -141,7 +142,7 @@ import numpy as np
 import random
 import pickle
 from collections import OrderedDict
-from bitsplit_dump import ofwa, ofwa_rr
+from trailmet.algorithms.quantize.bitsplit_dump import ofwa, ofwa_rr
 
 global feat, prev_feat, conv_feat
 def hook(module, input, output):
@@ -307,7 +308,8 @@ def quantize(trainloader, model, a_bits, act_quant_modules, device, prefix):
             #global feat
             feat_len = feat.size
             per_batch = min(get_safelen(feat_len), 100000)
-            n_batches = int(act_sta_len / per_batch)
+            # n_batches = int(act_sta_len / per_batch)
+            n_batches = 4
 
             failed = True
             while(failed):

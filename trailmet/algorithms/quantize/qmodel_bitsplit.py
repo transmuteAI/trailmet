@@ -109,7 +109,7 @@ class QBasicBlock(nn.Module):
         return out
 
 
-class QBottleneck:
+class QBottleneck(nn.Module):
     expansion = 4
     def __init__(self, bottleneck: Bottleneck):
         super().__init__()
@@ -157,6 +157,8 @@ supported_bitsplit = {
 class QuantModel(nn.Module):
     def __init__(self, model: nn.Module):
         super().__init__()
+        setattr(model, 'quant', Quantizer())
+        setattr(model, 'fc', nn.Sequential(model.quant, model.fc))
         self.quantizer(model)
 
     def quantizer(self, module: nn.Module):
