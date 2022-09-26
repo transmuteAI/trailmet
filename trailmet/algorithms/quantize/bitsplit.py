@@ -1,13 +1,26 @@
 
 
 import os
+import copy, random, pickle
+import numpy as np
 import torch
-import copy
 import torch.nn as nn
+from collections import OrderedDict
 from trailmet.utils import seed_everything
 from trailmet.algorithms.quantize.qmodel_bitsplit import QuantModel, Quantizer
 from trailmet.algorithms.quantize.quantize import BaseQuantization
+from trailmet.algorithms.quantize.bitsplit_dump import ofwa, ofwa_rr
 
+global feat, prev_feat, conv_feat
+def hook(module, input, output):
+    global feat
+    feat = output.data.cpu().numpy()
+def current_input_hook(module, inputdata, outputdata):
+    global prev_feat
+    prev_feat = inputdata[0].data#.cpu()#.numpy()
+def conv_hook(module, inputdata, outputdata):
+    global conv_feat
+    conv_feat = outputdata.data#.cpu()#.numpy()
 
 class BitSplit(BaseQuantization):
     def __init__(self, model: nn.Module, dataloaders, **kwargs):
@@ -27,8 +40,10 @@ class BitSplit(BaseQuantization):
         self.prefix = self.arch + '/A'+str(self.a_bits)+'W'+str(self.w_bits)
         if not os.path.exists(self.prefix):
             os.makedirs(self.prefix)
-        self.scales = False
-        self.load_scales = self.kwargs.get('LOAD_SCALES', False)
+        self.load_act_scales = self.kwargs.get('LOAD_ACT_SCALES', False)
+        self.load_weight_scales = self.kwargs.get('LOAD_WEIGHT_SCALES', False)
+        self.calib_batches = self.kwargs.get('CALIB_BATCHES', 16)
+        self.act_quant = self.kwargs.get('ACT_QUANT', True)
 
         
     def compress_model(self):
@@ -43,14 +58,30 @@ class BitSplit(BaseQuantization):
                 self.act_quant_modules.append(m)
         self.act_quant_modules[-1].set_bitwidth(8)
 
-        #############################
-        #### Weight Quantization ####
-        #############################
+        if not self.load_weight_scales:
+            self.weight_quantizer()
+        self.load_weight_quantization()
+        print("==> Starting '{}-bit' activation quantization".format(self.a_bits))
+        if self.act_quant:
+            if self.load_act_scales:
+                scales = np.load('act_'+str(self.a_bits)+'_scales.npy')
+                for index, q_module in enumerate(self.act_quant_modules):
+                    q_module.set_scale(scales[index])
+            else:
+                act_quantizer(self.train_loader, self.qmodel, self.a_bits, self.act_quant_modules,
+                        device=self.device, prefix=self.prefix, n_batches=self.calib_batches)
+        save_state_dict(self.qmodel.state_dict(), self.prefix, filename='state_dict.pth')
+    
+    def weight_quantizer(self):
+        """
+        Find optimum weight quantization scales for ResNet Model
+        """
+        ### quantize first conv block ###
         conv = self.model.conv1
         q_conv = self.qmodel.conv1
-        conduct_ofwa(self.train_loader, self.model, self.qmodel, conv, q_conv, None, 8,
-                    prefix=self.prefix+'/conv1', device=self.device, ec=False)
-        #### quantize 4 blocks
+        conduct_ofwa(self.train_loader, self.model, self.qmodel, conv, q_conv, 8,
+                    self.calib_batches, prefix=self.prefix+'/conv1', device=self.device, ec=False)
+        ### quantize 4 blocks ###
         for layer_idx in range(1, 5):
             current_layer_pretrained = eval('self.model.layer{}'.format(layer_idx))
             current_layer_quan = eval('self.qmodel.layer{}'.format(layer_idx))
@@ -62,33 +93,40 @@ class BitSplit(BaseQuantization):
                 conv = current_block_pretrained.conv1
                 conv_quan = current_block_quan.conv1
                 q_module = current_block_quan.quant1
-                conduct_ofwa(self.train_loader, self.model, self.qmodel, conv, conv_quan, q_module, 
-                            self.w_bits, prefix=pkl_path+'_conv1', device=self.device, ec=False)
+                conduct_ofwa(self.train_loader, self.model, self.qmodel, conv, conv_quan, self.w_bits,
+                            self.calib_batches, prefix=pkl_path+'_conv1', device=self.device, ec=False)
                 # conv2
                 conv = current_block_pretrained.conv2
                 conv_quan = current_block_quan.conv2
                 q_module = current_block_quan.quant2
-                conduct_ofwa(self.train_loader, self.model, self.qmodel, conv, conv_quan, q_module, 
-                            self.w_bits, prefix=pkl_path+'_conv2', device=self.device, ec=False)
+                conduct_ofwa(self.train_loader, self.model, self.qmodel, conv, conv_quan, self.w_bits,  
+                            self.calib_batches, prefix=pkl_path+'_conv2', device=self.device, ec=False)
+                # conv3
+                conv = current_block_pretrained.conv3
+                conv_quan = current_block_quan.conv3
+                q_module = current_block_quan.quant3
+                conduct_ofwa(self.train_loader, self.model, self.qmodel, conv, conv_quan, self.w_bits, 
+                            self.calib_batches, prefix=pkl_path+'_conv3', device=self.device, ec=False)
                 # downsample
                 if current_block_pretrained.downsample is not None:
                     conv = current_block_pretrained.downsample[0]
                     conv_quan = current_block_quan.downsample[0]
-                    conduct_ofwa(self.train_loader, self.model, self.qmodel, conv, conv_quan, None, 
-                                self.w_bits, prefix=pkl_path+'_downsample', device=self.device, ec=False)
+                    conduct_ofwa(self.train_loader, self.model, self.qmodel, conv, conv_quan, self.w_bits,  
+                                self.calib_batches, prefix=pkl_path+'_downsample', device=self.device, ec=False)
         ## quantize last fc
         conv = self.model.fc
         conv_quan = self.qmodel.fc[1]
         q_module = self.qmodel.quant
-        conduct_ofwa(self.train_loader, self.model, self.qmodel, conv, conv_quan, q_module, 8, 
-                    prefix=self.prefix+'/fc', device=self.device, ec=False)
-        
-        ##################################
-        #### Load Weight Quantization ####
-        ##################################
+        conduct_ofwa(self.train_loader, self.model, self.qmodel, conv, conv_quan, 8, 
+                    self.calib_batches, prefix=self.prefix+'/fc', device=self.device, ec=False)
+
+    def load_weight_quantization(self):
+        """
+        Load weight quantization scales for ResNet Model
+        """
         conv = self.model.conv1
         conv_quan = self.qmodel.conv1
-        load_ofwa(conv, conv_quan, None, 8, prefix=self.prefix+'/conv1')
+        load_ofwa(conv, conv_quan, prefix=self.prefix+'/conv1')
         for layer_idx in range(1, 5):
             current_layer_pretrained = eval('self.model.layer{}'.format(layer_idx))
             current_layer_quan = eval('self.qmodel.layer{}'.format(layer_idx))
@@ -98,66 +136,27 @@ class BitSplit(BaseQuantization):
                 # conv1
                 conv = current_block_pretrained.conv1
                 conv_quan = current_block_quan.conv1
-                q_module = current_block_quan.quant1
-                load_ofwa(conv, conv_quan, q_module, self.w_bits, prefix=self.prefix+'/layer'+str(layer_idx)+'_block'+str(block_idx)+'_conv1')
+                load_ofwa(conv, conv_quan, prefix=self.prefix+'/layer'+str(layer_idx)+'_block'+str(block_idx)+'_conv1')
                 # conv2
                 conv = current_block_pretrained.conv2
                 conv_quan = current_block_quan.conv2
-                q_module = current_block_quan.quant2
-                load_ofwa(conv, conv_quan, q_module, self.w_bits, prefix=self.prefix+'/layer'+str(layer_idx)+'_block'+str(block_idx)+'_conv2')
+                load_ofwa(conv, conv_quan, prefix=self.prefix+'/layer'+str(layer_idx)+'_block'+str(block_idx)+'_conv2')
+                # conv2
+                conv = current_block_pretrained.conv3
+                conv_quan = current_block_quan.conv3
+                load_ofwa(conv, conv_quan, prefix=self.prefix+'/layer'+str(layer_idx)+'_block'+str(block_idx)+'_conv3')
                 # downsample
                 if current_block_pretrained.downsample is not None:
                     conv = current_block_pretrained.downsample[0]
                     conv_quan = current_block_quan.downsample[0]
-                    load_ofwa(conv, conv_quan, None, self.w_bits, prefix=self.prefix+'/layer'+str(layer_idx)+'_block'+str(block_idx)+'_downsample')
+                    load_ofwa(conv, conv_quan, prefix=self.prefix+'/layer'+str(layer_idx)+'_block'+str(block_idx)+'_downsample')
         conv = self.model.fc
         conv_quan = self.qmodel.fc[1]
-        q_module = self.qmodel.quant
-        load_ofwa(conv, conv_quan, q_module, 8, prefix=self.prefix+'/fc')
-        
-        #################################
-        #### Activation Quantization ####
-        #################################
-        print("quantizing ('{}-bit')...".format(self.a_bits))
-        # update(train_loader, model_quan, criterion, args, 200)
-        if self.scales:
-            scales = np.load(self.scales)
-            # enable feature map quantization
-            for index, q_module in enumerate(self.act_quant_modules):
-                q_module.set_scale(scales[index])
-        else:
-            quantize(self.train_loader, self.qmodel, self.a_bits, self.act_quant_modules,
-                    device=self.device, prefix=self.prefix)
-
-        # print('update ...')
-        # update(train_loader, model_quan, criterion, args, 200)
-        # print('validate quantization...')
-        # validate(val_loader, model_quan, criterion, args)
-
-        save_state_dict(self.qmodel.state_dict(), self.prefix, filename='state_dict.pth')
+        load_ofwa(conv, conv_quan, prefix=self.prefix+'/fc')
 
 
-
-import numpy as np
-import random
-import pickle
-from collections import OrderedDict
-from trailmet.algorithms.quantize.bitsplit_dump import ofwa, ofwa_rr
-
-global feat, prev_feat, conv_feat
-def hook(module, input, output):
-    global feat
-    feat = output.data.cpu().numpy()
-def current_input_hook(module, inputdata, outputdata):
-    global prev_feat
-    prev_feat = inputdata[0].data#.cpu()#.numpy()
-def conv_hook(module, inputdata, outputdata):
-    global conv_feat
-    conv_feat = outputdata.data#.cpu()#.numpy()
-
-
-def conduct_ofwa(train_loader, model_pretrained, model_quan, conv, conv_quan, 
-                q_module, bitwidth, device, prefix=None, ec=False):
+def conduct_ofwa(train_loader, model_pretrained, model_quan, 
+        conv, conv_quan, bitwidth, n_batches, device, prefix=None, ec=False):
     # for fc
     if not hasattr(conv, 'kernel_size'):
         W = conv.weight.data#.cpu()
@@ -189,7 +188,7 @@ def conduct_ofwa(train_loader, model_pretrained, model_quan, conv, conv_quan,
     print(W.shape)
 
     # feat extract
-    n_batches = 30
+    # n_batches = 30
     per_batch = 400
     input, target = next(batch_iterator)
     input_pretrained = input.cuda(device=device, non_blocking=True)
@@ -203,8 +202,8 @@ def conduct_ofwa(train_loader, model_pretrained, model_quan, conv, conv_quan,
 
     X = torch.zeros(n_batches*per_batch, prev_feat_c, kernel_h, kernel_w).to(device)
     Y = torch.zeros(n_batches*per_batch, conv_feat_c).to(device)
-    print(X.shape)
-    print(Y.shape)
+    # print(X.shape)
+    # print(Y.shape)
 
     for batch_idx in range(0, n_batches):
         input, target = next(batch_iterator)
@@ -242,7 +241,7 @@ def conduct_ofwa(train_loader, model_pretrained, model_quan, conv, conv_quan,
         pickle.dump({'B': B, 'alpha': alpha}, f, pickle.HIGHEST_PROTOCOL)
 
 
-def load_ofwa(conv, conv_quan, q_module, bitwidth, prefix=None):
+def load_ofwa(conv, conv_quan, prefix=None):
     # for fc
     if not hasattr(conv, 'kernel_size'):
         W = conv.weight.data#.cpu()
@@ -278,38 +277,20 @@ def save_state_dict(state_dict, path, filename='state_dict.pth'):
     torch.save(new_state_dict, saved_path)
 
 
-def quantize(trainloader, model, a_bits, act_quant_modules, device, prefix):
-    
-    def get_safelen(x):
-        x = x / 10
-        y = 1
-        while(x>=10):
-            x = x / 10
-            y = y * 10
-        return int(y)
-
-    act_sta_len = 3000000
+def act_quantizer(trainloader, model, a_bits, act_quant_modules, device, prefix, n_batches):
+    act_sta_len = 3e6
     feat_buf = np.zeros(act_sta_len)
     scales = np.zeros(len(act_quant_modules))
 
     with torch.no_grad():
         for index, q_module in enumerate(act_quant_modules):
-            # batch_iterator = iter(torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True,
-                                                            #  num_workers=args.workers, pin_memory=True))
             batch_iterator = iter(trainloader)
             images, targets = next(batch_iterator)
             images = images.cuda()
             targets = targets.cuda()
 
-            #### ADD HANDLE ####
             handle = q_module.register_forward_hook(hook)
             model(images)
-
-            #global feat
-            feat_len = feat.size
-            per_batch = min(get_safelen(feat_len), 100000)
-            # n_batches = int(act_sta_len / per_batch)
-            n_batches = 4
 
             failed = True
             while(failed):
@@ -320,7 +301,6 @@ def quantize(trainloader, model, a_bits, act_quant_modules, device, prefix):
                     images = images.cuda(device=device, non_blocking=True)
                     # forward
                     model(images)
-
                     #global feat
                     if q_module.signed:
                         feat_tmp = np.abs(feat).reshape(-1)
@@ -339,7 +319,6 @@ def quantize(trainloader, model, a_bits, act_quant_modules, device, prefix):
                     scales[index] = q_module.init_quantization(feat_buf)
                     print(scales[index])
                     np.save(os.path.join(prefix, 'act_' + str(a_bits) + '_scales.npy'), scales)
-            #### REMOVE HANDLE ####
             handle.remove()
 
     np.save(os.path.join(prefix, 'act_' + str(a_bits) + '_scales.npy'), scales)

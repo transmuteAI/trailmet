@@ -78,7 +78,7 @@ def ofwa(W, bitwidth, max_epoch=50):
     minimizes the weight quantization error (instead of using round-off).
     Initialized by "fwa".
     """
-    assert(bitwidth >= 3)
+    assert(bitwidth >= 2)
     Q, alpha = fwa(W, bitwidth)
     B_sav = split(Q, bitwidth)
     # NOTE: the position of the decimal point is not at the end. 
