@@ -6,6 +6,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from collections import OrderedDict
+from tqdm import tqdm
 from trailmet.utils import seed_everything
 from trailmet.algorithms.quantize.qmodel_bitsplit import QuantModel, Quantizer
 from trailmet.algorithms.quantize.quantize import BaseQuantization
@@ -278,12 +279,14 @@ def save_state_dict(state_dict, path, filename='state_dict.pth'):
 
 
 def act_quantizer(trainloader, model, a_bits, act_quant_modules, device, prefix, n_batches):
-    act_sta_len = 3e6
+    per_batch = 256
+    act_sta_len = (n_batches+1)*per_batch
     feat_buf = np.zeros(act_sta_len)
     scales = np.zeros(len(act_quant_modules))
-
+    
+    pbar = tqdm(act_quant_modules, total=len(act_quant_modules))
     with torch.no_grad():
-        for index, q_module in enumerate(act_quant_modules):
+        for index, q_module in enumerate(pbar):
             batch_iterator = iter(trainloader)
             images, targets = next(batch_iterator)
             images = images.cuda()
@@ -291,37 +294,23 @@ def act_quantizer(trainloader, model, a_bits, act_quant_modules, device, prefix,
 
             handle = q_module.register_forward_hook(hook)
             model(images)
-
-            failed = True
-            while(failed):
-                failed = False
-                print('Extracting features for ', n_batches, ' batches...')
-                for batch_idx in range(0, n_batches):
-                    images, targets = next(batch_iterator)
-                    images = images.cuda(device=device, non_blocking=True)
-                    # forward
-                    model(images)
-                    #global feat
-                    if q_module.signed:
-                        feat_tmp = np.abs(feat).reshape(-1)
-                    else:
-                        feat_tmp = feat[feat>0].reshape(-1)
-                        if feat_tmp.size < per_batch:
-                            per_batch = int(per_batch / 10)
-                            n_batches = int(n_batches * 10)
-                            failed = True
-                            break
-                    np.random.shuffle(feat_tmp)
-                    feat_buf[batch_idx*per_batch:(batch_idx+1)*per_batch] = feat_tmp[0:per_batch]
-
-                if(not failed):
-                    print('Init quantization... ')
-                    scales[index] = q_module.init_quantization(feat_buf)
-                    print(scales[index])
-                    np.save(os.path.join(prefix, 'act_' + str(a_bits) + '_scales.npy'), scales)
+            
+            for batch_idx in range(0, n_batches):
+                images, targets = next(batch_iterator)
+                images = images.cuda(device=device, non_blocking=True)
+                model(images)
+                if q_module.signed:
+                    feat_tmp = np.abs(feat).reshape(-1)
+                else:
+                    feat_tmp = feat[feat>0].reshape(-1)
+                np.random.shuffle(feat_tmp)
+                feat_buf[batch_idx*per_batch:(batch_idx+1)*per_batch] = feat_tmp[0:per_batch]
+            
+            scales[index] = q_module.init_quantization(feat_buf)
+            pbar.set_postfix(curr_layer_scale=scales[index])
+            np.save(os.path.join(prefix, 'act_'+str(a_bits)+'_scales.npy'), scales)
             handle.remove()
-
+    pbar.close()
     np.save(os.path.join(prefix, 'act_' + str(a_bits) + '_scales.npy'), scales)
-    # enable feature map quantization
     for index, q_module in enumerate(act_quant_modules):
         q_module.set_scale(scales[index])
