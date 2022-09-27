@@ -76,11 +76,19 @@ class BitSplit(BaseQuantization):
         """
         Find optimum weight quantization scales for ResNet Model
         """
+        count = 2
+        for i in range(1,5):
+            lay = eval('self.model.layer{}'.format(i))
+            for j in range(len(lay)):
+                count+=3
+                if(lay[j].downsample is not None): count+=1
+        pbar = tqdm(total=count)
         ### quantize first conv block ###
         conv = self.model.conv1
         q_conv = self.qmodel.conv1
         conduct_ofwa(self.train_loader, self.model, self.qmodel, conv, q_conv, 8,
                     self.calib_batches, prefix=self.prefix+'/conv1', device=self.device, ec=False)
+        pbar.update(1)
         ### quantize 4 blocks ###
         for layer_idx in range(1, 5):
             current_layer_pretrained = eval('self.model.layer{}'.format(layer_idx))
@@ -95,30 +103,36 @@ class BitSplit(BaseQuantization):
                 q_module = current_block_quan.quant1
                 conduct_ofwa(self.train_loader, self.model, self.qmodel, conv, conv_quan, self.w_bits,
                             self.calib_batches, prefix=pkl_path+'_conv1', device=self.device, ec=False)
+                pbar.update(1)
                 # conv2
                 conv = current_block_pretrained.conv2
                 conv_quan = current_block_quan.conv2
                 q_module = current_block_quan.quant2
                 conduct_ofwa(self.train_loader, self.model, self.qmodel, conv, conv_quan, self.w_bits,  
                             self.calib_batches, prefix=pkl_path+'_conv2', device=self.device, ec=False)
+                pbar.update(1)
                 # conv3
                 conv = current_block_pretrained.conv3
                 conv_quan = current_block_quan.conv3
                 q_module = current_block_quan.quant3
                 conduct_ofwa(self.train_loader, self.model, self.qmodel, conv, conv_quan, self.w_bits, 
                             self.calib_batches, prefix=pkl_path+'_conv3', device=self.device, ec=False)
+                pbar.update(1)
                 # downsample
                 if current_block_pretrained.downsample is not None:
                     conv = current_block_pretrained.downsample[0]
                     conv_quan = current_block_quan.downsample[0]
                     conduct_ofwa(self.train_loader, self.model, self.qmodel, conv, conv_quan, self.w_bits,  
                                 self.calib_batches, prefix=pkl_path+'_downsample', device=self.device, ec=False)
+                    pbar.update(1)
         ## quantize last fc
         conv = self.model.fc
         conv_quan = self.qmodel.fc[1]
         q_module = self.qmodel.quant
         conduct_ofwa(self.train_loader, self.model, self.qmodel, conv, conv_quan, 8, 
                     self.calib_batches, prefix=self.prefix+'/fc', device=self.device, ec=False)
+        pbar.update(1)
+        pbar.close()
 
     def load_weight_quantization(self):
         """
@@ -225,7 +239,7 @@ def conduct_ofwa(train_loader, model_pretrained, model_quan,
         bias = torch.zeros(W.shape[0]).to(conv.weight.device)
     else:
         bias = conv.bias.data#.cpu()
-    print(W.shape)
+    # print(W.shape)
 
     # feat extract
     # n_batches = 30
