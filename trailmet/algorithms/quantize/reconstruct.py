@@ -5,8 +5,9 @@ import torch.distributed as dist
 import torch.nn.functional as F
 from typing import Union
 from trailmet.algorithms.quantize.quantize import StraightThrough, BaseQuantization as BQ
-from trailmet.algorithms.quantize.dumps.quant_model import QuantModule, BaseQuantBlock, QuantModel
+from trailmet.algorithms.quantize.qmodel import QuantModule, BaseQuantBlock
 from trailmet.algorithms.quantize.methods import AdaRoundQuantizer
+from trailmet.algorithms.quantize.brecq import QuantModel
 
 
 optimizer_map = {
