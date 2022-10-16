@@ -5,7 +5,7 @@ import torch.distributed as dist
 from trailmet.utils import seed_everything
 from trailmet.algorithms.quantize.quantize import BaseQuantization, FoldBN, StraightThrough
 from trailmet.models.resnet import BasicBlock, Bottleneck
-from trailmet.models.mobilenetv2 import InvertedResidual
+from trailmet.models.mobilenet import InvertedResidual
 from trailmet.algorithms.quantize.qmodel import QuantModule, BaseQuantBlock
 from trailmet.algorithms.quantize.qmodel import QuantBasicBlock, QuantBottleneck, QuantInvertedResidual
 from trailmet.algorithms.quantize.reconstruct import layer_reconstruction, block_reconstruction
