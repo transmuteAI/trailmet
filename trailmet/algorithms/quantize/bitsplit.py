@@ -27,15 +27,21 @@ def conv_hook(module, inputdata, outputdata):
     conv_feat = outputdata.data#.cpu()#.numpy()
 
 class QuantModel(nn.Module):
-    def __init__(self, model: nn.Module):
+    def __init__(self, model: nn.Module, arch='ResNet50'):
         super().__init__()
         self.supported = {
             BasicBlock : QBasicBlock,
             Bottleneck : QBottleneck,
             InvertedResidual : QInvertedResidual, 
         }
-        setattr(model, 'quant', ActQuantizer())
-        setattr(model, 'fc', nn.Sequential(model.quant, model.fc))
+        if arch=='ResNet50':
+            setattr(model, 'quant', ActQuantizer())
+            setattr(model, 'fc', nn.Sequential(model.quant, model.fc))
+        if arch=='MobileNetV2':
+            setattr(model, 'quant1', ActQuantizer())
+            setattr(model, 'quant2', ActQuantizer())
+            setattr(model, 'conv2', nn.Sequential(model.quant1, model.conv2))
+            setattr(model, 'linear', nn.Sequential(model.quant2, model.linear))
         self.quant_block_refactor(model)
 
     def quant_block_refactor(self, module: nn.Module):
@@ -84,14 +90,14 @@ class BitSplit(BaseQuantization):
     def compress_model(self):
         self.model.to(self.device)
         self.qmodel = copy.deepcopy(self.model)
-        QuantModel(self.qmodel)
+        QuantModel(self.qmodel, self.arch)
 
         self.act_quant_modules = []
         for m in self.qmodel.modules():
             if isinstance(m, ActQuantizer):
                 m.set_bitwidth(self.a_bits)
                 self.act_quant_modules.append(m)
-        self.act_quant_modules[-1].set_bitwidth(8)
+        self.act_quant_modules[-1].set_bitwidth(max(8, self.a_bits))
 
         if not self.load_weight_scales:
             self.weight_quantizer()
@@ -110,118 +116,184 @@ class BitSplit(BaseQuantization):
         """
         Find optimum weight quantization scales for ResNet Model
         """
-        count = 2
-        for i in range(1,5):
-            lay = eval('self.model.layer{}'.format(i))
-            for j in range(len(lay)):
+        if self.arch=='MobileNetV2':
+            count = 3
+            for i in range(1,8):
                 count+=3
-                if(lay[j].downsample is not None): count+=1
-        pbar = tqdm(total=count)
-        ### quantize first conv block ###
-        conv = self.model.conv1
-        q_conv = self.qmodel.conv1
-        w_bit = 8 if self.set_8bit_head_stem else self.w_bits
-        if self.precision_config: w_bit = self.precision_config[0] 
-        if w_bit!=32: 
-            conduct_ofwa(self.train_loader, self.model, self.qmodel, conv, q_conv, w_bit,
-                        self.calib_batches, prefix=self.prefix+'/conv1', device=self.device, ec=False)
-        pbar.update(1)
-        time.sleep(.1)
-        ### quantize 4 blocks ###
-        for layer_idx in range(1, 5):
-            current_layer_pretrained = eval('self.model.layer{}'.format(layer_idx))
-            current_layer_quan = eval('self.qmodel.layer{}'.format(layer_idx))
-            w_bit = self.precision_config[layer_idx] if self.precision_config else self.w_bits
-            skip = w_bit==32
-            for block_idx in range(len(current_layer_pretrained)):
-                current_block_pretrained = current_layer_pretrained[block_idx]
-                current_block_quan = current_layer_quan[block_idx]
-                pkl_path = self.prefix+'/layer'+str(layer_idx)+'_block'+str(block_idx)
-                # conv1
-                conv = current_block_pretrained.conv1
-                conv_quan = current_block_quan.conv1
-                q_module = current_block_quan.quant1
-                if not skip: conduct_ofwa(self.train_loader, self.model, self.qmodel, conv, conv_quan, w_bit,
-                                self.calib_batches, prefix=pkl_path+'_conv1', device=self.device, ec=False)
-                pbar.update(1)
-                time.sleep(.1)
-                # conv2
-                conv = current_block_pretrained.conv2
-                conv_quan = current_block_quan.conv2
-                q_module = current_block_quan.quant2
-                if not skip: conduct_ofwa(self.train_loader, self.model, self.qmodel, conv, conv_quan, w_bit,  
-                                self.calib_batches, prefix=pkl_path+'_conv2', device=self.device, ec=False)
-                pbar.update(1)
-                time.sleep(.1)
-                # conv3
-                conv = current_block_pretrained.conv3
-                conv_quan = current_block_quan.conv3
-                q_module = current_block_quan.quant3
-                if not skip: conduct_ofwa(self.train_loader, self.model, self.qmodel, conv, conv_quan, w_bit, 
-                                self.calib_batches, prefix=pkl_path+'_conv3', device=self.device, ec=False)
-                pbar.update(1)
-                time.sleep(.1)
-                # downsample
-                if current_block_pretrained.downsample is not None:
-                    conv = current_block_pretrained.downsample[0]
-                    conv_quan = current_block_quan.downsample[0]
-                    if not skip: conduct_ofwa(self.train_loader, self.model, self.qmodel, conv, conv_quan, w_bit,  
-                                self.calib_batches, prefix=pkl_path+'_downsample', device=self.device, ec=False)
+                if len(self.model.layers.shortcut)>0: count+=1
+            pbar = tqdm(total=count)
+            # quantize first layer
+            conv = self.model.conv1
+            conv_quan = self.qmodel.conv1
+            if self.precision_config: w_bit = self.precision_config[0] 
+            if w_bit!=32: 
+                conduct_ofwa(self.train_loader, self.model, self.qmodel, conv, conv_quan, w_bit,
+                            self.calib_batches, prefix=self.prefix+'/conv1', device=self.device, ec=False)
+            pbar.update(1)
+            time.sleep(.1)
+            for layer_idx in range(1,8):
+                current_layer_pretrained = self.model.layers[layer_idx]
+                current_layer_quan = self.qmodel.layers[layer_idx]
+                w_bit = self.precision_config[layer_idx] if self.precision_config else self.w_bits
+                skip = w_bit==32
+                pkl_path = self.prefix+'/layer'+str(layer_idx)
+                for idx in range(1,4):
+                    conv = eval('current_layer_pretrained.conv{}'.format(idx))
+                    conv_quan = eval('current_layer_quan.conv{}'.format(idx))
+                    if not skip: conduct_ofwa(self.train_loader, self.model, self.qmodel, conv, conv_quan, w_bit,
+                                    self.calib_batches, prefix=pkl_path+'_conv{}'.format(idx), device=self.device, ec=False)
                     pbar.update(1)
                     time.sleep(.1)
-        ## quantize last fc
-        conv = self.model.fc
-        conv_quan = self.qmodel.fc[1]
-        q_module = self.qmodel.quant
-        w_bit = 8 if self.set_8bit_head_stem else self.w_bits
-        if self.precision_config: w_bit = self.precision_config[0] 
-        if w_bit!=32: conduct_ofwa(self.train_loader, self.model, self.qmodel, conv, conv_quan, 8, 
-                        self.calib_batches, prefix=self.prefix+'/fc', device=self.device, ec=False)
-        pbar.update(1)
-        pbar.close()
+                if len(current_layer_pretrained.shortcut)>0:
+                    conv = current_layer_pretrained.shortcut[0]
+                    conv_quan = current_layer_quan.shortcut[0]
+                    if not skip: conduct_ofwa(self.train_loader, self.model, self.qmodel, conv, conv_quan, w_bit,
+                                    self.calib_batches, prefix=pkl_path+'_shortcut'.format(idx), device=self.device, ec=False)
+                    pbar.update(1)
+                    time.sleep(.1)
+            conv = self.model.conv2
+            conv_quan = self.qmodel.conv2[1]
+            if self.precision_config: w_bit = self.precision_config[-2] 
+            if w_bit!=32: 
+                conduct_ofwa(self.train_loader, self.model, self.qmodel, conv, conv_quan, w_bit,
+                            self.calib_batches, prefix=self.prefix+'/conv2', device=self.device, ec=False)
+            pbar.update(1)
+            time.sleep(.1)
+            conv = self.model.linear
+            conv_quan = self.qmodel.linear[1]
+            w_bit = 8 if self.set_8bit_head_stem else self.w_bits
+            if self.precision_config: w_bit = self.precision_config[-1] 
+            if w_bit!=32: conduct_ofwa(self.train_loader, self.model, self.qmodel, conv, conv_quan, w_bit, 
+                            self.calib_batches, prefix=self.prefix+'/linear', device=self.device, ec=False)
+            pbar.update(1)
+            pbar.close()
+                    
+        elif self.arch=='ResNet50':
+            count = 2
+            for i in range(1,5):
+                lay = eval('self.model.layer{}'.format(i))
+                for j in range(len(lay)):
+                    count+=3
+                    if(lay[j].downsample is not None): count+=1
+            pbar = tqdm(total=count)
+            ### quantize first conv block ###
+            conv = self.model.conv1
+            conv_quan = self.qmodel.conv1
+            w_bit = 8 if self.set_8bit_head_stem else self.w_bits
+            if self.precision_config: w_bit = self.precision_config[0] 
+            if w_bit!=32: 
+                conduct_ofwa(self.train_loader, self.model, self.qmodel, conv, conv_quan, w_bit,
+                            self.calib_batches, prefix=self.prefix+'/conv1', device=self.device, ec=False)
+            pbar.update(1)
+            time.sleep(.1)
+            ### quantize blocks ###
+            for layer_idx in range(1, 5):
+                current_layer_pretrained = eval('self.model.layer{}'.format(layer_idx))
+                current_layer_quan = eval('self.qmodel.layer{}'.format(layer_idx))
+                w_bit = self.precision_config[layer_idx] if self.precision_config else self.w_bits
+                skip = w_bit==32
+                for block_idx in range(len(current_layer_pretrained)):
+                    current_block_pretrained = current_layer_pretrained[block_idx]
+                    current_block_quan = current_layer_quan[block_idx]
+                    pkl_path = self.prefix+'/layer'+str(layer_idx)+'_block'+str(block_idx)
+                    # conv layers
+                    for idx in range(1, 4):
+                        conv = eval('current_block_pretrained.conv{}'.format(idx))
+                        conv_quan = eval('current_block_quan.conv{}'.format(idx))
+                        q_module = eval('current_block_quan.quant{}'.format(idx))
+                        if not skip: conduct_ofwa(self.train_loader, self.model, self.qmodel, conv, conv_quan, w_bit,
+                                    self.calib_batches, prefix=pkl_path+'_conv{}'.format(idx), device=self.device, ec=False)
+                        pbar.update(1)
+                        time.sleep(.1)
+                    # downsample
+                    if current_block_pretrained.downsample is not None:
+                        conv = current_block_pretrained.downsample[0]
+                        conv_quan = current_block_quan.downsample[0]
+                        if not skip: conduct_ofwa(self.train_loader, self.model, self.qmodel, conv, conv_quan, w_bit,  
+                                    self.calib_batches, prefix=pkl_path+'_downsample', device=self.device, ec=False)
+                        pbar.update(1)
+                        time.sleep(.1)
+            ## quantize last fc
+            conv = self.model.fc
+            conv_quan = self.qmodel.fc[1]
+            q_module = self.qmodel.quant
+            w_bit = 8 if self.set_8bit_head_stem else self.w_bits
+            if self.precision_config: w_bit = self.precision_config[-1] 
+            if w_bit!=32: conduct_ofwa(self.train_loader, self.model, self.qmodel, conv, conv_quan, w_bit, 
+                            self.calib_batches, prefix=self.prefix+'/fc', device=self.device, ec=False)
+            pbar.update(1)
+            pbar.close()
+
+        else: raise NotImplementedError
 
     def load_weight_quantization(self):
         """
         Load weight quantization scales for ResNet Model
         """
-        conv = self.model.conv1
-        conv_quan = self.qmodel.conv1
-        if self.precision_config and self.precision_config[0]==32: 
-            conv_quan.weight.data.copy_(conv.weight.data)
-        else: load_ofwa(conv, conv_quan, prefix=self.prefix+'/conv1')
-        for layer_idx in range(1, 5):
-            current_layer_pretrained = eval('self.model.layer{}'.format(layer_idx))
-            current_layer_quan = eval('self.qmodel.layer{}'.format(layer_idx))
-            skip = self.precision_config[layer_idx]==32 if self.precision_config else False
-            for block_idx in range(len(current_layer_pretrained)):
-                current_block_pretrained = current_layer_pretrained[block_idx]
-                current_block_quan = current_layer_quan[block_idx]
-                # conv1
-                conv = current_block_pretrained.conv1
-                conv_quan = current_block_quan.conv1
-                if skip: conv_quan.weight.data.copy_(conv.weight.data)
-                else: load_ofwa(conv, conv_quan, prefix=self.prefix+'/layer'+str(layer_idx)+'_block'+str(block_idx)+'_conv1')
-                # conv2
-                conv = current_block_pretrained.conv2
-                conv_quan = current_block_quan.conv2
-                if skip: conv_quan.weight.data.copy_(conv.weight.data)
-                else: load_ofwa(conv, conv_quan, prefix=self.prefix+'/layer'+str(layer_idx)+'_block'+str(block_idx)+'_conv2')
-                # conv2
-                conv = current_block_pretrained.conv3
-                conv_quan = current_block_quan.conv3
-                if skip: conv_quan.weight.data.copy_(conv.weight.data)
-                else: load_ofwa(conv, conv_quan, prefix=self.prefix+'/layer'+str(layer_idx)+'_block'+str(block_idx)+'_conv3')
-                # downsample
-                if current_block_pretrained.downsample is not None:
-                    conv = current_block_pretrained.downsample[0]
-                    conv_quan = current_block_quan.downsample[0]
+        if self.arch == 'MobileNetV2':
+            conv = self.model.conv1
+            conv_quan = self.qmodel.conv1
+            if self.precision_config and self.precision_config[0]==32: 
+                conv_quan.weight.data.copy_(conv.weight.data)
+            else: load_ofwa(conv, conv_quan, prefix=self.prefix+'/conv1')
+            for layer_idx in range(1,8):
+                current_layer_pretrained = self.model.layers[layer_idx]
+                current_layer_quan = self.qmodel.layers[layer_idx]
+                skip = self.precision_config[layer_idx]==32 if self.precision_config else False
+                pkl_path = self.prefix+'/layer'+str(layer_idx)
+                for idx in range(1,4):
+                    conv = eval('current_layer_pretrained.conv{}'.format(idx))
+                    conv_quan = eval('current_layer_quan.conv{}'.format(idx))
                     if skip: conv_quan.weight.data.copy_(conv.weight.data)
-                    else: load_ofwa(conv, conv_quan, prefix=self.prefix+'/layer'+str(layer_idx)+'_block'+str(block_idx)+'_downsample')
-        conv = self.model.fc
-        conv_quan = self.qmodel.fc[1]
-        if self.precision_config and self.precision_config[-1]==32: 
-            conv_quan.weight.data.copy_(conv.weight.data)
-        else: load_ofwa(conv, conv_quan, prefix=self.prefix+'/fc')
+                    else: load_ofwa(conv, conv_quan, prefix=self.prefix+'/layer'+str(layer_idx)+'_conv'+str(idx))
+                if len(current_layer_pretrained.shortcut)>0:
+                    conv = current_layer_pretrained.shortcut[0]
+                    conv_quan = current_layer_quan.shortcut[0]
+                    if skip: conv_quan.weight.data.copy_(conv.weight.data)
+                    else: load_ofwa(conv, conv_quan, prefix=self.prefix+'/layer'+str(layer_idx)+'_shortcut')
+            conv = self.model.conv2
+            conv_quan = self.qmodel.conv2[1]
+            if self.precision_config and self.precision_config[-1]==32: 
+                conv_quan.weight.data.copy_(conv.weight.data)
+            else: load_ofwa(conv, conv_quan, prefix=self.prefix+'/conv2')
+            conv = self.model.linear
+            conv_quan = self.qmodel.linear[1]
+            if self.precision_config and self.precision_config[-1]==32: 
+                conv_quan.weight.data.copy_(conv.weight.data)
+            else: load_ofwa(conv, conv_quan, prefix=self.prefix+'/linear')
+
+        elif self.arch == 'ResNet50':
+            conv = self.model.conv1
+            conv_quan = self.qmodel.conv1
+            if self.precision_config and self.precision_config[0]==32: 
+                conv_quan.weight.data.copy_(conv.weight.data)
+            else: load_ofwa(conv, conv_quan, prefix=self.prefix+'/conv1')
+            for layer_idx in range(1, 5):
+                current_layer_pretrained = eval('self.model.layer{}'.format(layer_idx))
+                current_layer_quan = eval('self.qmodel.layer{}'.format(layer_idx))
+                skip = self.precision_config[layer_idx]==32 if self.precision_config else False
+                for block_idx in range(len(current_layer_pretrained)):
+                    current_block_pretrained = current_layer_pretrained[block_idx]
+                    current_block_quan = current_layer_quan[block_idx]
+                    # conv
+                    for idx in range(1, 4):
+                        conv = eval('current_block_pretrained.conv{}'.format(idx))
+                        conv_quan = eval('current_block_quan.conv{}'.format(idx))
+                        if skip: conv_quan.weight.data.copy_(conv.weight.data)
+                        else: load_ofwa(conv, conv_quan, prefix=self.prefix+'/layer'+str(layer_idx)+'_block'+str(block_idx)+'_conv'+str(idx))
+                    # downsample
+                    if current_block_pretrained.downsample is not None:
+                        conv = current_block_pretrained.downsample[0]
+                        conv_quan = current_block_quan.downsample[0]
+                        if skip: conv_quan.weight.data.copy_(conv.weight.data)
+                        else: load_ofwa(conv, conv_quan, prefix=self.prefix+'/layer'+str(layer_idx)+'_block'+str(block_idx)+'_downsample')
+            conv = self.model.fc
+            conv_quan = self.qmodel.fc[1]
+            if self.precision_config and self.precision_config[-1]==32: 
+                conv_quan.weight.data.copy_(conv.weight.data)
+            else: load_ofwa(conv, conv_quan, prefix=self.prefix+'/fc')
+
+        else: raise NotImplementedError
 
     def act_quantizer(self, model, prefix, n_batches):
         """
