@@ -10,7 +10,8 @@ from tqdm import tqdm
 from trailmet.utils import seed_everything
 from trailmet.algorithms.quantize.quantize import BaseQuantization
 from trailmet.models.resnet import BasicBlock, Bottleneck
-from trailmet.algorithms.quantize.qmodel import QBasicBlock, QBottleneck
+from trailmet.models.mobilenet import InvertedResidual
+from trailmet.algorithms.quantize.qmodel import QBasicBlock, QBottleneck, QInvertedResidual
 from trailmet.algorithms.quantize.methods import BitSplitQuantizer, ActQuantizer
 
 
@@ -31,6 +32,7 @@ class QuantModel(nn.Module):
         self.supported = {
             BasicBlock : QBasicBlock,
             Bottleneck : QBottleneck,
+            InvertedResidual : QInvertedResidual, 
         }
         setattr(model, 'quant', ActQuantizer())
         setattr(model, 'fc', nn.Sequential(model.quant, model.fc))

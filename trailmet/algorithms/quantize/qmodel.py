@@ -185,13 +185,16 @@ class QuantInvertedResidual(BaseQuantBlock):
     def __init__(self, inv_res: InvertedResidual, weight_quant_params: dict = {}, act_quant_params: dict = {}):
         super().__init__(act_quant_params)
         self.stride = inv_res.stride
+        self.inp = inv_res.inp
+        self.oup = inv_res.oup
+        self.exp = inv_res.exp
         self.conv1 = QuantModule(inv_res.conv1, weight_quant_params, act_quant_params)
         self.conv1.activation_function = inv_res.activ
         self.conv2 = QuantModule(inv_res.conv2, weight_quant_params, act_quant_params)
         self.conv2.activation_function = inv_res.activ
         self.conv3 = QuantModule(inv_res.conv3, weight_quant_params, act_quant_params)
         self.shortcut = nn.Sequential()
-        if inv_res.stride==1 and inv_res.inp!=inv_res.oup:
+        if self.stride==1 and self.inp!=self.oup:
             self.shortcut = nn.Sequential(
                 QuantModule(inv_res.shortcut[0], weight_quant_params, act_quant_params)
             )
@@ -255,19 +258,13 @@ class QBasicBlock(nn.Module):
     def forward(self, x):
         residual = x
         x = self.quant1(x)
-        out = self.conv1(x)
-        out = self.bn1(out)
-        out = self.activ(out)
+        out = self.activ(self.bn1(self.conv1(x)))
         out = self.quant2(out)
-        out = self.conv2(out)
-        out = self.bn2(out)
-
+        out = self.bn2(self.conv2(out))
         if self.downsample is not None:
             residual = self.downsample(x)
-
         out += residual
         out = self.activ(out)
-
         return out
 
 
@@ -291,24 +288,49 @@ class QBottleneck(nn.Module):
     def forward(self, x):
         residual = x
         x = self.quant1(x)
-        out = self.conv1(x)
-        out = self.bn1(out)
-        out = self.activ(out)
+        out = self.activ(self.bn1(self.conv1(x)))
         out = self.quant2(out)
-        out = self.conv2(out)
-        out = self.bn2(out)
-        out = self.activ(out)
+        out = self.activ(self.bn2(self.conv2(out)))
         out = self.quant3(out)
-        out = self.conv3(out)
-        out = self.bn3(out)
-
+        out = self.bn3(self.conv3(out))
         if self.downsample is not None:
             residual = self.downsample(x)
-
         out += residual
         out = self.activ(out)
-
         return out
+
+
+class QInvertedResidual(nn.Module):
+    def __init__(self, inv_res: InvertedResidual):
+        super().__init__() 
+        self.stride = inv_res.stride
+        self.inp = inv_res.inp
+        self.oup = inv_res.oup
+        self.exp = inv_res.exp
+        self.quant1 = ActQuantizer()
+        self.conv1 = inv_res.conv1
+        self.bn1 = inv_res.bn1
+        self.quant2 = ActQuantizer()
+        self.conv2 = inv_res.conv2
+        self.bn2 = inv_res.bn2()
+        self.quant3 = ActQuantizer()
+        self.conv3 = inv_res.conv3
+        self.bn3 = inv_res.bn3
+        self.shortcut = inv_res.shortcut
+        self.activ = inv_res.activ
+
+    def forward(self, x):
+        x = self.quant1(x)
+        out = self.activ(self.bn1(self.conv1(x)))
+        out = self.quant2(out)
+        out = self.activ(self.bn2(self.conv2(out)))
+        out = self.quant3(out)
+        out = self.bn3(self.conv3(out))
+        out = out + self.shortcut(x) if self.stride==1 else out
+        return out
+
+    
+        
 
 #===========================================
 #***** Quantization Modules for LAPQ *******

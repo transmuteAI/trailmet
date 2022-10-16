@@ -50,14 +50,13 @@ class InvertedResidual(nn.Module):
         self.conv3 = nn.Conv2d(hidden_dim, out_planes, kernel_size=1, stride=1, padding=0, bias=False)
         self.bn3 = nn.BatchNorm2d(out_planes)
 
-        self.activ = nn.ReLU6
-
         self.shortcut = nn.Sequential()
         if stride==1 and in_planes!=out_planes:
             self.shortcut = nn.Sequential(
                 nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=1, padding=0, bias=False),
                 nn.BatchNorm2d(out_planes)
             )
+        self.activ = nn.ReLU6
 
     def forward(self, x):
         out = self.activ(self.bn1(self.conv1(x)))
