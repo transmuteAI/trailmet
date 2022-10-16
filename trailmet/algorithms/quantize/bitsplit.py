@@ -8,9 +8,11 @@ import torch.nn as nn
 from collections import OrderedDict
 from tqdm import tqdm
 from trailmet.utils import seed_everything
-from trailmet.algorithms.quantize.qmodel_bitsplit import QuantModel, Quantizer
 from trailmet.algorithms.quantize.quantize import BaseQuantization
-from trailmet.algorithms.quantize.bitsplit_dump import ofwa, ofwa_rr
+from trailmet.models.resnet import BasicBlock, Bottleneck
+from trailmet.algorithms.quantize.qmodel import QBasicBlock, QBottleneck
+from trailmet.algorithms.quantize.methods import BitSplitQuantizer, ActQuantizer
+
 
 global feat, prev_feat, conv_feat
 def hook(module, input, output):
@@ -22,6 +24,29 @@ def current_input_hook(module, inputdata, outputdata):
 def conv_hook(module, inputdata, outputdata):
     global conv_feat
     conv_feat = outputdata.data#.cpu()#.numpy()
+
+class QuantModel(nn.Module):
+    def __init__(self, model: nn.Module):
+        super().__init__()
+        self.supported = {
+            BasicBlock : QBasicBlock,
+            Bottleneck : QBottleneck,
+        }
+        setattr(model, 'quant', ActQuantizer())
+        setattr(model, 'fc', nn.Sequential(model.quant, model.fc))
+        self.quant_block_refactor(model)
+
+    def quant_block_refactor(self, module: nn.Module):
+        """
+        Recursively modify the supported conv-blocks to add activation quantization layers
+        :param module: nn.Module with supported conv-block classes in its children
+        """
+        for name, child_module in module.named_children():
+            if type(child_module) in self.supported:
+                setattr(module, name, self.supported[type(child_module)](child_module))
+            elif isinstance(child_module, (nn.Conv2d, nn.Linear, nn.ReLU, nn.ReLU6)):
+                continue
+            else: self.quant_block_refactor(child_module)
 
 class BitSplit(BaseQuantization):
     def __init__(self, model: nn.Module, dataloaders, **kwargs):
@@ -61,7 +86,7 @@ class BitSplit(BaseQuantization):
 
         self.act_quant_modules = []
         for m in self.qmodel.modules():
-            if isinstance(m, Quantizer):
+            if isinstance(m, ActQuantizer):
                 m.set_bitwidth(self.a_bits)
                 self.act_quant_modules.append(m)
         self.act_quant_modules[-1].set_bitwidth(8)
@@ -69,10 +94,10 @@ class BitSplit(BaseQuantization):
         if not self.load_weight_scales:
             self.weight_quantizer()
         self.load_weight_quantization()
-        print("==> Starting '{}-bit' activation quantization".format(self.a_bits))
         if self.act_quant:
+            print("==> Starting '{}-bit' activation quantization".format(self.a_bits))
             if self.load_act_scales:
-                scales = np.load('act_'+str(self.a_bits)+'_scales.npy')
+                scales = np.load(self.prefix+'/act_'+str(self.a_bits)+'_scales.npy')
                 for index, q_module in enumerate(self.act_quant_modules):
                     q_module.set_scale(scales[index])
             else:
@@ -243,7 +268,8 @@ def conduct_ofwa(train_loader, model_pretrained, model_quan,
     if not hasattr(conv, 'kernel_size'):
         W = conv.weight.data#.cpu()
         W_shape = W.shape
-        B_sav, B, alpha = ofwa(W.cpu().numpy(), bitwidth)
+        B_sav, B, alpha = BitSplitQuantizer(W.cpu().numpy(), bitwidth).ofwa()
+        # B_sav, B, alpha = ofwa(W.cpu().numpy(), bitwidth)
         with open(prefix + '_fwa.pkl', 'wb') as f:
             pickle.dump({'B': B, 'alpha': alpha}, f, pickle.HIGHEST_PROTOCOL)
         if ec:
@@ -317,8 +343,9 @@ def conduct_ofwa(train_loader, model_pretrained, model_quan,
     X = X.cpu().numpy()
     Y = Y.cpu().numpy()
     W = W.reshape(W_shape[0], -1)
-    B_sav, B, alpha = ofwa(W.cpu().numpy(), bitwidth)
-    B, alpha = ofwa_rr(X, Y, B_sav, alpha, bitwidth, max_epoch=100)
+    B, alpha = BitSplitQuantizer(W.cpu().numpy(), bitwidth).ofwa_rr(X, Y) 
+    # B_sav, B, alpha = ofwa(W.cpu().numpy(), bitwidth)
+    # B, alpha = ofwa_rr(X, Y, B_sav, alpha, bitwidth, max_epoch=100)
     with open(prefix + '_rr_b30x400_e100.pkl', 'wb') as f:
         pickle.dump({'B': B, 'alpha': alpha}, f, pickle.HIGHEST_PROTOCOL)
 

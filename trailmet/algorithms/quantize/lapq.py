@@ -7,8 +7,9 @@ import scipy.optimize as optim
 from tqdm import tqdm
 from itertools import count
 from trailmet.utils import seed_everything
-from trailmet.algorithms.quantize.quantize import BaseQuantization
-from trailmet.algorithms.quantize.qmodel import ModelQuantizer
+from trailmet.algorithms.quantize.quantize import BaseQuantization, Conv2dFunctor, LinearFunctor
+from trailmet.algorithms.quantize.methods import LearnedStepSizeQuantization, FixedClipValueQuantization
+from trailmet.algorithms.quantize.qmodel import ParameterModuleWrapper, ActivationModuleWrapper
 
 
 class LAPQ(BaseQuantization):
@@ -56,11 +57,11 @@ class LAPQ(BaseQuantization):
         if self.test_before_calibration:
             args['qtype'] = 'max_static'
             cnn = copy.deepcopy(self.model)
-            mq = ModelQuantizer(cnn, args, layers)
-            acc1, acc5 = self.test(mq.model, self.val_loader, device=self.device)
+            qm = QuantModel(cnn, args, layers)
+            acc1, acc5 = self.test(qm.model, self.val_loader, device=self.device)
             print('==> Quantization (W{}A{}) accuracy before LAPQ: {:.4f} | {:.4f}'.format(
                 self.w_bits, self.a_bits, acc1, acc5))
-            del mq, cnn
+            del qm, cnn
 
         ps = np.linspace(2,4,10)
         losses = []
@@ -69,11 +70,11 @@ class LAPQ(BaseQuantization):
             args['qtype'] = 'lp_norm'
             args['lp'] = p
             cnn = copy.deepcopy(self.model)
-            mq = ModelQuantizer(cnn, args, layers)
-            loss = self.evaluate_loss(model=mq.model, device=self.device)
+            qm = QuantModel(cnn, args, layers)
+            loss = self.evaluate_loss(model=qm.model, device=self.device)
             losses.append(loss.item())
             tk1.set_postfix(p_val=p, loss=loss.item())
-            del mq, cnn
+            del qm, cnn
         # using quadratic interpolation to approximate the optimal quantization step size ∆p∗
         z = np.polyfit(ps, losses, 2)
         y = np.poly1d(z)
@@ -81,7 +82,7 @@ class LAPQ(BaseQuantization):
 
         print("==> using p intr : {:.2f}".format(p_intr))
         args['lp'] = p_intr
-        quant_model = ModelQuantizer(self.model, args, layers)
+        quant_model = QuantModel(self.model, args, layers)
         lp_acc1, lp_acc5, lp_loss = self.test(quant_model.model, self.val_loader, torch.nn.CrossEntropyLoss().to(self.device), self.device)
         lp_point = quant_model.get_clipping()
 
@@ -121,7 +122,7 @@ class LAPQ(BaseQuantization):
         self.qnn = copy.deepcopy(quant_model.model)
 
 
-    def evaluate_calibration(self, scales, QM: ModelQuantizer, device):
+    def evaluate_calibration(self, scales, QM, device):
         eval_count = next(self.eval_count)
         QM.set_clipping(scales, device)
         loss = self.evaluate_loss(QM.model, device).item()
@@ -153,3 +154,101 @@ class LAPQ(BaseQuantization):
                 loss = criterion(output, target)
                 res += loss
             return res / len(self.cal_set)        
+
+
+class QuantModel(nn.Module):
+    def __init__(self, model, args, quantizable_layers, optimizer_bridge=None):
+        self.model = model
+        self.args = args
+        self.bit_weights = args['bit_weights']
+        self.bit_act = args['bit_act']
+        self.post_relu = True
+        
+        self.replacement_factory = {
+            nn.ReLU: ActivationModuleWrapper,
+            nn.ReLU6: ActivationModuleWrapper,
+            nn.Conv2d: ParameterModuleWrapper 
+            }
+        self.functor_map = {
+            nn.Conv2d: Conv2dFunctor, 
+            nn.Linear: LinearFunctor, 
+            }
+        self.optimizer_bridge = optimizer_bridge
+        
+        self.quantization_wrappers = []
+        self.quantizable_modules = []
+        self.quantizable_layers = quantizable_layers
+        self._pre_process_container(model)
+        self._create_quantization_wrappers()
+        self.quantization_params = LearnedStepSizeQuantization.learned_parameters()
+
+    def load_state_dict(self, state_dict):
+        for name, qwrapper in self.quantization_wrappers:
+            qwrapper.load_state_dict(state_dict)
+
+    def freeze(self):
+        for n, p in self.model.named_parameters():
+            # TODO: hack, make it more robust
+            if not np.any([qp in n for qp in self.quantization_params]):
+                p.requires_grad = False
+
+    @staticmethod
+    def has_children(module):
+        try:
+            next(module.children())
+            return True
+        except StopIteration:
+            return False
+    
+    def _create_quantization_wrappers(self):
+        for qm in self.quantizable_modules:
+            # replace module by it's wrapper
+            fn = self.functor_map[type(qm.module)](qm.module) if type(qm.module) in self.functor_map else None
+            args = {"bits_out": self.bit_act, "bits_weight": self.bit_weights, "forward_functor": fn,
+                    "post_relu": self.post_relu, "optim_bridge": self.optimizer_bridge}
+            args.update(self.args)
+            if hasattr(qm, 'bn'):
+                args['bn'] = qm.bn
+            module_wrapper = self.replacement_factory[type(qm.module)](qm.full_name, qm.module,
+                                                                    **args)
+            setattr(qm.container, qm.name, module_wrapper)
+            self.quantization_wrappers.append((qm.full_name, module_wrapper))
+
+    def _pre_process_container(self, container, prefix=''):
+        prev, prev_name = None, None
+        for name, module in container.named_children():
+            # if is_bn(module) and is_absorbing(prev) and prev_name in self.quantizable_layers:
+            #     # Pass BN module to prev module quantization wrapper for BN folding/unfolding
+            #     self.quantizable_modules[-1].bn = module
+
+            full_name = prefix + name
+            if full_name in self.quantizable_layers:
+                self.quantizable_modules.append(
+                    type('', (object,), {'name': name, 'full_name': full_name, 'module': module, 'container': container})()
+                )
+
+            if self.has_children(module):
+                # For container we call recursively
+                self._pre_process_container(module, full_name + '.')
+
+            prev = module
+            prev_name = full_name
+
+    def get_qwrappers(self):
+        return [qwrapper for (name, qwrapper) in self.quantization_wrappers if qwrapper.__enabled__()]
+
+    def set_clipping(self, clipping, device):  # TODO: handle device internally somehow
+        qwrappers = self.get_qwrappers()
+        for i, qwrapper in enumerate(qwrappers):
+            qwrapper.set_quantization(FixedClipValueQuantization,
+                                      {'clip_value': clipping[i], 'device': device})
+
+    def get_clipping(self):
+        clipping = []
+        qwrappers = self.get_qwrappers()
+        for i, qwrapper in enumerate(qwrappers):
+            q = qwrapper.get_quantization()
+            clip_value = getattr(q, 'alpha')
+            clipping.append(clip_value.item())
+
+        return qwrappers[0].get_quantization().alpha.new_tensor(clipping)

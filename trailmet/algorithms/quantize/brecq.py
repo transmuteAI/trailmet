@@ -1,12 +1,20 @@
 
 import torch
 import torch.nn as nn
+import torch.distributed as dist
 from trailmet.utils import seed_everything
-from trailmet.algorithms.quantize.quantize import BaseQuantization
-from trailmet.algorithms.quantize.quant_model import QuantModel, BaseQuantBlock, QuantModule
+from trailmet.algorithms.quantize.quantize import BaseQuantization, FoldBN, StraightThrough
+from trailmet.models.resnet import BasicBlock, Bottleneck
+from trailmet.models.mobilenetv2 import InvertedResidual
+from trailmet.algorithms.quantize.qmodel import QuantModule, BaseQuantBlock
+from trailmet.algorithms.quantize.qmodel import QuantBasicBlock, QuantBottleneck, QuantInvertedResidual
 from trailmet.algorithms.quantize.reconstruct import layer_reconstruction, block_reconstruction
 
-
+supported = {
+    BasicBlock: QuantBasicBlock,
+    Bottleneck: QuantBottleneck,
+    InvertedResidual: QuantInvertedResidual,
+}
 
 class BRECQ(BaseQuantization):
     """
@@ -34,12 +42,12 @@ class BRECQ(BaseQuantization):
         self.a_bits = self.kwargs.get('A_BITS', 8)
         self.channel_wise = self.kwargs.get('CHANNEL_WISE', True)
         self.act_quant = self.kwargs.get('ACT_QUANT', True)
-        self.set_8bit_head_stem = self.kwargs.get('SET_8BIT_HEAD_STEM', True)
+        self.set_8bit_head_stem = self.kwargs.get('SET_8BIT_HEAD_STEM', False)
         self.precision_config = self.kwargs.get('PREC_CONFIG', [])
         self.num_samples = self.kwargs.get('NUM_SAMPLES', 1024)
         self.weight = self.kwargs.get('WEIGHT', 0.01)
-        self.iters_w = self.kwargs.get('ITERS_W', 20000)
-        self.iters_a = self.kwargs.get('ITERS_A', 20000)
+        self.iters_w = self.kwargs.get('ITERS_W', 10000)
+        self.iters_a = self.kwargs.get('ITERS_A', 10000)
         self.optimizer = self.kwargs.get('OPTIMIZER', 'adam')
         self.lr = self.kwargs.get('LR', 4e-4)
         self.gpu_id = self.kwargs.get('GPU_ID', 0)
@@ -136,4 +144,85 @@ class BRECQ(BaseQuantization):
                 self.reconstruct_model(module, **kwargs)
 
 
+class QuantModel(nn.Module):
+    def __init__(self, model: nn.Module, weight_quant_params: dict = {}, act_quant_params: dict = {}):
+        super().__init__()
+        self.model = model
+        bn = FoldBN()
+        bn.search_fold_and_remove_bn(self.model)
+        self.quant_module_refactor(self.model, weight_quant_params, act_quant_params)
+
+    def quant_module_refactor(self, module: nn.Module, weight_quant_params: dict = {}, act_quant_params: dict = {}):
+        """
+        Recursively replace the normal conv2d and Linear layer to QuantModule
+        :param module: nn.Module with nn.Conv2d or nn.Linear in its children
+        :param weight_quant_params: quantization parameters like n_bits for weight quantizer
+        :param act_quant_params: quantization parameters like n_bits for activation quantizer
+        """
+        prev_quantmodule = None
+        for name, child_module in module.named_children():
+            if type(child_module) in supported:
+                setattr(module, name, supported[type(child_module)](child_module, weight_quant_params, act_quant_params))
+
+            elif isinstance(child_module, (nn.Conv2d, nn.Linear)):
+                setattr(module, name, QuantModule(child_module, weight_quant_params, act_quant_params))
+                prev_quantmodule = getattr(module, name)
+
+            elif isinstance(child_module, (nn.ReLU, nn.ReLU6)):
+                if prev_quantmodule is not None:
+                    prev_quantmodule.activation_function = child_module
+                    setattr(module, name, StraightThrough())
+                else:
+                    continue
+
+            elif isinstance(child_module, StraightThrough):
+                continue
+
+            else:
+                self.quant_module_refactor(child_module, weight_quant_params, act_quant_params)
     
+    def set_quant_state(self, weight_quant: bool = False, act_quant: bool = False):
+        for m in self.model.modules():
+            if isinstance(m, (QuantModule, BaseQuantBlock)):
+                m.set_quant_state(weight_quant, act_quant)
+
+    def forward(self, input):
+        return self.model(input)
+
+    def set_first_last_layer_to_8bit(self):
+        module_list = []
+        for m in self.model.modules():
+            if isinstance(m, QuantModule):
+                module_list += [m]
+        module_list[0].weight_quantizer.bitwidth_refactor(8)
+        module_list[0].act_quantizer.bitwidth_refactor(8)
+        module_list[-1].weight_quantizer.bitwidth_refactor(8)
+        module_list[-2].act_quantizer.bitwidth_refactor(8)
+        # ignore reconstruction of the first layer
+        module_list[0].ignore_reconstruction = True
+
+    def disable_network_output_quantization(self):
+        module_list = []
+        for m in self.model.modules():
+            if isinstance(m, QuantModule):
+                module_list += [m]
+        module_list[-1].disable_act_quant = True
+
+    def set_layer_precision(self, weight_bit=8, act_bit=8, start=1, end=-1):
+        module_list = []
+        for m in self.model.modules():
+            if isinstance(m, QuantModule):
+                module_list += [m]
+        assert start>=0 and end>=0, 'layer index cannot be negative'
+        assert start<len(module_list) and end<len(module_list), 'layer index out of range'
+        for i in range(start, end+1):
+            module_list[i].weight_quantizer.bitwidth_refactor(weight_bit)
+            if i==len(module_list)-1: continue
+            module_list[i].act_quantizer.bitwidth_refactor(act_bit)
+
+    def synchorize_activation_statistics(self):
+        for m in self.modules():
+            if isinstance(m, QuantModule):
+                if m.act_quantizer.delta is not None:
+                    m.act_quantizer.delta.data /= dist.get_world_size()
+                    dist.all_reduce(m.act_quantizer.delta.data) 
