@@ -468,7 +468,7 @@ class ActQuantizer(nn.Module):
         if not isinstance(self.out_scale, (float, np.float32, np.float64)):
             self.out_scale = self.out_scale.to(x.device)
         # return torch.clamp(torch.round(x/self.in_scale), self.min_val, self.max_val) * self.out_scale
-        return torch.clamp(RoundSTE(x/self.in_scale), self.min_val, self.max_val) * self.out_scale
+        return torch.clamp(RoundSTE.apply(x/self.in_scale), self.min_val, self.max_val) * self.out_scale
 
 
 class QuantizationBase(object):

@@ -307,13 +307,13 @@ class QInvertedResidual(nn.Module):
         self.inp = inv_res.inp
         self.oup = inv_res.oup
         self.exp = inv_res.exp
-        self.quant1 = ActQuantizer()
+        self.quant1 = ActQuantizer(islinear=1)
         self.conv1 = inv_res.conv1
         self.bn1 = inv_res.bn1
-        self.quant2 = ActQuantizer()
+        self.quant2 = ActQuantizer(islinear=1)
         self.conv2 = inv_res.conv2
         self.bn2 = inv_res.bn2
-        self.quant3 = ActQuantizer()
+        self.quant3 = ActQuantizer(islinear=1)
         self.conv3 = inv_res.conv3
         self.bn3 = inv_res.bn3
         self.shortcut = inv_res.shortcut
