@@ -7,7 +7,7 @@ from typing import Union
 from trailmet.algorithms.quantize.quantize import StraightThrough, BaseQuantization as BQ
 from trailmet.algorithms.quantize.qmodel import QuantModule, BaseQuantBlock
 from trailmet.algorithms.quantize.methods import AdaRoundQuantizer
-from trailmet.algorithms.quantize.brecq import QuantModel
+# from trailmet.algorithms.quantize.brecq import QuantModel
 
 
 optimizer_map = {
@@ -22,7 +22,7 @@ optimizer_map = {
 #****** Data & Grad Hook Utils *******
 #=====================================
 
-def save_inp_oup_data(model: QuantModel, layer: Union[QuantModule, BaseQuantBlock], cali_data: torch.Tensor,
+def save_inp_oup_data(model, layer: Union[QuantModule, BaseQuantBlock], cali_data: torch.Tensor,
                       asym: bool = False, act_quant: bool = False, batch_size: int = 32, keep_gpu: bool = True):
     """
     Save input data and output data of a particular layer/block over calibration dataset.
@@ -53,7 +53,7 @@ def save_inp_oup_data(model: QuantModel, layer: Union[QuantModule, BaseQuantBloc
     return cached_inps, cached_outs
 
 
-def save_grad_data(model: QuantModel, layer: Union[QuantModule, BaseQuantBlock], cali_data: torch.Tensor,
+def save_grad_data(model, layer: Union[QuantModule, BaseQuantBlock], cali_data: torch.Tensor,
                    damping: float = 1., act_quant: bool = False, batch_size: int = 32,
                    keep_gpu: bool = True):
     """
@@ -115,7 +115,7 @@ class DataSaverHook:
 
 
 class GetLayerInpOut:
-    def __init__(self, model: QuantModel, layer: Union[QuantModule, BaseQuantBlock],
+    def __init__(self, model, layer: Union[QuantModule, BaseQuantBlock],
                  device: torch.device, asym: bool = False, act_quant: bool = False):
         self.model = model
         self.layer = layer
@@ -168,7 +168,7 @@ class GradSaverHook:
 
 
 class GetLayerGrad:
-    def __init__(self, model: QuantModel, layer: Union[QuantModule, BaseQuantBlock],
+    def __init__(self, model, layer: Union[QuantModule, BaseQuantBlock],
                  device: torch.device, act_quant: bool = False):
         self.model = model
         self.layer = layer
@@ -306,7 +306,7 @@ class LayerLossFunction:
         return total_loss
 
 
-def layer_reconstruction(model: QuantModel, layer: QuantModule, cali_data: torch.Tensor,
+def layer_reconstruction(model, layer: QuantModule, cali_data: torch.Tensor,
                          batch_size: int = 32, iters: int = 20000, weight: float = 0.001, opt_mode: str = 'mse',
                          asym: bool = False, include_act_func: bool = True, b_range: tuple = (20, 2),
                          warmup: float = 0.0, act_quant: bool = False, lr: float = 4e-5, p: float = 2.0,
@@ -465,7 +465,7 @@ class BlockLossFunction:
         return total_loss
 
 
-def block_reconstruction(model: QuantModel, block: BaseQuantBlock, cali_data: torch.Tensor,
+def block_reconstruction(model, block: BaseQuantBlock, cali_data: torch.Tensor,
                          batch_size: int = 32, iters: int = 20000, weight: float = 0.01, opt_mode: str = 'mse',
                          asym: bool = False, include_act_func: bool = True, b_range: tuple = (20, 2),
                          warmup: float = 0.0, act_quant: bool = False, lr: float = 4e-5, p: float = 2.0,

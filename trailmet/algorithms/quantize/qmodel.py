@@ -312,18 +312,17 @@ class QInvertedResidual(nn.Module):
         self.bn1 = inv_res.bn1
         self.quant2 = ActQuantizer()
         self.conv2 = inv_res.conv2
-        self.bn2 = inv_res.bn2()
+        self.bn2 = inv_res.bn2
         self.quant3 = ActQuantizer()
         self.conv3 = inv_res.conv3
         self.bn3 = inv_res.bn3
         self.shortcut = inv_res.shortcut
-        self.activ = inv_res.activ
 
     def forward(self, x):
         x = self.quant1(x)
-        out = self.activ(self.bn1(self.conv1(x)))
+        out = F.relu6(self.bn1(self.conv1(x)))
         out = self.quant2(out)
-        out = self.activ(self.bn2(self.conv2(out)))
+        out = F.relu6(self.bn2(self.conv2(out)))
         out = self.quant3(out)
         out = self.bn3(self.conv3(out))
         out = out + self.shortcut(x) if self.stride==1 else out

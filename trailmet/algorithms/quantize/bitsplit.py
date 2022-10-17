@@ -36,12 +36,12 @@ class QuantModel(nn.Module):
         }
         if arch=='ResNet50':
             setattr(model, 'quant', ActQuantizer())
-            setattr(model, 'fc', nn.Sequential(model.quant, model.fc))
+            setattr(model, 'fc', nn.Sequential(ActQuantizer(), model.fc))
         if arch=='MobileNetV2':
-            setattr(model, 'quant1', ActQuantizer())
-            setattr(model, 'quant2', ActQuantizer())
-            setattr(model, 'conv2', nn.Sequential(model.quant1, model.conv2))
-            setattr(model, 'linear', nn.Sequential(model.quant2, model.linear))
+            # setattr(model, 'quant1', ActQuantizer())
+            # setattr(model, 'quant2', ActQuantizer())
+            setattr(model, 'conv2', nn.Sequential(ActQuantizer(), model.conv2))
+            setattr(model, 'linear', nn.Sequential(ActQuantizer(), model.linear))
         self.quant_block_refactor(model)
 
     def quant_block_refactor(self, module: nn.Module):
@@ -118,20 +118,21 @@ class BitSplit(BaseQuantization):
         """
         if self.arch=='MobileNetV2':
             count = 3
-            for i in range(1,8):
+            for i in range(len(self.model.layers)):
                 count+=3
-                if len(self.model.layers.shortcut)>0: count+=1
+                if len(self.model.layers[i].shortcut)>0: count+=1
             pbar = tqdm(total=count)
             # quantize first layer
             conv = self.model.conv1
             conv_quan = self.qmodel.conv1
+            w_bit = 8 if self.set_8bit_head_stem else self.w_bits
             if self.precision_config: w_bit = self.precision_config[0] 
             if w_bit!=32: 
                 conduct_ofwa(self.train_loader, self.model, self.qmodel, conv, conv_quan, w_bit,
                             self.calib_batches, prefix=self.prefix+'/conv1', device=self.device, ec=False)
             pbar.update(1)
             time.sleep(.1)
-            for layer_idx in range(1,8):
+            for layer_idx in range(len(self.model.layers)):
                 current_layer_pretrained = self.model.layers[layer_idx]
                 current_layer_quan = self.qmodel.layers[layer_idx]
                 w_bit = self.precision_config[layer_idx] if self.precision_config else self.w_bits
@@ -140,8 +141,9 @@ class BitSplit(BaseQuantization):
                 for idx in range(1,4):
                     conv = eval('current_layer_pretrained.conv{}'.format(idx))
                     conv_quan = eval('current_layer_quan.conv{}'.format(idx))
-                    if not skip: conduct_ofwa(self.train_loader, self.model, self.qmodel, conv, conv_quan, w_bit,
-                                    self.calib_batches, prefix=pkl_path+'_conv{}'.format(idx), device=self.device, ec=False)
+                    if not skip: conduct_ofwa(self.train_loader, self.model, self.qmodel, conv, conv_quan, 
+                                    w_bit, self.calib_batches, prefix=pkl_path+'_conv{}'.format(idx), 
+                                    device=self.device, dw=(idx==2), ec=False)
                     pbar.update(1)
                     time.sleep(.1)
                 if len(current_layer_pretrained.shortcut)>0:
@@ -167,7 +169,8 @@ class BitSplit(BaseQuantization):
                             self.calib_batches, prefix=self.prefix+'/linear', device=self.device, ec=False)
             pbar.update(1)
             pbar.close()
-                    
+
+        # Quantizer for Resnet50            
         elif self.arch=='ResNet50':
             count = 2
             for i in range(1,5):
@@ -336,8 +339,8 @@ class BitSplit(BaseQuantization):
             q_module.set_scale(scales[index])
 
 
-def conduct_ofwa(train_loader, model_pretrained, model_quan, 
-        conv, conv_quan, bitwidth, n_batches, device, prefix=None, ec=False):
+def conduct_ofwa(train_loader, model_pretrained, model_quan, conv, conv_quan, 
+            bitwidth, n_batches, device, num_epochs=100, prefix=None, dw=False, ec=False):
     # for fc
     if not hasattr(conv, 'kernel_size'):
         W = conv.weight.data#.cpu()
@@ -417,7 +420,10 @@ def conduct_ofwa(train_loader, model_pretrained, model_quan,
     X = X.cpu().numpy()
     Y = Y.cpu().numpy()
     W = W.reshape(W_shape[0], -1)
-    B, alpha = BitSplitQuantizer(W.cpu().numpy(), bitwidth).ofwa_rr(X, Y) 
+    if dw:
+        B, alpha = BitSplitQuantizer(W.cpu().numpy(), bitwidth).ofwa_rr_dw(X, Y, num_epochs)
+    else: 
+        B, alpha = BitSplitQuantizer(W.cpu().numpy(), bitwidth).ofwa_rr(X, Y, num_epochs) 
     # B_sav, B, alpha = ofwa(W.cpu().numpy(), bitwidth)
     # B, alpha = ofwa_rr(X, Y, B_sav, alpha, bitwidth, max_epoch=100)
     with open(prefix + '_rr_b30x400_e100.pkl', 'wb') as f:

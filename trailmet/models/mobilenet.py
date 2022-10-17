@@ -56,19 +56,18 @@ class InvertedResidual(nn.Module):
                 nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=1, padding=0, bias=False),
                 nn.BatchNorm2d(out_planes)
             )
-        self.activ = nn.ReLU6
 
     def forward(self, x):
-        out = self.activ(self.bn1(self.conv1(x)))
-        out = self.activ(self.bn2(self.conv2(out)))
+        out = F.relu6(self.bn1(self.conv1(x)))
+        out = F.relu6(self.bn2(self.conv2(out)))
         out = self.bn3(self.conv3(out))
         out = out + self.shortcut(x) if self.stride==1 else out
         return out
 
 
-class MobileNetV2(nn.Module):
+class MobileNetv2(nn.Module):
     def __init__(self, num_classes=1000, width_mult=1.):
-        super(MobileNetV2, self).__init__()
+        super(MobileNetv2, self).__init__()
         # setting of inverted residual blocks
         self.cfgs = [
             # t, c, n, s
@@ -104,14 +103,14 @@ class MobileNetV2(nn.Module):
         return nn.Sequential(*layers)  
 
     def forward(self, x):
-        out = nn.ReLU6(self.bn1(self.conv1(x)))
+        out = F.relu6(self.bn1(self.conv1(x)))
         out = self.layers(out)
-        out = nn.ReLU6(self.bn2(self.conv2(out)))
+        out = F.relu6(self.bn2(self.conv2(out)))
 #         out = self.avgpool(out)
         out = F.avg_pool2d(out, 4)
         out = out.view(out.size(0), -1)
         out = self.linear(out)
-        return out  
+        return out 
 
 def get_mobilenet_model(model_name, num_classes):
     """Returns the requested model, ready for training/compression with the specified method.
@@ -121,5 +120,5 @@ def get_mobilenet_model(model_name, num_classes):
     """
     assert model_name in __all__, '{model} model not present'
     if model_name == 'mobilenetv2':
-        net = MobileNetV2(num_classes)
+        net = MobileNetv2(num_classes)
     return net
