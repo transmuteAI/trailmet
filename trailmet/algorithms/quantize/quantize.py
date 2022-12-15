@@ -107,7 +107,7 @@ class LinearFunctor:
         res = torch.nn.functional.linear(*input, weight, bias)
         return res
 
-
+# TODO : To migrate all BN-layer folding function calls to the ones defined inside BaseQuantization class 
 class FoldBN():
     """used to fold batch norm to prev linear or conv layer which helps reduce comutational overhead during quantization"""
     def __init__(self):

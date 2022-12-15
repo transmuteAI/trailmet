@@ -189,9 +189,9 @@ class QuantInvertedResidual(BaseQuantBlock):
         self.oup = inv_res.oup
         self.exp = inv_res.exp
         self.conv1 = QuantModule(inv_res.conv1, weight_quant_params, act_quant_params)
-        self.conv1.activation_function = inv_res.activ
+        self.conv1.activation_function = nn.ReLU6(inplace=True)
         self.conv2 = QuantModule(inv_res.conv2, weight_quant_params, act_quant_params)
-        self.conv2.activation_function = inv_res.activ
+        self.conv2.activation_function = nn.ReLU6(inplace=True)
         self.conv3 = QuantModule(inv_res.conv3, weight_quant_params, act_quant_params)
         self.shortcut = nn.Sequential()
         if self.stride==1 and self.inp!=self.oup:
@@ -313,16 +313,16 @@ class QInvertedResidual(nn.Module):
         self.quant2 = ActQuantizer(islinear=1)
         self.conv2 = inv_res.conv2
         self.bn2 = inv_res.bn2
-        self.quant3 = ActQuantizer(islinear=1)
+        self.quant3 = ActQuantizer(islinear=0)
         self.conv3 = inv_res.conv3
         self.bn3 = inv_res.bn3
         self.shortcut = inv_res.shortcut
 
     def forward(self, x):
         x = self.quant1(x)
-        out = F.relu6(self.bn1(self.conv1(x)))
+        out = F.relu(self.bn1(self.conv1(x)))
         out = self.quant2(out)
-        out = F.relu6(self.bn2(self.conv2(out)))
+        out = F.relu(self.bn2(self.conv2(out)))
         out = self.quant3(out)
         out = self.bn3(self.conv3(out))
         out = out + self.shortcut(x) if self.stride==1 else out
@@ -367,7 +367,6 @@ class ActivationModuleWrapper(nn.Module):
                     uint=True, kwargs=kwargs
                 )
                 self.out_quantization = self.out_quantization_default
-                # print("ActivationModuleWrapperPost - {} | {} | {}".format(self.name, str(self.out_quantization), str(tensor.device)))
             self.out_quantization_init_fn = __init_out_quantization__
 
     def __enabled__(self):
@@ -435,7 +434,6 @@ class ParameterModuleWrapper(nn.Module):
             if not self.dynamic_weight_quantization:
                 self.weight_q = self.weight_quantization(self.weight)
                 self.weight_mse = torch.mean((self.weight_q - self.weight)**2).item()
-            # print("ParameterModuleWrapperPost - {} | {} | {}".format(self.name, str(self.weight_quantization),str(self.weight.device)))
 
     def __enabled__(self):
         return self.enabled and self.active and self.bit_weights is not None

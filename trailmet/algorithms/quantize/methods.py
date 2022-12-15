@@ -7,10 +7,13 @@ from trailmet.algorithms.quantize.quantize import BaseQuantization, RoundSTE
 
 """
 Quantization classes:-
+[BRECQ] 
     - UniformAffineQuantizer
     - AdaRoundQuantizer
+[BitSplit] 
     - BitSplitQuantizer
     - ActQuantizer
+[LAPQ] 
     - QuantizationBase
         - UniformQuantization
             - ClippedUniformQuantization

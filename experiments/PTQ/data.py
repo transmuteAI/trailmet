@@ -17,10 +17,12 @@ class DataManager:
         self.valid_size = 0.1
         self.num_train = 0
 
-    def prepare_data(self, name):
+    def prepare_data(self, name, batch_size=128):
+        self.batch_size = batch_size
         print('... Preparing data ...')
 
-        if name in ['Cifar100', 'cifar100', 'c100']:
+        if name in ['Cifar100', 'cifar100', 'CIFAR100', 'c100']:
+            self.dataset_name = 'c100'
             norm_mean = [0.49139968, 0.48215827, 0.44653124]
             norm_std = [0.24703233, 0.24348505, 0.26158768]
             norm_transform = transforms.Normalize(norm_mean, norm_std)
@@ -39,6 +41,7 @@ class DataManager:
             testset = CIFAR100(root='./data', train=False, download=True, transform=val_transform)
                                                 
         elif name in ['TinyImagenet', 'tiny_imagenet', 'tin']:
+            self.dataset_name = 'tin'
             norm_mean = [0.485, 0.456, 0.406]
             norm_std = [0.229, 0.224, 0.225]
             norm_transform = transforms.Normalize(norm_mean, norm_std)
