@@ -67,10 +67,12 @@ class AttentionTransfer(Distillation):
         test_only = kwargs.get('TEST_ONLY', False)
         lr = kwargs.get('LR', 0.1)
         weight_decay = kwargs.get('WEIGHT_DECAY', 0.0005)
+        milestones = kwargs.get('MILE_STONES', [82, 123])
+        gamma = kwargs.get('GAMMA', 0.1)
         
         # dont hard code this
-        optimizer = torch.optim.SGD(student_model.parameters(), lr=lr, weight_decay=weight_decay, momentum=0.9, nesterov=True)
-        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[60, 120, 160], gamma=0.2, verbose=False)
+        optimizer = torch.optim.SGD(student_model.parameters(), lr=lr, weight_decay=weight_decay, momentum=0.9)
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones, gamma=gamma, verbose=False)
         criterion = self.criterion
         
         best_acc = 0
