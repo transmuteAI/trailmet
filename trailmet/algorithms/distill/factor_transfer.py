@@ -99,6 +99,7 @@ class FactorTransfer(Distillation):
         self.kwargs = kwargs
         self.device = kwargs['DEVICE']
         self.beta = self.kwargs['DISTILL_ARGS'].get('BETA', 500);
+        self.verbose = self.kwargs['VERBOSE']
 
         #self.student_io_dict, self.teacher_io_dict = dict(), dict()
         self.teacher_layer_name = kwargs['DISTILL_ARGS'].get('TEACHER_LAYER_NAME')
@@ -125,7 +126,9 @@ class FactorTransfer(Distillation):
         self.distill(self.teacher_model, self.student_model, self.paraphraser, self.dataloaders, **self.kwargs['DISTILL_ARGS'])
 
     def distill(self, teacher_model, student_model, paraphraser, dataloaders, **kwargs):
-        print("=====TRAINING STUDENT NETWORK=====")
+        if self.verbose:
+            print("=====TRAINING STUDENT NETWORK=====")
+
         self.register_hooks()
         num_epochs = kwargs.get('EPOCHS', 163)
         test_only = kwargs.get('TEST_ONLY', False)
@@ -154,7 +157,8 @@ class FactorTransfer(Distillation):
 
         if test_only == False:
             for epoch in range(num_epochs):
-                print(f"Epoch: {epoch+1}")
+                if self.verbose:
+                    print(f"Epoch: {epoch+1}")
                 t_loss = self.train_one_epoch(teacher_model, student_model, paraphraser, translator,
                                               dataloaders['train'], criterion, optimizer, optimizer_translator)
                 acc, v_loss = self.test(teacher_model, student_model, paraphraser, translator,
@@ -165,13 +169,14 @@ class FactorTransfer(Distillation):
                 scheduler_translator.step()
                 
                 if acc > best_acc:
+                    if self.verbose:
                         print("**Saving checkpoint**")
-                        best_acc = acc
-                        torch.save({
-                            "epoch": epoch+1,
-                            "state_dict": student_model.state_dict(),
-                            "accuracy": acc,
-                        }, f"checkpoints/{self.log_name}.pth")
+                    best_acc = acc
+                    torch.save({
+                        "epoch": epoch+1,
+                        "state_dict": student_model.state_dict(),
+                        "accuracy": acc,
+                    }, f"checkpoints/{self.log_name}.pth")
                 train_losses.append(t_loss)
                 valid_losses.append(v_loss)
                 valid_accuracy.append(acc)
@@ -270,11 +275,13 @@ class FactorTransfer(Distillation):
         
         path = kwargs.get('PATH', '')
         if path != '':
-            print("=====LOADING PARAPHRASER=====")
+            if self.verbose:
+                print("=====LOADING PARAPHRASER=====")
             paraphraser.load_state_dict(torch.load(path))
             self.paraphraser = paraphraser
         else:
-            print("=====TRAINING PARAPHRASER=====")
+            if self.verbose:
+                print("=====TRAINING PARAPHRASER=====")
             num_epochs = kwargs.get('EPOCHS', 5)
             lr = kwargs.get('LR', 0.1)
             weight_decay = kwargs.get('WEIGHT_DECAY', 0.0005)
@@ -285,7 +292,8 @@ class FactorTransfer(Distillation):
             paraphraser.train()
             for epoch in range(num_epochs):
                 t_loss = self.train_one_epoch_paraphraser(teacher_model, paraphraser, dataloaders['train'], criterion, optimizer)
-                print(f"Epoch {epoch+1} | Train loss: {t_loss:.4f}")
+                if self.verbose:
+                    print(f"Epoch {epoch+1} | Train loss: {t_loss:.4f}")
 
             torch.save(paraphraser.state_dict(), f'checkpoints/{self.log_name}_paraphraser.pth')
             self.paraphraser = paraphraser
