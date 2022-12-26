@@ -1,4 +1,4 @@
-"""Cifer10, Cifer100 dataset.
+"""CIFAR10, CIFAR100 dataset.
 The original database is available from StatLib
     <https://www.cs.toronto.edu/~kriz/cifar.html>
 The CIFAR-10 dataset consists of 60000 32x32 colour images
@@ -39,7 +39,7 @@ class CIFAR10Dataset(BaseDataset):
             puts it in root directory. If dataset is already downloaded, it is not
             downloaded again, default=True.
         split_types (list): the possible values of this parameter are "train", "test" and "val".
-            If the split_type contains "val", then suffle has to be True, default value is None.
+            If the split_type contains "val", then shuffle has to be True, default value is None.
         val_fraction (float): If float, should be between 0.0 and 1.0 and represent
         the proportion of the dataset to include in the val split.
         shuffle (bool): Whether or not to shuffle the data before splitting into val from train,
