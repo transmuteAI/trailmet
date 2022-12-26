@@ -27,13 +27,13 @@ class DatasetFactory(object):
         assert 'root' in kwargs, "should provide dataset root"
         if 'CIFAR10' == name:
             obj_dfactory = CIFAR10Dataset(**kwargs)
-            dataset =  obj_dfactory.stack_dataset()
         elif 'CIFAR100' == name:
             obj_dfactory = CIFAR100Dataset(**kwargs)
-            dataset =  obj_dfactory.stack_dataset()
         elif 'ImageNet' == name:
             obj_dfactory = ImageNetDataset(**kwargs)
-            dataset = obj_dfactory.stack_dataset()
         else:
             raise Exception(f"unknown dataset{kwargs['name']}")
+        dataset = obj_dfactory.stack_dataset()
+        dataset = obj_dfactory.build_dict_info()
+
         return dataset

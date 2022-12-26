@@ -49,18 +49,25 @@ class BaseDataset:
             and "test_dataset" and the values are object of pytorch CIFER10 dataset containing train,
             val and test respectively.
         """
-        num_train = len(self.dataset_dict["train_dataset"])
-        indices = list(range(num_train))
-        split = int(np.floor(self.val_fraction * num_train))
 
-        if self.shuffle:
-            np.random.seed(self.random_seed)
-            np.random.shuffle(indices)
-
-        train_idx, valid_idx = indices[split:], indices[:split]
-        train_sampler = SubsetRandomSampler(train_idx)
-        valid_sampler = SubsetRandomSampler(valid_idx)
-        self.dataset_dict["train_sampler"] = train_sampler
-        self.dataset_dict["val_sampler"] = valid_sampler
+        # defining the samplers
+        self.dataset_dict["train_sampler"] = None
+        self.dataset_dict["val_sampler"] = None
         self.dataset_dict["test_sampler"] = None
+
+        if self.name in ['CIFAR10', 'CIFAR100']:
+            num_train = len(self.dataset_dict["train"])
+            indices = list(range(num_train))
+            split = int(np.floor(self.val_fraction * num_train))
+
+            if self.shuffle:
+                np.random.seed(self.random_seed)
+                np.random.shuffle(indices)
+
+            self.train_idx, self.valid_idx = indices[split:], indices[:split]
+            train_sampler = SubsetRandomSampler(self.train_idx)
+            valid_sampler = SubsetRandomSampler(self.valid_idx)
+            self.dataset_dict["train_sampler"] = train_sampler
+            self.dataset_dict["val_sampler"] = valid_sampler
+
         return self.dataset_dict

@@ -69,16 +69,25 @@ class CIFAR10Dataset(BaseDataset):
         self.dataset_dict = {}
 
         for item in self.split_types:
-            dataset_type = item + "_dataset"
+            dataset_type = item
             if item == 'val' and not self.val_exists:
                 self.dataset_dict[dataset_type] = None
             data = dataset(root=self.root,
                         train=(item !="test"),
                         transform=self.transform[item],
-                        target_transform = self.target_transform[item],
+                        target_transform =self.target_transform[item],
                         download=self.download)
             self.dataset_dict[dataset_type] = data
 
+    def build_dict_info(self):
+        self.dataset_dict['info'] = {}
+        self.dataset_dict['info']['train_size'] = len(self.dataset_dict['train_sampler'])
+        self.dataset_dict['info']['val_size'] = len(self.dataset_dict['val_sampler'])
+        self.dataset_dict['info']['test_size'] = len(self.dataset_dict['test'])
+        self.dataset_dict['info']['note'] = 'Note that we use the CIFAR10 instance of torchvision for train and validation, ' \
+                                            'due to which the length of these will be displayed as 50000 when len() is invoked.' \
+                                            'For accurate details, extract information from the info keyword in this dict '
+        return self.dataset_dict
 
 class CIFAR100Dataset(BaseDataset):
     """
@@ -130,7 +139,7 @@ class CIFAR100Dataset(BaseDataset):
         self.dataset_dict = {}
 
         for item in self.split_types:
-            dataset_type = item + "_dataset"
+            dataset_type = item
             if item == 'val' and not self.val_exists:
                 self.dataset_dict[dataset_type] = None
             data = dataset(root=self.root,
@@ -140,111 +149,15 @@ class CIFAR100Dataset(BaseDataset):
                         download=self.download)
             self.dataset_dict[dataset_type] = data
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#         else:
-#             testset = dataset(root=self.root,
-#                         train=self.train,
-#                         transform=self.transform,
-#                         target_transform = self.target_transform,
-#                         download=self.download)
-
-
-
-# class CIFAR100Dataset(Dataset):
-
-#     def __init__(self, name=None, root=None,
-#                  train=True, transform=None,
-#                  target_transform=None,
-#                  download=True,
-#                  split_types = ['train', 'val', 'test'],
-#                  val_fraction = 0.2,
-#                  random_state = 42):
-#         super(CIFAR100Dataset, self).__init__(name=None, root=None,
-#                  train=True, transform=None,
-#                  target_transform=None,
-#                  download=True, split_types = ['train', 'val', 'test'],
-#                  val_fraction = 0.2,
-#                  random_state = 42)
-#         dataset = torchvision.datasets.CIFAR100
-#         if self.train == True:
-#             trainset = dataset(root=self.root,
-#                         train=self.train,
-#                         transform=self.transform,
-#                         target_transform = self.target_transform,
-#                         download=self.download)
-#             return trainset
-#         else:
-#             testset = dataset(root=self.root,
-#                         train=self.train,
-#                         transform=self.transform,
-#                         target_transform = self.target_transform,
-#                         download=self.download)
-#             return testset
-
-
-# class Create_CIFAR10Dataset(Create_Dataset):
-#     def __init__(self, name=None, root=None,
-#                  train=True, data=None,
-#                  labels=None, transform=None,
-#                  target_transform=None,
-#                  download=True,
-#                  split_types = ['train', 'val', 'test'],
-#                  val_fraction = 0.2,
-#                  random_state = 42):
-#         super(CIFAR10Dataset, self).__init__(name=name, root=root,
-#                  train=train, transform=transform,
-#                  target_transform=target_transform,
-#                  download=download, split_types = ['train', 'val', 'test'],
-#                  val_fraction = 0.2,
-#                  random_state = 42)
-#         return self
-#     # download the data
-#     dataset = torchvision.datasets.CIFAR10
-#     if self.train == True:
-#         trainset = dataset(root=self.root,
-#                     train=self.train,
-#                     transform=self.transform,
-#                     target_transform = self.target_transform,
-#                     download=self.download)
-#     train_file = glob.glob(self.root + "/*")
-#     self.data, self.labels = self.load_train_data(train_file)
-#     self.train_data, self.valid_data, self.train_labels, self.valid_labels = self.get_train_val_split(self.data, self.labels,
-#                                                             test_size=self.val_fraction,
-#                                                             random_state=self.random_state)
-#     else:
-#         testset = dataset(root=self.root,
-#                     train=False,
-#                     transform=self.transform,
-#                     target_transform = self.target_transform,
-#                     download=self.download)
-#         test_file = os.path.join(BASE_DIR, f"test_batch")
-#         dict = self.unpickle(test_file)
-#         self.test_data = dict[b'data']
-#         self.test_labels = dict[b'labels']
-
-#      def load_train_data(self, root):
-#         root = self.root
-#         data = np.empty((0, 3072))
-#         labels = []
-#         for i in range(1,6):
-#             path = os.path.join(root, f"data_batch_{i}")
-#             dict = self.unpickle(path)
-#             data = np.vstack((data, dict[b'data']))
-#             labels.extend(dict[b'labels'])
-#         return data, labels
+    def build_dict_info(self):
+        self.dataset_dict['info'] = {}
+        self.dataset_dict['info']['train_size'] = len(self.dataset_dict['train_sampler'])
+        self.dataset_dict['info']['val_size'] = len(self.dataset_dict['val_sampler'])
+        self.dataset_dict['info']['test_size'] = len(self.dataset_dict['test'])
+        self.dataset_dict['info']['note'] = 'Note that we use the CIFAR100 instance of torchvision for train and validation, ' \
+                                            'due to which the length of these will be displayed as 50000 when len() is invoked.' \
+                                            'For accurate details, extract information from the info keyword in this dict '
+        return self.dataset_dict
 
 
 
