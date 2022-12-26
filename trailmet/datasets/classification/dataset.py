@@ -26,6 +26,21 @@ class BaseDataset:
         self.val_exists = False
         self.dataset_dict = {}
 
+        # performing QC of the input parameters
+        try:
+            self.val_fraction = float(self.val_fraction) # check for float type
+        except ValueError:
+            raise ValueError('val_fraction needs to be of float type')
+
+        assert (self.val_fraction >= 0.0) and (self.val_fraction < 1.0), 'val_fraction should be in range [0.0, 1.0]'
+
+        # check if split_types contain nothing beyond train, val and test
+        assert (len(set(self.split_types) - set(['train', 'val', 'test'])) == 0), 'Only train, val and test permitted as inputs in split_types'
+
+        if self.shuffle:
+            # ensure that val exists in split_types
+            assert 'val' in self.split_types, 'Required param val missing in the defined split types (split_type)'
+
     def stack_dataset(self):
         """
         Returns
