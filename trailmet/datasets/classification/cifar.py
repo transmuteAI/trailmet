@@ -1,36 +1,28 @@
-"""CIFAR10, CIFAR100 dataset.
-The original database is available from StatLib
-    <https://www.cs.toronto.edu/~kriz/cifar.html>
-The CIFAR-10 dataset consists of 60000 32x32 colour images
-in 10 classes, with 6000 images per class. There are 50000
-training images and 10000 test images.The classes are completely
-mutually exclusive.
+#!/usr/bin/env python
 
-This dataset is just like the CIFAR-10, except it has 100 classes
-containing 600 images each. There are 500 training images and 100
-testing images per class.
-References
-----------
-Learning Multiple Layers of Features from Tiny Images,
-Alex Krizhevsky, 2008.
-"""
-
+# importing the required packages
 import sys
 import torchvision
 from .dataset import BaseDataset
 
-
-
 class CIFAR10Dataset(BaseDataset):
     """
     `CIFAR10 <https://www.cs.toronto.edu/~kriz/cifar.html>`_ Dataset.
+    The CIFAR-10 dataset consists of 60000 32x32 colour images
+    in 10 classes, with 6000 images per class. There are 50000
+    training images and 10000 test images.The classes are completely
+    mutually exclusive.
+
+    References
+    ----------
+    Learning Multiple Layers of Features from Tiny Images,
+    Alex Krizhevsky, 2008.
 
     Parameters
     ----------
         name (string): dataset name 'CIFAR10', 'CIFAR100', default=None.
-        root (string): Root directory of dataset where directory
-            ``cifar-10-batches-py`` exists or will be saved to if download
-             is set to True, default=None.
+        root (string): Root directory where ``cifar-10-batches-py`` exists or will be saved if download flag is set to
+        True (default is None).
         train (bool, optional): If True, creates dataset from training set, otherwise
             creates from test set, default=None.
         transform (callable, optional): A function/transform that takes in an PIL image
@@ -80,6 +72,14 @@ class CIFAR10Dataset(BaseDataset):
             self.dataset_dict[dataset_type] = data
 
     def build_dict_info(self):
+        """
+        Behavior:
+            This function creates info key in the output dictionary. The info key contains details related to the size
+            of the training, validation and test datasets. Further, it can be used to define any additional information
+            necessary for the user.
+        Returns:
+            dataset_dict (dict): Updated with info key that contains details related to the data splits
+        """
         self.dataset_dict['info'] = {}
         self.dataset_dict['info']['train_size'] = len(self.dataset_dict['train_sampler'])
         self.dataset_dict['info']['val_size'] = len(self.dataset_dict['val_sampler'])
@@ -92,6 +92,15 @@ class CIFAR10Dataset(BaseDataset):
 class CIFAR100Dataset(BaseDataset):
     """
     `CIFAR10 <https://www.cs.toronto.edu/~kriz/cifar.html>`_ Dataset.
+    The CIFAR-100 dataset consists of 60000 32x32 colour images
+    in 100 classes, with 600 images per class. There are 50000
+    training images and 10000 test images. The classes are completely
+    mutually exclusive.
+
+    References
+    ----------
+    Learning Multiple Layers of Features from Tiny Images,
+    Alex Krizhevsky, 2008.
 
     Parameters
     ----------
@@ -150,6 +159,14 @@ class CIFAR100Dataset(BaseDataset):
             self.dataset_dict[dataset_type] = data
 
     def build_dict_info(self):
+        """
+        Behavior:
+            This function creates info key in the output dictionary. The info key contains details related to the size
+            of the training, validation and test datasets. Further, it can be used to define any additional information
+            necessary for the user.
+        Returns:
+            dataset_dict (dict): Updated with info key that contains details related to the data splits
+        """
         self.dataset_dict['info'] = {}
         self.dataset_dict['info']['train_size'] = len(self.dataset_dict['train_sampler'])
         self.dataset_dict['info']['val_size'] = len(self.dataset_dict['val_sampler'])
