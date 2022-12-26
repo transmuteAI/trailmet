@@ -14,6 +14,8 @@ References
 Learning Multiple Layers of Features from Tiny Images,
 Alex Krizhevsky, 2008.
 """
+
+import sys
 import torchvision
 from .dataset import BaseDataset
 
@@ -47,8 +49,8 @@ class CIFAR10Dataset(BaseDataset):
         random_seed (int): RandomState instance, default=None.
     """
     def __init__(self, name=None, root=None,
-                transform=None,
-                target_transform=None,
+                 transform=None,
+                 target_transform=None,
                  download=True,
                  split_types = None,
                  val_fraction = 0.2,
@@ -62,6 +64,23 @@ class CIFAR10Dataset(BaseDataset):
                  val_fraction =val_fraction,
                  shuffle=shuffle,
                  random_seed=random_seed)
+
+        # performing QC of the input parameters
+
+        try:
+            self.val_fraction = float(self.val_fraction) # check for float type
+        except ValueError:
+            raise ValueError('val_fraction needs to be of float type')
+
+        assert (self.val_fraction >= 0.0) and (self.val_fraction < 1.0), 'val_fraction should be in range [0.0, 1.0]'
+
+        # try:
+        #     raise Exception(self.val_fraction >= 0 & self.val_fraction < 1.0)
+        # except TypeError:
+        #     print('val_frac needs to be of float type')
+        #     sys.exit(0)
+        # except Exception:
+        #     sys.exit('ERROR: val_frac needs to be between 0.0 and 1.0')
 
         ## To do: chcek val_frac is float, else raise error
         ## To do: if shuffle is true, there should be 'val' in train test split
