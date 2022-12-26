@@ -1,15 +1,14 @@
-"""
-The :mod:`trailmet.datasets` module includes utilities to load datasets,
-including methods to load and fetch popular reference datasets.
-"""
+#!/usr/bin/env python
+
+# importing the required packages
 import os
-#from .cifar import CIFAR10Dataset, CIFAR100Dataset, ImageNetDataset
 from .cifar import CIFAR10Dataset, CIFAR100Dataset
 from .imagenet import ImageNetDataset
 
 class DatasetFactory(object):
     """
-    docstring to be written
+    This class forms the generic wrapper for the different dataset classes. The module includes utilities to load datasets,
+    including methods to load and fetch popular reference datasets.
     """
     @staticmethod
     def create_dataset(**kwargs):
@@ -27,13 +26,13 @@ class DatasetFactory(object):
         assert 'root' in kwargs, "should provide dataset root"
         if 'CIFAR10' == name:
             obj_dfactory = CIFAR10Dataset(**kwargs)
-            dataset =  obj_dfactory.stack_dataset()
         elif 'CIFAR100' == name:
             obj_dfactory = CIFAR100Dataset(**kwargs)
-            dataset =  obj_dfactory.stack_dataset()
         elif 'ImageNet' == name:
             obj_dfactory = ImageNetDataset(**kwargs)
-            dataset = obj_dfactory.stack_dataset()
         else:
             raise Exception(f"unknown dataset{kwargs['name']}")
+        dataset = obj_dfactory.stack_dataset()
+        dataset = obj_dfactory.build_dict_info()
+
         return dataset
