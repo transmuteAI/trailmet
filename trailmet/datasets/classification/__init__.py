@@ -4,6 +4,7 @@
 import os
 from .cifar import CIFAR10Dataset, CIFAR100Dataset
 from .imagenet import ImageNetDataset
+from .chest import ChestDataset
 
 class DatasetFactory(object):
     """
@@ -14,7 +15,7 @@ class DatasetFactory(object):
     def create_dataset(**kwargs):
         """
         Args:
-            name(string): dataset name 'CIFAR10', 'CIFAR100', 'ImageNet',
+            name(string): dataset name 'CIFAR10', 'CIFAR100', 'ImageNet', 'CHEST',
             root(string):  Root directory of dataset where directory
                    cifar-10-batches-py exists or will be saved
                    to if download is set to True.
@@ -30,6 +31,8 @@ class DatasetFactory(object):
             obj_dfactory = CIFAR100Dataset(**kwargs)
         elif 'ImageNet' == name:
             obj_dfactory = ImageNetDataset(**kwargs)
+        elif 'CHEST' == name:
+            obj_dfactory = ChestDataset(**kwargs)
         else:
             raise Exception(f"unknown dataset{kwargs['name']}")
         dataset = obj_dfactory.stack_dataset()
