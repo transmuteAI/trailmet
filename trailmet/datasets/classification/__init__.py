@@ -15,7 +15,7 @@ class DatasetFactory(object):
     def create_dataset(**kwargs):
         """
         Args:
-            name(string): dataset name 'CIFAR10', 'CIFAR100', 'ImageNet',
+            name(string): dataset name 'CIFAR10', 'CIFAR100', 'ImageNet', 'CHEST',
             root(string):  Root directory of dataset where directory
                    cifar-10-batches-py exists or will be saved
                    to if download is set to True.

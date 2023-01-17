@@ -4,6 +4,7 @@ from PIL import Image
 import os
 import numpy as np
 from tqdm import tqdm
+import torch
 from torch.utils.data import Dataset
 
 
@@ -23,6 +24,8 @@ class Chest(Dataset):
         name (string): dataset name 'CHEST', default=None.
         root (string): Root directory where ``train, train.csv`` exists or will be saved if download flag is set to
         True (default is None).
+        mode (string): Mode to run the dataset, options are 'train', 'val', 'test', 'heatmap', default='train'.
+        subname (string): Subname of the dataset, default='atelectasis'. options are 'atelectasis', 'edema', 'cardiomegaly', 'effusion'
         train (bool, optional): If True, creates dataset from training set, otherwise
             creates from test set, default=None.
         transform (callable, optional): A function/transform that takes in an PIL image
@@ -41,9 +44,10 @@ class Chest(Dataset):
         random_seed (int): RandomState instance, default=None.
     """
     def __init__(self, root=None,
+                 subname='atelectasis',
                  transform=None,
+                 target_transform=None,
                  mode='train',
-                 enhance_index=[2,6],
                  download=True,
                 ):
 
@@ -52,8 +56,8 @@ class Chest(Dataset):
         self._labels = []
         self._mode = mode
         self.transform = transform
-        self.dict = [{'1.0': '1', '': '0', '0.0': '0', '-1.0': '0'}, # need to check this again
-                     {'1.0': '1', '': '0', '0.0': '0', '-1.0': '1'}, ]
+        self.dict = [{'1.0': 1, '': 0, '0.0': 0, '-1.0': 2}, # need to check this with deepak for multiclass setting.
+                     {'1.0': 1, '': 0, '0.0': 0, '-1.0': 1}, ]
 
         if mode == "train":
             label_path = os.path.join(root, "train.csv")  
@@ -64,39 +68,22 @@ class Chest(Dataset):
         
         with open(label_path) as f:
             header = f.readline().strip('\n').split(',')
-            self._label_header = [
-                header[7],
-                header[10],
-                header[11],
-                header[13],
-                header[15]]
+            for i, value in enumerate(header):
+                if subname == value.lower() or (subname == "effusion" and value.split(" ")[-1].lower() == subname):
+                    subname_index = i
+
             for line in tqdm(f):
-                labels = []
                 fields = line.strip('\n').split(',')
                 image_path = os.path.join(root, "/".join(fields[0].split("/")[1:]))
-                flg_enhance = False
-                for index, value in enumerate(fields[5:]):
-                    if index == 5 or index == 8:
-                        labels.append(self.dict[1].get(value))
-                        if self.dict[1].get(
-                                value) == '1' and \
-                                enhance_index.count(index) > 0:
-                            flg_enhance = True
-                    elif index == 2 or index == 6 or index == 10:
-                        labels.append(self.dict[0].get(value))
-                        if self.dict[0].get(
-                                value) == '1' and \
-                                enhance_index.count(index) > 0:
-                            flg_enhance = True
-                # labels = ([self.dict.get(n, n) for n in fields[5:]])
-                labels = list(map(int, labels))
+                if subname in ["atelectasis", "edema"]:
+                    value = fields[subname_index]
+                    self._labels.append(self.dict[1].get(value))
+                elif subname in ["cardiomegaly", "effusion"]:
+                    value = fields[subname_index]
+                    self._labels.append(self.dict[0].get(value))
+
                 self._image_paths.append(image_path)
                 assert os.path.exists(image_path), image_path
-                self._labels.append(labels)
-                # if flg_enhance and self._mode == 'train':
-                #     for i in range(enhance_times):
-                #         self._image_paths.append(image_path)
-                #         self._labels.append(labels)
         self._num_image = len(self._image_paths)        
 
     def __len__(self):
@@ -105,22 +92,23 @@ class Chest(Dataset):
     def __getitem__(self, idx):
         image = Image.open(self._image_paths[idx]).convert("RGB")
         image = self.transform(image)
-        labels = np.array(self._labels[idx]).astype(np.float32)
+        label = torch.tensor([self._labels[idx]]).float()
 
         path = self._image_paths[idx]
 
         if self._mode == 'train' or self._mode == 'val':
-            return (image, labels)
+            return (image, label)
         elif self._mode == 'test':
             return (image, path)
         elif self._mode == 'heatmap':
-            return (image, path, labels)
+            return (image, path, label)
         else:
             raise Exception('Unknown mode : {}'.format(self._mode))
 
 class ChestDataset(BaseDataset):
     def __init__(self, name=None, root=None,
                  transform=None,
+                 subname='atelectasis',
                  target_transform=None,
                  download=True,
                  split_types = None,
@@ -144,6 +132,7 @@ class ChestDataset(BaseDataset):
             if item == 'val' and not self.val_exists:
                 self.dataset_dict[dataset_type] = None
             data = dataset(root=root,
+                        subname=subname,
                         mode=item,
                         transform=self.transform[item],
                         target_transform =self.target_transform[item],
