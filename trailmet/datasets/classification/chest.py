@@ -56,6 +56,7 @@ class Chest(Dataset):
         self._labels = []
         self._mode = mode
         self.transform = transform
+        self.target_transform = target_transform
         self.dict = [{'1.0': 1, '': 0, '0.0': 0, '-1.0': 2}, # need to check this with deepak for multiclass setting.
                      {'1.0': 1, '': 0, '0.0': 0, '-1.0': 1}, ]
 
@@ -91,7 +92,11 @@ class Chest(Dataset):
 
     def __getitem__(self, idx):
         image = Image.open(self._image_paths[idx]).convert("RGB")
-        image = self.transform(image)
+
+        if self._mode == "train":
+            image = self.transform(image)
+        else:
+            image = self.target_transform(image)
         label = torch.tensor([self._labels[idx]]).float()
 
         path = self._image_paths[idx]
