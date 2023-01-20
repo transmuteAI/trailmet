@@ -51,21 +51,20 @@ class Chest(Dataset):
                  download=True,
                 ):
 
-        self._label_header = None
         self._image_paths = []
         self._labels = []
         self._mode = mode
         self.transform = transform
         self.target_transform = target_transform
-        self.dict = [{'1.0': 1, '': 0, '0.0': 0, '-1.0': 2}, # need to check this with deepak for multiclass setting.
+        self.dict = [{'1.0': 1, '': 0, '0.0': 0, '-1.0': 2},
                      {'1.0': 1, '': 0, '0.0': 0, '-1.0': 1}, ]
 
         if mode == "train":
-            label_path = os.path.join(root, "train.csv")  
-        elif mode == "val":
-            label_path = os.path.join(root, "valid.csv")
+            label_path = os.path.join(root, "train.csv")
+            total_files = 224316
         elif mode == "test":
-            label_path = os.path.join(root, "valid.csv") # need to change to test.csv after final check
+            label_path = os.path.join(root, "valid.csv") # using valid.csv in testing mode
+            total_files = 234
         
         with open(label_path) as f:
             header = f.readline().strip('\n').split(',')
@@ -73,7 +72,7 @@ class Chest(Dataset):
                 if subname == value.lower() or (subname == "effusion" and value.split(" ")[-1].lower() == subname):
                     subname_index = i
 
-            for line in tqdm(f):
+            for line in tqdm(f, desc="Loading {} data".format(mode), total=total_files):
                 fields = line.strip('\n').split(',')
                 image_path = os.path.join(root, "/".join(fields[0].split("/")[1:]))
                 if subname in ["atelectasis", "edema"]:
@@ -101,10 +100,8 @@ class Chest(Dataset):
 
         path = self._image_paths[idx]
 
-        if self._mode == 'train' or self._mode == 'val':
+        if self._mode == 'train' or self._mode == 'val' or self._mode == 'test':
             return (image, label)
-        elif self._mode == 'test':
-            return (image, path)
         elif self._mode == 'heatmap':
             return (image, path, label)
         else:
@@ -129,6 +126,18 @@ class ChestDataset(BaseDataset):
                  shuffle=shuffle,
                  random_seed=random_seed)
 
+        os.makedirs(root, exist_ok=True)
+        final_path = os.path.join(root, "CheXpert-v1.0-small")
+
+        if not os.path.exists(final_path + "/train.csv"):
+            print(f"Chest dataset is not present in {root}. Downloading the dataset")
+            os.system(f"gdown 1UT4_JsaMV_-KV9hMwNaYnBqhXy5pMZSi -O {root}/CheXpert-v1.0-small.zip")  
+            os.makedirs(final_path, exist_ok=True)
+            os.system(f"unzip {root}/CheXpert-v1.0-small.zip -d {final_path}")
+            os.system(f"rm {root}/CheXpert-v1.0-small.zip")
+        else:
+            print(f"Chest dataset is present in {final_path}")
+
         dataset = Chest
         self.dataset_dict = {}
 
@@ -136,7 +145,8 @@ class ChestDataset(BaseDataset):
             dataset_type = item
             if item == 'val' and not self.val_exists:
                 self.dataset_dict[dataset_type] = None
-            data = dataset(root=root,
+                continue
+            data = dataset(root=final_path,
                         subname=subname,
                         mode=item,
                         transform=self.transform[item],
@@ -156,8 +166,8 @@ class ChestDataset(BaseDataset):
             dataset_dict (dict): Updated with info key that contains details related to the data splits
         """
         self.dataset_dict['info'] = {}
-        self.dataset_dict['info']['train_size'] = len(self.dataset_dict['train'])
-        self.dataset_dict['info']['val_size'] = len(self.dataset_dict['val'])
+        self.dataset_dict['info']['train_size'] = len(self.dataset_dict['train_sampler'])
+        self.dataset_dict['info']['val_size'] = len(self.dataset_dict['val_sampler'])
         self.dataset_dict['info']['test_size'] = len(self.dataset_dict['test'])
         self.dataset_dict['info']['note'] = ''
         return self.dataset_dict

@@ -83,7 +83,7 @@ class BaseDataset:
         self.dataset_dict["val_sampler"] = None
         self.dataset_dict["test_sampler"] = None
 
-        if self.name in ['CIFAR10', 'CIFAR100']:
+        if self.name in ['CIFAR10', 'CIFAR100' , "CHEST"]:
             num_train = len(self.dataset_dict["train"])
             indices = list(range(num_train))
             split = int(np.floor(self.val_fraction * num_train))
