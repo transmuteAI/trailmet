@@ -6,6 +6,9 @@ import numpy as np
 from tqdm import tqdm
 import torch
 from torch.utils.data import Dataset
+import gdown
+import zipfile
+
 
 
 
@@ -131,10 +134,22 @@ class ChestDataset(BaseDataset):
 
         if not os.path.exists(final_path + "/train.csv"):
             print(f"Chest dataset is not present in {root}. Downloading the dataset")
-            os.system(f"gdown 1UT4_JsaMV_-KV9hMwNaYnBqhXy5pMZSi -O {root}/CheXpert-v1.0-small.zip")  
+            gdown.download(id="1UT4_JsaMV_-KV9hMwNaYnBqhXy5pMZSi", output=f"{root}/CheXpert-v1.0-small.zip", quiet=False)
             os.makedirs(final_path, exist_ok=True)
-            os.system(f"unzip {root}/CheXpert-v1.0-small.zip -d {final_path}")
-            os.system(f"rm {root}/CheXpert-v1.0-small.zip")
+            
+            # unzipping the dataset
+            with zipfile.ZipFile(f'{root}/CheXpert-v1.0-small.zip', 'r') as zip_ref:
+                for member in tqdm(zip_ref.infolist(), desc='Extracting '):
+                    try:
+                        zip_ref.extract(member, final_path)
+                    except zipfile.error as e:
+                        raise Exception(f"Unable to extract the dataset. Please check the path {root}")
+            print("Removing the zip file")
+            os.remove(f"{root}/CheXpert-v1.0-small.zip")
+            print("Done! downloading the dataset.")
+
+            if not os.path.exists(final_path + "/train.csv"):
+                raise Exception(f"Unable to download the dataset. Please check the path {root}")
         else:
             print(f"Chest dataset is present in {final_path}")
 
