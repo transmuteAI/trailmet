@@ -1,7 +1,7 @@
 # importing the required packages
 from enum import Flag
-from trailmet.utils import seed_everything
-from trailmet.algorithms.prune.prune import BasePruning
+from trailmet.trailmet.utils import seed_everything
+from trailmet.trailmet.algorithms.prune.prune import BasePruning
 import torch
 import numpy as np
 import torch.nn as nn
