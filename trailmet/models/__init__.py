@@ -1,7 +1,9 @@
 from .resnet import get_resnet_model
+from .resnet import *
 
-
-class ModelsFactory(object):
+from .vgg_16_ns import *
+class ModelsFactory(obje
+                    ct):
     @staticmethod
     def create_model(name, num_classes=100, pretrained = False, **kwargs):
         """
