@@ -1,4 +1,4 @@
-
+print("Hello world")
 
 from ..algorithms import BaseAlgorithm
 
