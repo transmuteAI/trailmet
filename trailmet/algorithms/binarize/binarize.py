@@ -1,4 +1,3 @@
-import sys
 from ..algorithms import BaseAlgorithm
 
 class BaseBinarize(BaseAlgorithm):
@@ -7,5 +6,6 @@ class BaseBinarize(BaseAlgorithm):
         super(BaseBinarize, self).__init__(**kwargs)
         pass
     
-    def binarize(self):
+    def Binarize(self, model, dataloaders, **kwargs):
         pass
+
