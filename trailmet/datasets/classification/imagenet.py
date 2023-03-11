@@ -5,7 +5,7 @@ from .dataset import BaseDataset
 class ImageNetDataset(BaseDataset):
     """
     ImageNet <http://image-net.org/>`_ 2012 Classification Dataset.
-
+    
     Parameters
     ----------
         name (string): dataset name 'ImageNet', default=None.

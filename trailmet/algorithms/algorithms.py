@@ -114,29 +114,56 @@ class BaseAlgorithm(object):
                 extra_functionality()
         return running_loss/counter
 
-    def test(self, model, dataloader, loss_fn):
-        """This method is used to test the performance of the trained model."""
-        model.eval()
-        counter = 0
-        tk1 = tqdm_notebook(dataloader, total=len(dataloader))
-        running_loss = 0
-        running_acc = 0
-        total = 0
+    def lp_loss(pred, tgt, p=2.0, reduction='none'):
+        """loss function measured in Lp Norm"""
+        if reduction == 'none':
+            return (pred-tgt).abs().pow(p).sum(1).mean()
+        else:
+            return (pred-tgt).abs().pow(p).mean()
+
+    def accuracy(self, output, target, topk=(1,)):
+        """Computes the accuracy over the k top predictions for the specified values of k"""
         with torch.no_grad():
-            for x_var, y_var in tk1:
-                counter +=1
-                x_var = x_var.to(device=self.device)
-                y_var = y_var.to(device=self.device)
-                scores = model(x_var)
-                loss = loss_fn(scores, y_var)
-                _, scores = torch.max(scores.data, 1)
-                y_var = y_var.cpu().detach().numpy()
-                scores = scores.cpu().detach().numpy()
+            maxk = max(topk)
+            batch_size = target.size(0)
 
-                correct = (scores == y_var).sum().item()
-                running_loss+=loss.item()
-                running_acc+=correct
-                total+=scores.shape[0]
-                tk1.set_postfix(loss=running_loss/counter, acc=running_acc/total)
-        return running_acc/total, running_loss/counter
+            _, pred = output.topk(maxk, 1, True, True)
+            pred = pred.t()
+            correct = pred.eq(target.view(1, -1).expand_as(pred))
 
+            res = []
+            for k in topk:
+                correct_k = correct[:k].reshape(-1).float().sum(0, keepdim=True)
+                res.append(correct_k.mul_(100.0 / batch_size))
+            return res
+
+    def test(self, model, dataloader, loss_fn=None, device=None):
+        """This method is used to test the performance of the trained model."""
+        if device is None:
+            device = next(model.parameters()).device()
+        else:
+            model.to(device)
+        model.eval()
+        counter=0
+        tk1=tqdm_notebook(dataloader, total=len(dataloader))
+        running_acc1=0
+        running_acc5=0
+        running_loss=0
+        with torch.no_grad():
+            for images, targets in tk1:
+                counter+=1
+                images = images.to(device)
+                targets = targets.to(device)
+                outputs = model(images)
+                acc1, acc5 = self.accuracy(outputs, targets, topk=(1,5))
+                running_acc1+=acc1[0].item()
+                running_acc5+=acc5[0].item()
+                if loss_fn is not None:
+                    loss = loss_fn(outputs, targets)
+                    running_loss+=loss.item()
+                    tk1.set_postfix(loss=running_loss/counter, acc1=running_acc1/counter, acc5=running_acc5/counter)
+                else:
+                    tk1.set_postfix(acc1=running_acc1/counter, acc5=running_acc5/counter)
+        if loss_fn is not None:
+            return running_acc1/counter, running_acc5/counter, running_loss/counter
+        return running_acc1/counter, running_acc5/counter
