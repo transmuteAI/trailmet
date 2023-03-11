@@ -1,6 +1,5 @@
 from ..algorithms import BaseAlgorithm
 
-
 class BaseBinarize(BaseAlgorithm):
     """base class for binarization algorithms"""
     def __init__(self, **kwargs):
@@ -9,3 +8,4 @@ class BaseBinarize(BaseAlgorithm):
     
     def Binarize(self, model, dataloaders, **kwargs):
         pass
+
