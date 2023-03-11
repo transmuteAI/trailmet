@@ -1,0 +1,10 @@
+num_classes : 100
+weight_decay : 0.0005
+net : 'resnet50'
+dataset : 'c100'
+epochs : 200
+s : 0.003
+learning_rate : 0.002
+fine_tune_epochs : 165
+fine_tune_lr : 0.0004
+prune_ratio : 0.5
