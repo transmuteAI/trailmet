@@ -1,0 +1,19 @@
+GENERAL:
+  DATASET: "CIFAR100"
+  BACKBONE: "resnet18"
+
+ReActNet1_ARGS:
+  batch_size: 128
+  epochs: 1
+  learning_rate: 2.5e-3
+  momentum: 0.9
+  weight_deacy: 1e-5
+  label_smooth: 0.1
+
+ReActNet2_ARGS:
+  batch_size: 128
+  epochs: 1
+  learning_rate: 2.5e-3
+  momentum: 0.9
+  weight_deacy: 0
+  label_smooth: 0.1
