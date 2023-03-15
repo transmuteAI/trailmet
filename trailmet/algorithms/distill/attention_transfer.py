@@ -1,4 +1,3 @@
-from tabnanny import verbose
 import numpy as np
 import pandas as pd
 import torch
@@ -41,8 +40,10 @@ class AttentionTransfer(Distillation):
         self.student_model = student_model
         self.dataloaders = dataloaders
         self.kwargs = kwargs
+
+        self.device = kwargs['DEVICE']
         self.beta = self.kwargs['DISTILL_ARGS'].get('BETA', 1000);
-        
+
         #self.student_io_dict, self.teacher_io_dict = dict(), dict()
         self.teacher_layer_names = kwargs['DISTILL_ARGS'].get('TEACHER_LAYER_NAMES')
         self.student_layer_names = kwargs['DISTILL_ARGS'].get('STUDENT_LAYER_NAMES')
@@ -70,9 +71,9 @@ class AttentionTransfer(Distillation):
         milestones = kwargs.get('MILE_STONES', [82, 123])
         gamma = kwargs.get('GAMMA', 0.1)
         
-        # dont hard code this
         optimizer = torch.optim.SGD(student_model.parameters(), lr=lr, weight_decay=weight_decay, momentum=0.9)
         scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones, gamma=gamma, verbose=False)
+
         criterion = self.criterion
         
         best_acc = 0
@@ -84,6 +85,7 @@ class AttentionTransfer(Distillation):
             for epoch in range(num_epochs):
                 if verbose:
                     print(f"Epoch: {epoch+1}")
+
                 t_loss = self.train_one_epoch(teacher_model, student_model, dataloaders['train'], criterion, optimizer)
                 acc, v_loss = self.test(teacher_model, student_model, dataloaders['val'], criterion)
                 
@@ -99,6 +101,7 @@ class AttentionTransfer(Distillation):
                         "state_dict": student_model.state_dict(),
                         "accuracy": acc,
                     }, f"checkpoints/{self.log_name}.pth")
+
                 train_losses.append(t_loss)
                 valid_losses.append(v_loss)
                 valid_accuracy.append(acc)
