@@ -1,0 +1,22 @@
+DISTILL_ARGS :
+  BETA : 500
+  EPOCHS : 5
+  LR : 0.1
+  WEIGHT_DECAY : 0.0005
+    
+  IN_PLANES : 512
+  RATE : 2
+    
+  TEACHER_LAYER_NAME : layer4
+  STUDENT_LAYER_NAME : layer4
+  
+  VERBOSE : True
+PARAPHRASER :
+  IN_PLANES : 2048
+  RATE : 0.5
+  EPOCHS : 1
+  LR : 0.1
+  WEIGHT_DECAY : 0.0005
+
+log_dir : ft_resnet50-resnet18
+cuda_id : 0
