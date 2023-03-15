@@ -17,7 +17,7 @@ class LAPQ(BaseQuantization):
         super(LAPQ, self).__init__(**kwargs)
         self.model = model
         self.train_loader = dataloaders['train']
-        self.val_loader = dataloaders['val']
+        self.test_loader = dataloaders['test']
         self.kwargs = kwargs
         self.w_bits = kwargs.get('W_BITS', 8)
         self.a_bits = kwargs.get('A_BITS', 8)
@@ -58,7 +58,7 @@ class LAPQ(BaseQuantization):
             args['qtype'] = 'max_static'
             cnn = copy.deepcopy(self.model)
             qm = QuantModel(cnn, args, layers)
-            acc1, acc5 = self.test(qm.model, self.val_loader, device=self.device)
+            acc1, acc5 = self.test(qm.model, self.test_loader, device=self.device)
             print('==> Quantization (W{}A{}) accuracy before LAPQ: {:.4f} | {:.4f}'.format(
                 self.w_bits, self.a_bits, acc1, acc5))
             del qm, cnn
@@ -83,7 +83,7 @@ class LAPQ(BaseQuantization):
         print("==> using p intr : {:.2f}".format(p_intr))
         args['lp'] = p_intr
         quant_model = QuantModel(self.model, args, layers)
-        lp_acc1, lp_acc5, lp_loss = self.test(quant_model.model, self.val_loader, torch.nn.CrossEntropyLoss().to(self.device), self.device)
+        lp_acc1, lp_acc5, lp_loss = self.test(quant_model.model, self.test_loader, torch.nn.CrossEntropyLoss().to(self.device), self.device)
         lp_point = quant_model.get_clipping()
 
         if self.verbose:
@@ -118,8 +118,9 @@ class LAPQ(BaseQuantization):
         quant_model.set_clipping(scales, self.device)
         print('==> Full quantization (W{}A{}) accuracy: {}'.format(
             self.w_bits, self.a_bits, 
-            self.test(quant_model.model, self.val_loader, device=self.device)))
+            self.test(quant_model.model, self.test_loader, device=self.device)))
         self.qnn = copy.deepcopy(quant_model.model)
+        return self.qnn
 
 
     def evaluate_calibration(self, scales, QM, device):
@@ -156,7 +157,7 @@ class LAPQ(BaseQuantization):
             return res / len(self.cal_set)        
 
 
-class QuantModel(nn.Module):
+class QuantModel:
     def __init__(self, model, args, quantizable_layers, optimizer_bridge=None):
         self.model = model
         self.args = args

@@ -145,6 +145,7 @@ class BRECQ(BaseQuantization):
             self.qnn.set_quant_state(weight_quant=True, act_quant=True)
             print('Full quantization (W{}A{}) accuracy: {}'.format(self.w_bits, self.a_bits, 
                 self.test(self.qnn, self.test_loader, device=self.device))) 
+        return self.qnn
 
 
     def reconstruct_model(self, model: nn.Module, **kwargs):

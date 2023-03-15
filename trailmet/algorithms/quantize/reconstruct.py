@@ -8,7 +8,6 @@ from tqdm import tqdm
 from trailmet.algorithms.quantize.quantize import StraightThrough, BaseQuantization as BQ
 from trailmet.algorithms.quantize.qmodel import QuantModule, BaseQuantBlock
 from trailmet.algorithms.quantize.methods import AdaRoundQuantizer
-from trailmet.algorithms.quantize.brecq import QuantModel
 
 
 optimizer_map = {
@@ -57,7 +56,7 @@ class GetLayerInpOut:
     :param asym: save quantized input and full precision output. [default=False]
     :param act_quant: use activation quantization. [default=False]
     """
-    def __init__(self, model: QuantModel, layer: Union[QuantModule, BaseQuantBlock],
+    def __init__(self, model, layer: Union[QuantModule, BaseQuantBlock],
                  device: torch.device, asym: bool = False, act_quant: bool = False):
         self.model = model
         self.layer = layer
@@ -99,7 +98,7 @@ class GetLayerInpOut:
         return self.data_saver.input_store[0].detach(), self.data_saver.output_store.detach()
 
 
-def save_inp_oup_data(model: QuantModel, layer: Union[QuantModule, BaseQuantBlock], cali_data: torch.Tensor,
+def save_inp_oup_data(model, layer: Union[QuantModule, BaseQuantBlock], cali_data: torch.Tensor,
                       asym: bool = False, act_quant: bool = False, batch_size: int = 32, keep_gpu: bool = True):
     """
     Function to save input data and output data of a particular layer/block over calibration dataset.
@@ -159,7 +158,7 @@ class GetLayerGrad:
     :param asym: if True, save quantized input and full precision output. [default=False]
     :param act_quant: use activation quantization. [default=False]
     """
-    def __init__(self, model: QuantModel, layer: Union[QuantModule, BaseQuantBlock],
+    def __init__(self, model, layer: Union[QuantModule, BaseQuantBlock],
                  device: torch.device, act_quant: bool = False):
         self.model = model
         self.layer = layer
@@ -198,7 +197,7 @@ class GetLayerGrad:
         return self.data_saver.grad_out.data
 
 
-def save_grad_data(model: QuantModel, layer: Union[QuantModule, BaseQuantBlock], cali_data: torch.Tensor,
+def save_grad_data(model, layer: Union[QuantModule, BaseQuantBlock], cali_data: torch.Tensor,
                    damping: float = 1., act_quant: bool = False, batch_size: int = 32,
                    keep_gpu: bool = True):
     """
@@ -325,7 +324,7 @@ class LayerLossFunction:
 
         total_loss = rec_loss + round_loss
         if self.count % 100 == 0:
-            self.pbar.set_postfix(loss=total_loss, b=b)
+            self.pbar.set_postfix(loss=float(total_loss), b=b)
         self.pbar.update(1)
         return total_loss
 
@@ -485,7 +484,7 @@ class BlockLossFunction:
 
         total_loss = rec_loss + round_loss
         if self.count % 100 == 0:
-            self.pbar.set_postfix(loss=total_loss, b=b)
+            self.pbar.set_postfix(loss=float(total_loss), b=b)
         self.pbar.update(1)
         return total_loss
 

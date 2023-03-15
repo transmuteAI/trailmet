@@ -57,11 +57,26 @@ class QuantModel(nn.Module):
             else: self.quant_block_refactor(child_module)
 
 class BitSplit(BaseQuantization):
+    """
+    Class for post-training quantization using bit-split and stitching method 
+    based on - Towards accurate post-training network quantization via 
+    bit-split and stitching [https://dl.acm.org/doi/abs/10.5555/3524938.3525851]
+
+    :param W_BITS: bitwidth for weight quantization
+    :param A_BITS: bitwidth for activation quantization
+    :param CHANNEL_WISE: apply channel-wise quantization for weights
+    :param ACT_QUANT: apply activation quantization
+    :param HEAD_STEM_PRECISION: bitwidth for first and last layer
+    :param PREC_CONFIG: list of bitwidths of the body for mixed precision
+    :param CALIB_BATCHES: num of batches in calibration dataset
+    :param LOAD_ACT_SCALES: load precomputed weight scales
+    :param LOAD_WEIGHT_SCALES: load precomputed activation scales
+    :param SAVE_PATH: path for storing quantized weights and scales
+    """
     def __init__(self, model: nn.Module, dataloaders, **kwargs):
         super(BitSplit, self).__init__(**kwargs)
         self.model = model
         self.train_loader = dataloaders['train']
-        self.val_loader = dataloaders['val']
         self.kwargs = kwargs
         self.w_bits = self.kwargs.get('W_BITS', 8)
         self.a_bits = self.kwargs.get('A_BITS', 8)
@@ -71,8 +86,8 @@ class BitSplit(BaseQuantization):
         torch.cuda.set_device(self.gpu_id)
         seed_everything(self.seed)
         self.save_path = self.kwargs.get('SAVE_PATH', './')
-        self.arch = self.kwargs.get('ARCH', 'ResNet50')
-        self.dataset = self.kwargs.get('DATASET', 'cifar100')
+        self.arch = self.kwargs.get('ARCH', '')
+        self.dataset = self.kwargs.get('DATASET', '')
         self.precision_config = self.kwargs.get('PREC_CONFIG', [])
         if self.precision_config:
             w_prefix = str(self.precision_config[0])+'_mix'
@@ -111,6 +126,7 @@ class BitSplit(BaseQuantization):
                 print("==> Starting '{}-bit' activation quantization".format(self.a_bits))
                 self.act_quantizer(self.qmodel, prefix=self.prefix, n_batches=self.calib_batches)
         save_state_dict(self.qmodel.state_dict(), self.prefix, filename='state_dict.pth')
+        return self.qmodel
 
 
 # TODO :  Use functions to process submodules of respective models so that adding new models in future is easier  
