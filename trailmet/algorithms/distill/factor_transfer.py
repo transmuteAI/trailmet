@@ -89,7 +89,7 @@ class Translator(nn.Module):
 
 
 class FactorTransfer(Distillation):
-    """class to compress model using distillation via attention transfer"""
+    """class to compress model using distillation via factor transfer"""
     def __init__(self, teacher_model, student_model, dataloaders, paraphraser=None, **kwargs):
         super(FactorTransfer, self).__init__(**kwargs)
         self.teacher_model = teacher_model
@@ -97,9 +97,8 @@ class FactorTransfer(Distillation):
         self.paraphraser = paraphraser
         self.dataloaders = dataloaders
         self.kwargs = kwargs
-        self.device = kwargs['DEVICE']
         self.beta = self.kwargs['DISTILL_ARGS'].get('BETA', 500);
-        self.verbose = self.kwargs['VERBOSE']
+        self.verbose = self.kwargs['DISTILL_ARGS'].get('VERBOSE', False)
 
         #self.student_io_dict, self.teacher_io_dict = dict(), dict()
         self.teacher_layer_name = kwargs['DISTILL_ARGS'].get('TEACHER_LAYER_NAME')
