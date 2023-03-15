@@ -133,8 +133,9 @@ class FactorTransfer(Distillation):
         test_only = kwargs.get('TEST_ONLY', False)
         lr = kwargs.get('LR', 0.1)
         weight_decay = kwargs.get('WEIGHT_DECAY', 0.0005)
-        milestones = kwargs.get('MILE_STONES', [82, 123])
-        
+        milestones = kwargs.get('MILESTONES', [82, 123])
+        gamma = kwargs.get('GAMMA', 0.1)
+
         in_planes = kwargs.get('IN_PLANES', 64)
         rate = kwargs.get('RATE', 0.5)
         planes = kwargs.get('planes', int(in_planes*rate))
@@ -144,7 +145,7 @@ class FactorTransfer(Distillation):
         
         # dont hard code this
         optimizer = torch.optim.SGD(student_model.parameters(), lr=lr, weight_decay=weight_decay, momentum=0.9)
-        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones, gamma=0.1, verbose=False)
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones, gamma=gamma, verbose=False)
         optimizer_translator = torch.optim.SGD(translator.parameters(), lr=lr, weight_decay=weight_decay, momentum=0.9)
         scheduler_translator = torch.optim.lr_scheduler.MultiStepLR(optimizer_translator, milestones=milestones, gamma=0.1, verbose=False)
         
