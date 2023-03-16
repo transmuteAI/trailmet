@@ -1,0 +1,12 @@
+---
+GENERAL:
+  GPU_ID: 0
+  SEED: 42
+  W_BITS: 4           # bitwidth for weight quantization
+  A_BITS: 8           # bitwidth for activation quantization 
+  ACT_QUANT: True     # store true for performing activation quantization
+  CALIB_BATCHES: 4    # num of batches in calibration dataset
+  MAX_ITER: 1000      # num of iterations for quantization scale optimization
+  MAX_FEV: 1000
+  VERBOSE: True
+  
