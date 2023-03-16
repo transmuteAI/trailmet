@@ -1,19 +1,28 @@
 GENERAL:
-  DATASET: "CIFAR100"
-  BACKBONE: "resnet18"
+  DATASET: "c100"
+  BACKBONE: "mobilenetv2"
+  batch_size: 256
+  workers: 4
+  valid_size: 0.1
+  num_train: 0
+  
+  num_classes: 100
+  insize: 32
 
 ReActNet1_ARGS:
-  batch_size: 128
-  epochs: 1
-  learning_rate: 2.5e-3
+  batch_size: 256
+  epochs: 256
+  learning_rate: 5.0e-4
   momentum: 0.9
   weight_deacy: 1e-5
   label_smooth: 0.1
+  save: './save_path_mbnet_cifar100_0fp/step1'
 
 ReActNet2_ARGS:
-  batch_size: 128
-  epochs: 1
-  learning_rate: 2.5e-3
+  batch_size: 256
+  epochs: 256
+  learning_rate: 5.0e-4
   momentum: 0.9
   weight_deacy: 0
   label_smooth: 0.1
+  save: './save_path_mbnet_cifar100_0fp/step2'
