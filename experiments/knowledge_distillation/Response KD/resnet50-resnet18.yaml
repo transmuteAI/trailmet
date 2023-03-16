@@ -1,0 +1,11 @@
+DISTILL_ARGS :
+  LAMBDA : 0.5
+  TEMPERATURE : 20
+  seed : 43
+  EPOCHS : 5
+  LR : 0.1
+  WEIGHT_DECAY : 0.0005
+
+VERBOSE : TRUE
+log_dir : r50_to_r18
+cuda_id : 0
