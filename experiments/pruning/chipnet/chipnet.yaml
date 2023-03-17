@@ -7,21 +7,21 @@ CHIPNET_ARGS:                                                                   
     GAMMA_INCREMENT: 2                                                               #number of epochs after which value of gamma doubles
     STEEPNESS: 100                                                                   #steepness
 PRETRAIN:                                                                            #optional, add only if you need to pretrain
-    EPOCHS: 200                                                                      #num epochs
+    EPOCHS: 1                                                                        #num epochs
     TEST_ONLY: False                                                                 #whether only to test
     OPTIMIZER: 'SGD'                                                                 #optimizer
     LR: 0.05                                                                         #learning rate
     SCHEDULER_TYPE: 1                                                                #scheduler type (0/1), see algorithms utils
     WEIGHT_DECAY: 0.001                                                              #weight decay
 PRUNE:
-    EPOCHS: 200
+    EPOCHS: 1
     TEST_ONLY: False
     OPTIMIZER: 'SGD'
     LR: 0.05
     WEIGHT_DECAY: 0.001
 FINETUNE:
-    EPOCHS: 200
-    TEST_ONLY: false
+    EPOCHS: 2
+    TEST_ONLY: False
     OPTIMIZER: 'SGD'
     LR: 0.05
     SCHEDULER_TYPE: 1
