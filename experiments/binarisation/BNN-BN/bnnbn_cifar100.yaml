@@ -1,0 +1,23 @@
+DATASET: "c100"
+arch: "reactnet-A"           # Architecture to choose from {'reactnet-A'(for mobilenetv2 backbone), 'reactnet-18'(for resnet18 backbone)}
+binary_w: True               # Binarize both activation and weights if True else just activations
+bn_type: 'none'              # BN type {'bn': with BN, 'bf':BN-Free, 'none': without BN}
+batch_size: 256
+workers: 4
+valid_size: 0.1
+num_train: 0
+num_classes: 100
+insize: 32
+loss_type: "ce"              # Type of loss to use '[kd, ce, ls]'
+teacher: "resnet34"
+teacher_weight: ''
+label_smooth: 0.1
+pretrained: ''               # Pretrained weight for student
+resume: False
+save: './saved_weights'
+epoch: 5
+agc: True                    # Whether to use adaptive gradient clipping
+clip_value: 0.04
+weight_decay: 0
+learning_rate: 0.001
+
