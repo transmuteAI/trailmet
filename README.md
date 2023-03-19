@@ -57,6 +57,7 @@ Results and models are available in the [model zoo]
   
 - [x] [BiRealNet](https://arxiv.org/abs/1808.00278)
 - [x] [ReActNet](https://arxiv.org/abs/2003.03488)
+- [x] [BNN-BN](https://arxiv.org/abs/2104.08215v1)
 
 </details>
 
