@@ -33,7 +33,7 @@ cd trailmet
 ```
 ## Algorithms Implemented
 
-Results and models weights are available in the model zoo (coming soon..)
+Demo notebooks for each algorithm is added in [experiments](https://github.com/transmuteAI/trailmet/blob/dev/experiments) folder
 
 <details open>
 <summary> Knowledge Distillation</summary>
