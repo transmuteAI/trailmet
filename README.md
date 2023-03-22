@@ -1,16 +1,25 @@
+<p align="center">
+    <br>
+        <img src="docs/source/imgs/Group 13.png" width="500"/>
+    </br>
+    <br>
+        <strong> Transmute AI Model Efficiency Toolkit </strong>
+    </br>
+</p>
+
 # Trailmet
-Transmute AI Lab Model Efficiency Toolkit
+<h3 align="center">
+<p>Transmute AI Lab Model Efficiency Toolkit
+</h3>
 
 ## Introduction
-
-The master branch works with **PyTorch 1.5+**.
+Trailmet is a model efficiency toolkit for compressing deep learning models using state of the art compression techniques. 
+Today deep learning models are not deployable because of their huge memory footprint, TRAILMET is an effort to make deep learning models more efficient in their size to performance ratio. It is developed using Pytorch 1.5.
 
 ### Major features
-- 
--
-- 
-- 
-- 
+- State of the art compression algorithms implemented.
+- Demo notebooks for training each algorithm.
+- Modular Design: All alogithms are modular and can customized easily for any kind of model and dataset.
 
 ## Installation
 
@@ -22,9 +31,9 @@ conda activate trailmet
 git clone https://github.com/transmuteAI/trailmet.git
 cd trailmet
 ```
-## Model zoo
+## Algorithms Implemented
 
-Results and models are available in the [model zoo]
+Results and models weights are available in the model zoo (coming soon..)
 
 <details open>
 <summary> Knowledge Distillation</summary>
