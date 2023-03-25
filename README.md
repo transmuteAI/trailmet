@@ -6,13 +6,25 @@
         <strong> Transmute AI Model Efficiency Toolkit </strong>
     </br>
 </p>
-
-# Trailmet
-<h3 align="center">
-<p>Transmute AI Lab Model Efficiency Toolkit
+<p align="center">
+    <a href="https://github.com/transmuteAI/trailmet/blob/dev/LICENSE">
+        <img alt="GitHub" src="https://img.shields.io/github/license/transmuteAI/trailmet?color=blue">
+    </a> 
+    <a href="https://cords.readthedocs.io/en/latest/">
+        <img alt="Documentation" src="https://img.shields.io/badge/docs-passing-brightgreen">
+    </a>
+    <a href="#">
+        <img alt="GitHub Stars" src="https://img.shields.io/github/stars/transmuteAI/trailmet">
+    </a>
+    <a href="#">
+        <img alt="GitHub Forks" src="https://img.shields.io/github/forks/transmuteAI/trailmet">
+    </a>
+</p>
+<h3 align="justified">
+<!-- <p>Transmute AI Lab Model Efficiency Toolkit -->
 </h3>
 
-## Introduction
+# Introduction
 Trailmet is a model efficiency toolkit for compressing deep learning models using state of the art compression techniques. 
 Today deep learning models are not deployable because of their huge memory footprint, TRAILMET is an effort to make deep learning models more efficient in their size to performance ratio. It is developed using Pytorch 1.5.
 
@@ -21,7 +33,7 @@ Today deep learning models are not deployable because of their huge memory footp
 - Demo notebooks for training each algorithm.
 - Modular Design: All alogithms are modular and can customized easily for any kind of model and dataset.
 
-## Installation
+# Installation
 
 Below are quick steps for installation:
 
@@ -31,7 +43,7 @@ conda activate trailmet
 git clone https://github.com/transmuteAI/trailmet.git
 cd trailmet
 ```
-## Algorithms Implemented
+# Algorithms Implemented
 
 Demo notebooks for each algorithm is added in [experiments](https://github.com/transmuteAI/trailmet/blob/dev/experiments) folder
 
@@ -70,11 +82,11 @@ Demo notebooks for each algorithm is added in [experiments](https://github.com/t
 
 </details>
 
-## Acknowledgement
+# Acknowledgement
 
 
 
-## Citation
+# Citation
 
 If you find this project useful in your research, please consider cite:
 
@@ -87,6 +99,6 @@ If you find this project useful in your research, please consider cite:
 }
 ```
 
-## License
+# License
 
-This project is released under the [Apache 2.0 license](LICENSE).
+This project is released under the [MIT license](LICENSE).
