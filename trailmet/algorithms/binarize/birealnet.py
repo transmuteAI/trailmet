@@ -28,7 +28,7 @@ import torch.distributed as dist
 import torch.utils.data.distributed
 sys.path.append('/workspace/code/kushagrabhushan/TrAIL/trailmet/trailmet/algorithms/binarize')
 sys.path.append("../../../")
-from utils import *
+from .utils import *
 from trailmet.algorithms.binarize.binarize import BaseBinarize
 from trailmet.utils import *
 
@@ -39,7 +39,7 @@ class BirealNet(BaseBinarize):
         self.dataloaders = dataloaders
         self.CFG = CFG
         self.batch_size = self.CFG['batch_size']
-        self.optimizer = self.CFG['optimizer']
+        self.optimizer = eval(self.CFG['optimizer'])
         self.epochs = self.CFG['epochs']
         self.lr = self.CFG['lr']
         self.momentum = self.CFG['momentum']
@@ -96,7 +96,7 @@ class BirealNet(BaseBinarize):
             loss = criterion(logits, target)
 
             # measure accuracy and record loss
-            prec1, prec5 = accuracy(logits, target, topk1=(1, 5))
+            prec1, prec5 = accuracy(logits, target, topk=(1, 5))
             n = images.size(0)
             losses.update(loss.item(), n)   #accumulated loss
             top1.update(prec1.item(), n)
@@ -138,7 +138,7 @@ class BirealNet(BaseBinarize):
                 loss = criterion(logits, target)
 
                 # measure accuracy and record loss
-                pred1, pred5 = accuracy(logits, target, topk1=(1, 5))
+                pred1, pred5 = accuracy(logits, target, topk=(1, 5))
                 n = images.size(0)
                 losses.update(loss.item(), n)
                 top1.update(pred1[0], n)
@@ -178,7 +178,7 @@ class BirealNet(BaseBinarize):
                 loss = criterion(logits, target)
 
                 # measure accuracy and record loss
-                pred1, pred5 = accuracy(logits, target, topk1=(1, 5))
+                pred1, pred5 = accuracy(logits, target, topk=(1, 5))
                 n = images.size(0)
                 losses.update(loss.item(), n)
                 top1.update(pred1[0], n)
@@ -264,11 +264,11 @@ class BirealNet(BaseBinarize):
                 'state_dict': model.state_dict(),
                 'best_top1_acc': best_top1_acc,
                 'optimizer' : optimizer.state_dict(),
-                }, is_best, self.save_path, self.dataset)
+                }, is_best, self.save_path)
 
             epoch += 1
         
-        best = torch.load(f"{self.save_path}/{self.dataset}-model_best.pth.tar")
+        best = torch.load(f"{self.save_path}/model_best.pth.tar")
         self.model.load_state_dict(best['state_dict'])
         self.test(epoch, self.dataloaders['test'], self.model, criterion, self.CFG)
         training_time = (time.time() - start_t) / 36000
