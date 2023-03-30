@@ -1,8 +1,7 @@
-TrAILMET
+Contents
 ========
 
 .. toctree::
-   trailmet.models
+   trailmet.algorithms
    trailmet.datasets
-   trailmet.configs
-   experiments.birealnet.md
+

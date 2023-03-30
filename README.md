@@ -74,7 +74,7 @@ Demo notebooks for each algorithm is added in [experiments](https://github.com/t
 </details>
 
 <details open>
-<summary> Binerization</summary>
+<summary> Binarization</summary>
   
 - [x] [BiRealNet](https://arxiv.org/abs/1808.00278)
 - [x] [ReActNet](https://arxiv.org/abs/2003.03488)

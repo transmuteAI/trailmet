@@ -13,9 +13,9 @@
 Welcome to TrAILMET's documentation!
 ************************************
 
-TrAILMET::Transmute AI Model Efficiency Toolkit
+Transmute AI Model Efficiency Toolkit (TrAILMET)
 ===============================================
-TrAILMET:: Transmute AI Model Efficiency Toolkit is an efficient and scalable library for making machine learning time, energy, cost, and compute efficient
+Transmute AI Model Efficiency Toolkit is an efficient and scalable library for making machine learning time, energy, cost, and compute efficient
 built on top of pytorch.
 
 **Background:** Trailmet is a model efficiency toolkit for compressing deep learning models using state of the art compression techniques. 
@@ -30,8 +30,7 @@ Major features
 
 
 .. toctree::
-   :maxdepth: 4
+   :maxdepth: 2
    :caption: Contents:
 
    strategies/modules
-   experiments/birealnet.md

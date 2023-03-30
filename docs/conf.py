@@ -7,8 +7,8 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'TrAILMET'
-copyright = '2023, raghav, deepak, rishabh'
-author = 'raghav, deepak, rishabh'
+copyright = '2023, deepak, rishabh'
+author = 'deepak, rishabh'
 release = 'v1.0'
 master_doc = 'index'
 
@@ -36,6 +36,6 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = 'classic'
+html_theme = 'bizstyle'
 html_static_path = ['_static']
 html_logo = "source/imgs/Group 13.png"
