@@ -207,7 +207,6 @@ class BirealNet(BaseBinarize):
         
         # load model
         model = self.model
-        logging.info(model)
 #         model = nn.DataParallel(model).to(device=self.device)
         model = model.to(device=self.device)
         criterion = nn.CrossEntropyLoss()
