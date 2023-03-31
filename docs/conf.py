@@ -9,7 +9,7 @@
 project = 'TrAILMET'
 copyright = '2023, deepak, rishabh'
 author = 'deepak, rishabh'
-release = 'v1.0'
+release = 'v0.1'
 master_doc = 'index'
 
 # -- General configuration ---------------------------------------------------
@@ -21,7 +21,13 @@ import sys
 import os
 # import subprocess
 
-extensions = ["myst_parser", "sphinx_design"]
+extensions = [
+    'sphinx.ext.duration',
+    'sphinx.ext.doctest',
+    'sphinx.ext.autodoc',
+    'sphinx.ext.autosummary',
+    'sphinx.ext.intersphinx',
+]
 
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
