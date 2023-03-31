@@ -8,4 +8,5 @@ gdown
 datasets
 sklearn 
 myst-parser
+sphinx_design
 
