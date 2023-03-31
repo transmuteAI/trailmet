@@ -10,7 +10,7 @@
     <a href="https://github.com/transmuteAI/trailmet/blob/dev/LICENSE">
         <img alt="GitHub" src="https://img.shields.io/github/license/transmuteAI/trailmet?color=blue">
     </a> 
-    <a href="https://cords.readthedocs.io/en/latest/">
+    <a href="https://transmuteai-trailmet.readthedocs.io/en/latest/">
         <img alt="Documentation" src="https://img.shields.io/badge/docs-passing-brightgreen">
     </a>
     <a href="#">
