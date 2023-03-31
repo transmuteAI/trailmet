@@ -1,0 +1,11 @@
+pandas
+tqdm
+timm
+matplotlib
+thop 
+scipy
+gdown
+datasets
+sklearn 
+myst-parser
+
