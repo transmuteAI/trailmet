@@ -1,0 +1,16 @@
+exceptiongroup==1.1.1
+flit_core @ file:///private/var/folders/sy/f16zz6x50xz3113nwtb9bvq00000gp/T/abs_9elg0qmmha/croot/flit-core_1679397106218/work/source/flit_core
+iniconfig==2.0.0
+mkl-fft==1.3.1
+mkl-random @ file:///opt/concourse/worker/volumes/live/f196a661-8e33-4aac-63bc-efb2ff50e035/volume/mkl_random_1626186080069/work
+mkl-service==2.4.0
+numpy @ file:///private/var/folders/sy/f16zz6x50xz3113nwtb9bvq00000gp/T/abs_8cgikbzvtd/croot/numpy_and_numpy_base_1672336184666/work
+packaging==23.1
+Pillow==9.4.0
+pluggy==1.0.0
+pytest==7.3.1
+six @ file:///tmp/build/80754af9/six_1644875935023/work
+tomli==2.0.1
+torch==1.10.0
+torchvision==0.11.0
+typing_extensions @ file:///private/var/folders/sy/f16zz6x50xz3113nwtb9bvq00000gp/T/abs_4b7xacf029/croot/typing_extensions_1669923792404/work
