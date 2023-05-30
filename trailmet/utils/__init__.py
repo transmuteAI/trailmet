@@ -3,6 +3,8 @@ import os
 import numpy as np
 import torch
 
+from .benchmark import ModelBenchmark
+
 def seed_everything(seed):
     "sets the random seed to ensure reproducibility"
     random.seed(seed)
