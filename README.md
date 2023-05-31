@@ -1,18 +1,39 @@
-# Trailmet
-Transmute AI Lab Model Efficiency Toolkit
+<p align="center">
+    <br>
+        <img src="docs/source/imgs/Group 13.png" width="500"/>
+    </br>
+    <br>
+        <strong> Transmute AI Model Efficiency Toolkit </strong>
+    </br>
+</p>
+<p align="center">
+    <a href="https://github.com/transmuteAI/trailmet/blob/dev/LICENSE">
+        <img alt="GitHub" src="https://img.shields.io/github/license/transmuteAI/trailmet?color=blue">
+    </a> 
+    <a href="https://transmuteai-trailmet.readthedocs.io/en/latest/">
+        <img alt="Documentation" src="https://img.shields.io/badge/docs-passing-brightgreen">
+    </a>
+    <a href="#">
+        <img alt="GitHub Stars" src="https://img.shields.io/github/stars/transmuteAI/trailmet">
+    </a>
+    <a href="#">
+        <img alt="GitHub Forks" src="https://img.shields.io/github/forks/transmuteAI/trailmet">
+    </a>
+</p>
+<h3 align="justified">
+<!-- <p>Transmute AI Lab Model Efficiency Toolkit -->
+</h3>
 
-## Introduction
-
-The master branch works with **PyTorch 1.5+**.
+# Introduction
+Trailmet is a model efficiency toolkit for compressing deep learning models using state of the art compression techniques. 
+Today deep learning models are not deployable because of their huge memory footprint, TRAILMET is an effort to make deep learning models more efficient in their size to performance ratio. It is developed using Pytorch 1.5.
 
 ### Major features
-- 
--
-- 
-- 
-- 
+- State of the art compression algorithms implemented.
+- Demo notebooks for training each algorithm.
+- Modular Design: All alogithms are modular and can customized easily for any kind of model and dataset.
 
-## Installation
+# Installation
 
 Below are quick steps for installation:
 
@@ -22,9 +43,9 @@ conda activate trailmet
 git clone https://github.com/transmuteAI/trailmet.git
 cd trailmet
 ```
-## Model zoo
+# Algorithms Implemented
 
-Results and models are available in the [model zoo]
+Demo notebooks for each algorithm is added in [experiments](https://github.com/transmuteAI/trailmet/blob/dev/experiments) folder
 
 <details open>
 <summary> Knowledge Distillation</summary>
@@ -53,7 +74,7 @@ Results and models are available in the [model zoo]
 </details>
 
 <details open>
-<summary> Binerization</summary>
+<summary> Binarization</summary>
   
 - [x] [BiRealNet](https://arxiv.org/abs/1808.00278)
 - [x] [ReActNet](https://arxiv.org/abs/2003.03488)
@@ -61,11 +82,11 @@ Results and models are available in the [model zoo]
 
 </details>
 
-## Acknowledgement
+# Acknowledgement
 
 
 
-## Citation
+# Citation
 
 If you find this project useful in your research, please consider cite:
 
@@ -78,6 +99,6 @@ If you find this project useful in your research, please consider cite:
 }
 ```
 
-## License
+# License
 
-This project is released under the [Apache 2.0 license](LICENSE).
+This project is released under the [MIT license](LICENSE).

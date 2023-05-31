@@ -11,7 +11,7 @@ GENERAL:
 
 ReActNet1_ARGS:
   batch_size: 256                                 # batch size
-  epochs: 256                                     # epochs
+  epochs: 5                                     # epochs
   learning_rate: 5.0e-4                           # learning rate
   momentum: 0.9                                   # momentum
   weight_deacy: 1e-5                              # weight decay
@@ -20,7 +20,7 @@ ReActNet1_ARGS:
 
 ReActNet2_ARGS:
   batch_size: 256                                 # batch size
-  epochs: 256                                     # epochs
+  epochs: 5                                     # epochs
   learning_rate: 5.0e-4                           # learning rate
   momentum: 0.9                                   # momentum
   weight_deacy: 0                                 # weight decay

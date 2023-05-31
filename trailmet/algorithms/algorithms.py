@@ -140,7 +140,7 @@ class BaseAlgorithm(object):
     def test(self, model, dataloader, loss_fn=None, device=None):
         """This method is used to test the performance of the trained model."""
         if device is None:
-            device = next(model.parameters()).device()
+            device = next(model.parameters()).device
         else:
             model.to(device)
         model.eval()
@@ -165,5 +165,5 @@ class BaseAlgorithm(object):
                 else:
                     tk1.set_postfix(acc1=running_acc1/counter, acc5=running_acc5/counter)
         if loss_fn is not None:
-            return running_acc1/counter, running_acc5/counter, running_loss/counter
+            return running_acc1/counter, running_loss/counter
         return running_acc1/counter, running_acc5/counter

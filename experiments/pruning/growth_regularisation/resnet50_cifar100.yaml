@@ -1,0 +1,10 @@
+num_classes : 100                  #number of classes in cifar100
+weight_decay : 0.0005              #L2 regularisation
+arch : 'resnet50'                  # Architecture
+dataset : 'cifar100'               #Name of the dataset
+epochs : 1               #Number of epochs to train the baseline, set to 2 for demo notebook
+learning_rate : 0.002              #Learning rate for baseline
+prune_ratio : 0.5                  #Channel pruning ratios
+reg_upper_limit : 0.0004           #set to 4e-4 for demo notebook
+reg_granularity_prune : 0.0002     #Increment in sparsity weight
+method : 'GReg-1'                  #Pruning Method

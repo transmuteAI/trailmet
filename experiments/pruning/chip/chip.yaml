@@ -1,0 +1,20 @@
+CFG:                                                                                 #general chip configs
+    batch_size: 16                                                                   #batch_size
+    arch: 'resnet_50'                                                                #architecture used
+    repeat: 5                                                                        #the number of different batches for calculating feature maps
+    ci_dir: './ci_resnet_50'                                                         #path for ci
+    lr_type: 'cos'                                                                   #choose the type of lr to be used from ['step','step_5','cos','exp','fixed']
+    learning_rate: 0.01                                                              #original learning rate
+    epochs: 2                                                                        #number of epochs
+    num_layers: 53                                                                   #number of conv layers in the model
+    feature_map_dir: './conv_feature_map'                                            #path for feature maps
+    sparsity: '[0.]+[0.1]*3+[0.35]*16'                                               #sparsity of each conv layer
+    label_smooth: 0                                                                  #label smoothing used
+    device: 'cuda:1'                                                                 #device used
+    gpu: 1                                                                           #gpu id
+    momentum: 0.9                                                                    #momentum
+    weight_decay: 0.005                                                              #weight decay
+    lr_decay_step: '30,60'                                                           #learning rate decay steps
+    result_dir: './result'                                                           #path for saving models and loggers
+    pretrain_dir: './pretrained_models/resnet_50.pt'                                 #pretrained model path
+    conv_index: torch.tensor(1)                                                      #conv index for layers
