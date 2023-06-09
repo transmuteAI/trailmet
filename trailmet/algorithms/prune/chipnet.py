@@ -1,6 +1,6 @@
 # importing the required packages
 from enum import Flag
-from trailmet.utils import seed_everything
+# from trailmet.utils import seed_everything
 from trailmet.algorithms.prune.prune import BasePruning
 import torch
 import numpy as np
@@ -9,7 +9,7 @@ import torch.optim as optim
 import matplotlib.pyplot as plt
 import pandas as pd
 
-seed_everything(43)
+# seed_everything(43)
 
 
 class PrunableBatchNorm2d(torch.nn.BatchNorm2d):
