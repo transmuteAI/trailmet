@@ -39,7 +39,6 @@ class TP_Prune:
             
             for prune_model_modules, org_model_modules in zip(self.prune_model.named_modules(), self.org_model.named_modules()):
                 if hasattr(prune_model_modules[1], "pruned_zeta") and (0 in prune_model_modules[1].pruned_zeta):
-                    # print(data[1], data2[1])
 
                     indices = torch.where(prune_model_modules[1].pruned_zeta == 0)[0].cpu().tolist()
                     group = DG.get_pruning_group( org_model_modules[1], tp.prune_batchnorm_out_channels, idxs=indices )
@@ -80,3 +79,4 @@ class TP_Prune:
         print("==> Benchmarking model started")
         model_benchmark = ModelBenchmark(model, self.batch_size, self.input_size, self.device)
         model_benchmark.benchmark()
+        
