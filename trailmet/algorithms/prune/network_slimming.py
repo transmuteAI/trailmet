@@ -79,7 +79,6 @@ class Network_Slimming(BasePruning):
         self.fine_tune_lr = kwargs.get('fine_tune_learning_rate',1e-4)
         self.prune_ratio = kwargs.get('prune_ratio',0.5)
         self.log_base = f"{self.net}_{self.dataset}.pth"
-        self.model = Model(self.net,self.num_classes)
         
     def compress_model(self,dataloaders) -> None:
         """Template function to be overwritten for each model compression method"""
