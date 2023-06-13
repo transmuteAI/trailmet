@@ -1,6 +1,13 @@
+# +
+from functools import reduce
+
+import torch
 import torch.nn as nn
 from torch.hub import load_state_dict_from_url
 from .base_model import BaseModel
+# -
+
+from collections import defaultdict
 
 def conv3x3(in_planes, out_planes, stride=1):
     """3x3 convolution with padding"""
@@ -36,6 +43,24 @@ class BasicBlock(nn.Module):
         out = self.activ(out)
 
         return out
+    
+    def get_flops(self, inp):
+        flops = 0
+        output = self.conv1(inp)
+        active_elements_count = output.shape[0] * reduce(lambda x, y: x * y, output.shape[2:])
+        flops += self.conv1.in_channels*self.conv1.out_channels*9*active_elements_count
+        flops += 4 * output.numel() #relu + bn
+        output = self.conv2(output)
+        active_elements_count = output.shape[0] * reduce(lambda x, y: x * y, output.shape[2:])
+        flops += self.conv2.in_channels*self.conv2.out_channels*9*active_elements_count
+        flops += 5 * output.numel() #relu + bn + residual
+
+        if self.downsample is not None:
+            r_output = self.downsample[0](inp)
+            active_elements_count = r_output.shape[0] * reduce(lambda x, y: x * y, r_output.shape[2:])
+            flops += self.downsample[0].in_channels*self.downsample[0].out_channels*active_elements_count
+            flops += 2 * r_output.numel()
+        return flops
 
 class Bottleneck(nn.Module):
     expansion = 4
@@ -84,6 +109,7 @@ class ResNetCifar(BaseModel):
         self.width = width
         self.conv1 = nn.Conv2d(3, 16, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(16)
+        self.prev_module=defaultdict()
         self.prev_module[self.bn1]=None
         self.activ = nn.ReLU(inplace=True)
         self.layer1 = self._make_layer(block, 16 * width, layers[0])
@@ -144,7 +170,7 @@ class ResNetCifar(BaseModel):
                 bn_layers.append([m1, m2])
         return bn_layers
 
-    
+
 class ResNet(BaseModel):
     def __init__(self, block, layers, width=1, num_classes=1000, produce_vectors=False, init_weights=True, insize=32):
         super(ResNet, self).__init__()
@@ -159,6 +185,8 @@ class ResNet(BaseModel):
         else:
             self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
+        self.prev_module=defaultdict()
+        self.prev_module[self.bn1]=None
         self.activ = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(block, 64 * width, layers[0])
@@ -173,6 +201,18 @@ class ResNet(BaseModel):
         for l in [self.layer1, self.layer2, self.layer3, self.layer4]:
             for b in l.children():
                 downs = next(b.downsample.children()) if b.downsample is not None else None
+
+        #assert block is Bottleneck
+        if block is Bottleneck:
+            prev = self.bn1
+            for l_block in [self.layer1, self.layer2, self.layer3, self.layer4]:
+                for b in l_block:
+                    self.prev_module[b.bn1] = prev
+                    self.prev_module[b.bn2] = b.bn1
+                    self.prev_module[b.bn3] = b.bn2
+                    if b.downsample is not None:
+                        self.prev_module[b.downsample[1]] = prev
+                    prev = b.bn3
 
     def _make_layer(self, block, planes, blocks, stride=1):
         downsample = None
@@ -222,6 +262,31 @@ class ResNet(BaseModel):
                     m1, m2 = b.bn1, b.bn2
                     bn_layers.append([m1, m2])
         return bn_layers
+    
+    def get_flops(self, insize):
+        flops = 0
+        inp = torch.rand(1, 3, insize, insize).to(self.conv1.weight.device)
+        output = self.conv1(inp)
+        active_elements_count = output.shape[0] * reduce(lambda x, y: x * y, output.shape[2:])
+        flops += self.conv1.in_channels*self.conv1.out_channels*9*active_elements_count
+        output = self.bn1(output)
+        flops += 2*output.numel()
+        output = self.activ(output)
+        flops += 2*output.numel()
+        output = self.maxpool(output)
+        flops += 8*output.numel()
+        
+        for l_block in [self.layer1, self.layer2, self.layer3, self.layer4]:
+            for b in l_block:
+                flops += b.get_flops(output)
+                output = b(output)
+        
+        ops = output.shape[-1]*output.shape[-2]
+        output = self.avgpool(output)
+        flops += ops*output.numel()
+        
+        flops += (1 + self.fc.in_features)*self.fc.out_features
+        return flops
 
 
 def make_wide_resnet(num_classes, insize):
@@ -240,12 +305,31 @@ def make_resnet50(num_classes, insize):
     model = ResNet(Bottleneck, [3, 4, 6, 3], num_classes=num_classes, insize=insize)
     return model
 
-def make_resnet56(num_classes, insize):
-    model = ResNetCifar(BasicBlock, [9, 9, 9], width=1, num_classes=num_classes, insize=insize)
+def make_resnet26(num_classes, insize):
+    model = ResNet(BasicBlock, [3, 3, 3, 3], num_classes=num_classes, insize=insize)
     return model
+
+
+def make_resnet34(num_classes, insize):
+    model = ResNet(BasicBlock, [3, 4, 6, 3], num_classes=num_classes, insize=insize)
+    return model
+
 
 def make_resnet18(num_classes, insize):
     model = ResNet(BasicBlock, [2, 2, 2, 2], num_classes=num_classes, insize=insize)
+    return model
+
+model = make_resnet18(1000, 64)
+model
+
+
+def make_resnet10(num_classes, insize):
+    model = ResNet(BasicBlock, [1, 1, 1, 1], num_classes=num_classes, insize=insize)
+    return model
+
+
+def make_resnet56(num_classes, insize):
+    model = ResNetCifar(BasicBlock, [9, 9, 9], width=1, num_classes=num_classes, insize=insize)
     return model
 
 def make_resnet101(num_classes, insize):
@@ -294,6 +378,15 @@ def get_resnet_model(model, num_classes, insize, pretrained):
     elif model == 'resnet152':
         net = make_resnet152(num_classes, insize)
         pretrained_weights = "https://download.pytorch.org/models/resnet152-f82ba261.pth"
+    elif model == 'resnet34':
+        net = make_resnet34(num_classes, insize)
+        pretrained_weights = None
+    elif model == 'resnet26':
+        net = make_resnet26(num_classes, insize)
+        pretrained_weights = None
+    elif model == 'resnet10':
+        net = make_resnet10(num_classes, insize)
+        pretrained_weights = None
     if pretrained:
         if pretrained_weights != None:
             weights = load_state_dict_from_url(pretrained_weights, progress=True)

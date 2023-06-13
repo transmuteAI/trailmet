@@ -1,0 +1,31 @@
+---
+GENERAL:
+  ARCH: 'ResNet50'
+  DATASET: 'CIFAR100'
+  GPU_ID: 0
+  SEED: 42
+  W_BUDGET: 0.125     # compression ratio for weight quantization
+  A_BITS: 8           # bitwidth for activation quantization 
+  ACT_QUANT: True     # store true for performing activation quantization
+  CHANNEL_WISE: True  # store true for channel-wise scale calibration
+  CALIB_BATCHES: 8    # num of batches in calibration dataset
+  SAVE_PATH: './scales/'     # path for storing quantized weights and scales
+  LOAD_ACT_SCALES: False     # store true for loading precomputed weight scales
+  LOAD_WEIGHT_SCALES: False  # store true for loading precomputed activation scales
+  
+W_ARGS:
+  0.75:
+    PREC_CONFIG: [32, 32, 16, 8, 32, 32]
+  0.50:
+    W_BITS: 16
+  0.25:
+    W_BITS: 8
+  0.175:
+    PREC_CONFIG: [8, 8, 8, 4, 6, 8]
+  0.125:
+    W_BITS: 4
+  0.100: 
+    W_BITS: 3
+    HEAD_STEM_PRECISION: 8
+  0.0625:
+    w_BITS: 2

@@ -1,0 +1,24 @@
+DISTILL_ARGS : #hyperparameters for distillation process
+  BETA : 500 #weight of factor loss
+  EPOCHS : 5 #total number of epochs
+  LR : 0.1 #learning rate
+  WEIGHT_DECAY : 0.0005 #weight decay
+  MILESTONES : [82, 123] #list of epoch milstones indices for scheduler
+  GAMMA : 0.1 #multiplicative factor of learning rate decay
+  IN_PLANES : 512 #in planes in translator
+  RATE : 2 #translate rate (to be multiplied with in_planes)
+    
+  TEACHER_LAYER_NAME : layer4 #name of teacher layer
+  STUDENT_LAYER_NAME : layer4 #name of student layer
+  
+  VERBOSE : True #verbose - whether to print while training
+
+PARAPHRASER : #hyperparameters for training paraphraser
+  IN_PLANES : 2048 #in planes in paraphraser
+  RATE : 0.5 #paraphrase rate (to be multiplied with in_planes)
+  EPOCHS : 1 #total number of epochs for training paraphraser
+  LR : 0.1 #learning rate for training paraphraser
+  WEIGHT_DECAY : 0.0005 #weight decay for training paraphraser
+
+log_dir : ft_resnet50-resnet18 #checkpoints directory and model name
+cuda_id : 0 #device to be used

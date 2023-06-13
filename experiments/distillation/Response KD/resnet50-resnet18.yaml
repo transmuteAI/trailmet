@@ -1,0 +1,11 @@
+DISTILL_ARGS : #hyperparameters for distillation process
+  LAMBDA : 0.5 #balance between cross-entropy and KLDiv
+  TEMPERATURE : 20 #temperature for softmax
+  seed : 43
+  EPOCHS : 5 #total number of epochs
+  LR : 0.1 #learning rate
+  WEIGHT_DECAY : 0.0005 #weight decay
+
+VERBOSE : TRUE #verbose - whether to print while training
+log_dir : r50_to_r18 #checkpoints directory and model name
+cuda_id : 0 #device to be used

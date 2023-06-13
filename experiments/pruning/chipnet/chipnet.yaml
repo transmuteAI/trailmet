@@ -1,0 +1,28 @@
+CHIPNET_ARGS:                                                                        #chipnet specific args
+    BUDGET_TYPE: 'channel_ratio'                                                     #choose one of [channel_ratio, volume_ratio, flop_ratio, parameter_ratio]
+    TARGET_BUDGET: 0.5                                                               #target size for the pruned model
+    BUDGET_LOSS_WEIGHTAGE: 30                                                        #weightage given to budget loss [increase it if budget is not satisfied]
+    CRISPNESS_LOSS_WEIGHTAGE: 10                                                     #weightage given to crispness loss [increase it if pruning gate parameters (zeta) are not getting close to 0 or 1]
+    BETA_INCREMENT: 5                                                                #number of epochs after which value of beta increases by 0.1
+    GAMMA_INCREMENT: 2                                                               #number of epochs after which value of gamma doubles
+    STEEPNESS: 100                                                                   #steepness
+PRETRAIN:                                                                            #optional, add only if you need to pretrain
+    EPOCHS: 1                                                                        #num epochs
+    TEST_ONLY: False                                                                 #whether only to test
+    OPTIMIZER: 'SGD'                                                                 #optimizer
+    LR: 0.05                                                                         #learning rate
+    SCHEDULER_TYPE: 1                                                                #scheduler type (0/1), see algorithms utils
+    WEIGHT_DECAY: 0.001                                                              #weight decay
+PRUNE:
+    EPOCHS: 1
+    TEST_ONLY: False
+    OPTIMIZER: 'SGD'
+    LR: 0.05
+    WEIGHT_DECAY: 0.001
+FINETUNE:
+    EPOCHS: 2
+    TEST_ONLY: False
+    OPTIMIZER: 'SGD'
+    LR: 0.05
+    SCHEDULER_TYPE: 1
+    WEIGHT_DECAY: 0.001
