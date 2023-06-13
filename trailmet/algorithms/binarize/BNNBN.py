@@ -42,7 +42,19 @@ class BNNBN():
         self.weight_decay = self.kwargs.get('weight_decay', '0')
         self.learning_rate = self.kwargs.get('learning_rate', '0.001')
         
+    def prepare_dirs(self):
+        if not os.path.exists('log'):
+            print('Creating Logging Directory...')
+            os.mkdir('log')
+        log_format = '%(asctime)s %(message)s'
+        logging.basicConfig(stream=sys.stdout, level=logging.INFO,
+            format=log_format, datefmt='%m/%d %I:%M:%S %p')
+        fh = logging.FileHandler(os.path.join('log/log.txt'))
+        fh.setFormatter(logging.Formatter(log_format))
+        logging.getLogger().addHandler(fh)
+        
     def compress_model(self):
+        self.prepare_dirs()
         if not torch.cuda.is_available():
             sys.exit(1)
         start_t = time.time()
@@ -108,6 +120,7 @@ class BNNBN():
 
         if self.pretrained:
             print('* loading pretrained weight {}'.format(self.pretrained))
+            logging.info(f'loading pretrained weight {self.pretrained}')
             pretrain_student = torch.load(args.pretrained)
             if 'state_dict' in pretrain_student.keys():
                 pretrain_student = pretrain_student['state_dict']
@@ -122,6 +135,7 @@ class BNNBN():
             checkpoint_tar = os.path.join(self.save, 'checkpoint.pth.tar')
             if os.path.exists(checkpoint_tar):
                 print('loading checkpoint {} ..........'.format(checkpoint_tar))
+                logging.info('loading checkpoint {} ..........'.format(checkpoint_tar))
                 checkpoint = torch.load(checkpoint_tar)
                 start_epoch = checkpoint['epoch']
                 best_top1_acc = checkpoint['best_top1_acc']
@@ -129,13 +143,16 @@ class BNNBN():
                 optimizer.load_state_dict(checkpoint['optimizer'])
                 scheduler.load_state_dict(checkpoint['scheduler'])
                 print("loaded checkpoint {} epoch = {}" .format(checkpoint_tar, checkpoint['epoch']))
+                logging.info("loaded checkpoint {} epoch = {}" .format(checkpoint_tar, checkpoint['epoch']))
             else:
                 raise ValueError('no checkpoint for resume')
 
         if self.loss_type == 'kd':
             if not classes_in_teacher == self.num_classes:
                 self.validate('teacher', self.val_loader, model_teacher, criterion)
-
+        
+        logging.info('epoch, train accuracy, train loss, val accuracy, val loss')
+        
         # train the model
         epoch = start_epoch
         while epoch < self.epochs:
@@ -150,7 +167,9 @@ class BNNBN():
                 raise ValueError('unsupport loss_type')
 
             valid_obj, valid_top1_acc, valid_top5_acc = self.validate(epoch, self.val_loader, self.model_student, criterion)
-
+            
+            logging.info("{}, {}, {}, {}, {}".format(epoch, train_top1_acc, train_obj, valid_top1_acc.item(), valid_obj))
+            
             is_best = False
             if valid_top1_acc > best_top1_acc:
                 best_top1_acc = valid_top1_acc
@@ -168,7 +187,9 @@ class BNNBN():
 
         training_time = (time.time() - start_t) / 3600
         print('total training time = {} hours'.format(training_time))
+        logging.info('total training time = {} hours'.format(training_time))
         print('* best acc = {}'.format(best_top1_acc))
+        logging.info('* best acc = {}'.format(best_top1_acc))
         
     
     def train_kd(self, epoch, train_loader, model_student, model_teacher, criterion, optimizer, scheduler):
