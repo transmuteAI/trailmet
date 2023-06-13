@@ -263,9 +263,9 @@ class ResNet(BaseModel):
                     bn_layers.append([m1, m2])
         return bn_layers
     
-    def get_flops(self):
+    def get_flops(self, insize):
         flops = 0
-        inp = torch.rand(1,3,self.insize,self.insize).to(self.conv1.weight.device)
+        inp = torch.rand(1, 3, insize, insize).to(self.conv1.weight.device)
         output = self.conv1(inp)
         active_elements_count = output.shape[0] * reduce(lambda x, y: x * y, output.shape[2:])
         flops += self.conv1.in_channels*self.conv1.out_channels*9*active_elements_count

@@ -220,6 +220,8 @@ class SlimPruner:
             self.fixed_bn_ratio = schema.get("fixed_bn_ratio", [])
             print
             for name, module in self.pruned_model.named_modules():
+                if name != list(modules.keys())[0].split(".")[0]:
+                    name = "model." + name
                 if isinstance(module, Conv2d):
                     self.conv2d_modules[name] = Conv2dWrapper(
                         module,
