@@ -1,27 +1,14 @@
-#!/usr/bin/env python
-# coding: utf-8
-# %%
-
-
-import argparse
-import json
 import os
-#from datasets import DataManager
 import numpy as np
 import pandas as pd
 import torch
 import torch.optim as optim
 import torch.nn as nn
 from torchvision import models
-from trailmet.utils import seed_everything
 from trailmet.algorithms.prune.prune import BasePruning
 from trailmet.algorithms.prune.pns import SlimPruner
 from trailmet.algorithms.prune.functional import update_bn_grad, summary_model
 from tqdm import tqdm as tqdm_notebook
-
-
-# %%
-
 
 def build_model(net, num_classes=10):
     if net in ["resnet18", "resnet34", "resnet50"]:
@@ -52,10 +39,6 @@ def build_model(net, num_classes=10):
 
     return model
 
-
-# %%
-
-
 def adjust_learning_rate(optimizer, epoch, num_epochs, scheduler_type, lr):
     """Sets the learning rate to the initial LR decayed by 2 every 30 epochs"""
     if scheduler_type==1:
@@ -66,10 +49,6 @@ def adjust_learning_rate(optimizer, epoch, num_epochs, scheduler_type, lr):
         if epoch in [num_epochs*0.5, num_epochs*0.75]:
             for param_group in optimizer.param_groups:
                 param_group['lr'] *= 0.1
-
-
-# %%
-
 
 class Network_Slimming(BasePruning):
     """
@@ -84,8 +63,6 @@ class Network_Slimming(BasePruning):
         self.device = 'cuda'
         if os.path.exists('logs') is False:
             os.mkdir('logs')
-#         if os.path.exists('checkpoints') is False:
-#             os.mkdir('checkpoints_1')
         self.num_classes = kwargs.get('num_classes',100)
         self.pr = kwargs.get('pr',None)
         self.ft_only = kwargs.get('ft_only',False)
@@ -96,13 +73,11 @@ class Network_Slimming(BasePruning):
         self.epochs = kwargs.get('epochs',200)
         self.s = kwargs.get('s' , 1e-3)
         self.lr = kwargs.get('learning_rate',2e-3)
-        #self.save_dir = kwargs.get('save_dir')
         self.prune_schema = os.path.join(kwargs.get('schema_root') , f"schema/{self.net}.json")
         self.sparsity_train = kwargs.get('sparsity_train',True)
         self.fine_tune_epochs = kwargs.get('fine_tune_epochs',165)
         self.fine_tune_lr = kwargs.get('fine_tune_learning_rate',1e-4)
         self.prune_ratio = kwargs.get('prune_ratio',0.5)
-#        self.bn_weight_vis_period = kwargs.get('bn_weight_vis_period')
         self.log_base = f"{self.net}_{self.dataset}.pth"
         
     def compress_model(self,dataloaders) -> None:
@@ -127,7 +102,7 @@ class Network_Slimming(BasePruning):
     def update_bn_grad(self,model, s=0.0001):
 
         for m in model.modules():
-            if isinstance(m, BatchNorm2d):
+            if isinstance(m, nn.BatchNorm2d):
                 m.weight.grad.data.add_(s * torch.sign(m.weight.data))
     def base_train(self, model, dataloaders,fine_tune = False):
         """
@@ -185,11 +160,7 @@ class Network_Slimming(BasePruning):
 
         state = torch.load(self.log_name)
         model.load_state_dict(state['state_dict'],strict=True)
-        return model
-#         acc, v_loss = self.test(model, dataloaders['test'], criterion)
-#         print(f"Test Accuracy: {acc} | Valid Accuracy: {state['acc']}")
-
-    
+        return model 
 
     def get_optimizer(self, optimizer_name: str, model, lr, weight_decay):
         """returns the optimizer with the given name"""
@@ -248,10 +219,6 @@ class Network_Slimming(BasePruning):
                 total+=scores.shape[0]
                 tk1.set_postfix(loss=running_loss/counter, acc=running_acc/total)
         return running_acc/total, running_loss/counter
-
-
-# %%
-
 
 class Model(nn.Module):
     def __init__(self,net, num_classes):

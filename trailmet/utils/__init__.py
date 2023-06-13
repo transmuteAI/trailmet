@@ -4,6 +4,7 @@ import numpy as np
 import torch
 
 from .benchmark import ModelBenchmark
+from .tp_pruning import TP_Prune
 
 def seed_everything(seed):
     "sets the random seed to ensure reproducibility"
