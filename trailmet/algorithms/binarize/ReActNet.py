@@ -291,14 +291,3 @@ class ReActNet(BaseBinarize):
         fin_output = self.train2(model2)
 
         return fin_output
-
-
-
-
-
-
-
-
-
-
-        

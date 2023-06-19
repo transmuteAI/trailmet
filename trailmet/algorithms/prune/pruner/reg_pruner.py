@@ -11,7 +11,7 @@ import sys
 sys.path.append("../../../../")
 
 from trailmet.algorithms.prune.pns import SlimPruner
-from trailmet.algorithms.prune.functional import summary_model
+from trailmet.algorithms.prune.utils import summary_model
 
 
 class LitModel(nn.Module):

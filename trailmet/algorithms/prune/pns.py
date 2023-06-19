@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import copy
 import json
 from enum import Enum
@@ -9,7 +8,7 @@ from typing import Dict, List
 import pandas as pd
 from torch.nn import Conv2d, BatchNorm2d, Linear
 
-from .functional import (
+from .utils import (
     cal_threshold_by_bn2d_weights,
     mask2idxes,
     top_k_idxes,
@@ -23,6 +22,7 @@ from .functional import (
 SHORTCUTS_MERGE_OR = "or"
 SHORTCUTS_MERGE_AND = "and"
 
+__all__ = ['ChannelRounding', 'Conv2dWrapper', 'LinearWrapper', 'BN2dWrapper', 'SlimPruner']
 
 class ChannelRounding(Enum):
     NONE = "none"

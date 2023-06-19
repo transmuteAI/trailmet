@@ -11,7 +11,7 @@ from trailmet.algorithms.quantize.methods import UniformAffineQuantizer
 from trailmet.algorithms.quantize.methods import ActQuantizer
  
 
-
+__all__ = ['QuantBasicBlock', 'QuantBottleneck', 'QuantInvertedResidual', 'QuantModule', 'BaseQuantBlock', 'QBasicBlock', 'QBottleneck', 'QInvertedResidual', 'ActivationModuleWrapper', 'ParameterModuleWrapper']
 #============================================
 #***** Quantization Modules for BRECQ *******
 #============================================

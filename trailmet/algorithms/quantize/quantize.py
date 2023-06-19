@@ -5,6 +5,7 @@ import torch.nn.init as init
 from tqdm import tqdm_notebook
 from ..algorithms import BaseAlgorithm
 
+__all__ = ['BaseQuantization', 'StraightThrough', 'RoundSTE', 'Conv2dFunctor', 'LinearFunctor', 'FoldBN']
 class BaseQuantization(BaseAlgorithm):
     """base class for quantization algorithms"""
     def __init__(self, **kwargs):
