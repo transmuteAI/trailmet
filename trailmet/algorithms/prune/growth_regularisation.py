@@ -1,10 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-# %%
-
-
-import argparse
-import json
 import os
 pjoin = os.path.join
 import numpy as np
@@ -18,31 +11,16 @@ import torch
 import torch.optim as optim
 import torch.nn as nn
 import torch.nn.parallel
-import torch.backends.cudnn as cudnn
-import torch.distributed as dist
-import torch.multiprocessing as mp
 import torch.utils.data
 import torch.utils.data.distributed
-import torchvision.transforms as transforms
-import torchvision.datasets as datasets
 import torchvision.models as models
 
-from trailmet.algorithms.utils import strlist_to_list, strdict_to_dict, check_path,merge_args,PresetLRScheduler
+from trailmet.algorithms.utils import strlist_to_list
 from trailmet.algorithms.prune.prune import BasePruning
-from trailmet.algorithms.prune.pns import SlimPruner
-from trailmet.algorithms.prune.functional import update_bn_grad, summary_model
 from trailmet.algorithms.utils import Logger
 from trailmet.algorithms.prune.pruner import pruner_dict
-
-
-from copy import deepcopy
 from tqdm import tqdm as tqdm_notebook
 import numpy as np
-from importlib import import_module
-
-
-
-# %%
 
 
 def adjust_learning_rate(optimizer, epoch, num_epochs, scheduler_type, lr):
@@ -54,15 +32,11 @@ def adjust_learning_rate(optimizer, epoch, num_epochs, scheduler_type, lr):
     else:
         if epoch in [num_epochs*0.5, num_epochs*0.75]:
             for param_group in optimizer.param_groups:
-                pa
-                ram_group['lr'] *= 0.1
+                param_group['lr'] *= 0.1
 
-
-# %%
 def is_single_branch(name):
     return False
 
-# %%
 
 
 class Growth_Regularisation(BasePruning):

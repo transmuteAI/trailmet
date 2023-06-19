@@ -7,7 +7,7 @@ import torch.nn as nn
 from torchvision import models
 from trailmet.algorithms.prune.prune import BasePruning
 from trailmet.algorithms.prune.pns import SlimPruner
-from trailmet.algorithms.prune.functional import update_bn_grad, summary_model
+from trailmet.algorithms.prune.utils import update_bn_grad, summary_model
 from tqdm import tqdm as tqdm_notebook
 
 def build_model(net, num_classes=10):
