@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.optim as optim
 import matplotlib.pyplot as plt
 import pandas as pd
-from trailmet.utils import seed_everything
+from trailmet.utils.functions import seed_everything
 
 seed_everything(43)
 
