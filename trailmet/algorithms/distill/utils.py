@@ -1,4 +1,5 @@
-__all__ = ['pdist']
+__all__ = ["pdist"]
+
 
 def pdist(e, squared=False, eps=1e-12):
     e_square = e.pow(2).sum(dim=1)
