@@ -14,7 +14,7 @@ Welcome to TrAILMET's documentation!
 ************************************
 
 Transmute AI Model Efficiency Toolkit (TrAILMET)
-================================================
+===============================================
 Transmute AI Model Efficiency Toolkit is an efficient and scalable library for making machine learning time, energy, cost, and compute efficient
 built on top of pytorch.
 
