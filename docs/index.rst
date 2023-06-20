@@ -20,7 +20,7 @@ built on top of pytorch.
 
 **Background:** Trailmet is a model efficiency toolkit for compressing deep learning models using state of the art compression techniques. 
 Today deep learning models are not deployable because of their huge memory footprint, TRAILMET is an effort to make deep learning models more efficient in their size to performance ratio. 
-It is developed using Pytorch 1.5.
+It is developed using Pytorch 1.13.
 
 Major features
 --------------

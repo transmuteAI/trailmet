@@ -26,7 +26,7 @@
 
 # Introduction
 Trailmet is a model efficiency toolkit for compressing deep learning models using state of the art compression techniques. 
-Today deep learning models are not deployable because of their huge memory footprint, TRAILMET is an effort to make deep learning models more efficient in their size to performance ratio. It is developed using Pytorch 1.5.
+Today deep learning models are not deployable because of their huge memory footprint, TRAILMET is an effort to make deep learning models more efficient in their size to performance ratio. It is developed using Pytorch 1.13.
 
 ### Major features
 - State of the art compression algorithms implemented.
@@ -38,10 +38,12 @@ Today deep learning models are not deployable because of their huge memory footp
 Below are quick steps for installation:
 
 ```shell
-conda create -n trailmet python=3.8 pytorch=1.10 cudatoolkit=11.3 torchvision==0.11.0 -c pytorch -y
-conda activate trailmet
 git clone https://github.com/transmuteAI/trailmet.git
 cd trailmet
+conda create -n trailmet
+conda activate trailmet
+conda install pytorch=1.13 torchvision=0.14 pytorch-cuda=11.7 -c pytorch -c nvidia
+pip install -r requirements.txt
 ```
 # Algorithms Implemented
 
@@ -61,7 +63,7 @@ Demo notebooks for each algorithm is added in [experiments](https://github.com/t
 
 - [x] [Chipnet](https://arxiv.org/abs/2102.07156)
 - [x] [Network slimming](https://arxiv.org/abs/1708.06519)
-  
+- [x] [Growth Regularization](https://arxiv.org/abs/2012.09243)  
 </details>
   
 <details open>
