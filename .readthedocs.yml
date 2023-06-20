@@ -1,7 +1,6 @@
-version: 2
+version: 1
 
 formats:
-  - epub
   - htmlzip
 
 sphinx:
