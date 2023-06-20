@@ -1,13 +1,12 @@
-
 from collections import abc
-
 import torch
 from torch._six import string_classes
 from torch.nn.parallel.scatter_gather import gather
 from torch.nn import DataParallel, Sequential, ModuleList
 from torch.nn.parallel import DistributedDataParallel
-
 from trailmet.algorithms.algorithms import BaseAlgorithm
+
+__all__ = ['Distillation']
 
 class Distillation(BaseAlgorithm):
 

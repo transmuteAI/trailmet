@@ -6,7 +6,7 @@ import numpy as np
 from .benchmark import ModelBenchmark
 from ..algorithms.prune.network_slimming import Network_Slimming
 from ..algorithms.prune.pns import SlimPruner, ChannelRounding
-from ..algorithms.prune.functional import cal_threshold_by_bn2d_weights
+from ..algorithms.prune.utils import cal_threshold_by_bn2d_weights
 
 class TP_Prune:
     def __init__(self, method=None, prune_model=None, org_model=None, batch_size=64, input_size=32, device_name="cpu", root=None, schema=None):

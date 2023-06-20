@@ -1,6 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-# %%
 import os
 import argparse
 import numpy as np
@@ -15,7 +12,6 @@ from collections import OrderedDict
 from thop import profile
 import time, datetime
 import logging
-from thop import profile
 import torch.utils.data.distributed
 from torch.cuda.amp import autocast, GradScaler
 from trailmet.algorithms.prune.prune import BasePruning
@@ -50,12 +46,6 @@ class record_config():
         _make_dir(result_dir)
 
         config_dir = result_dir / 'config.txt'
-
-        #with open(config_dir, 'w') as f:
-        #    f.write(now + '\n\n')
-        #    for arg in vars(CFG):
-        #        f.write('{}: {}\n'.format(arg, getattr(CFG, arg)))
-        #    f.write('\n')
 
 
     def get_logger(file_path):
@@ -140,14 +130,6 @@ def save_checkpoint(state, is_best, save):
     if is_best:
         best_filename = os.path.join(save, 'model_best.pth.tar')
         shutil.copyfile(filename, best_filename)
-
-
-#def adjust_learning_rate(optimizer, epoch, args):
-#    """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
-#    lr = args.lr * (0.1 ** (epoch // 30))
-#    for param_group in optimizer.param_groups:
-#        param_group['lr'] = lr
-
 
 def accuracy(output, target, topk=(1,)):
     """Computes the accuracy over the k top predictions for the specified values of k"""
@@ -249,7 +231,6 @@ def format_time(seconds):
         f = '0ms'
     return f        
         
-# %%
 class Chip(BasePruning):
     def __init__(self, model, dataloaders, **CFG):
         self.dataloaders = dataloaders
@@ -329,8 +310,7 @@ class Chip(BasePruning):
                 index = j * repeat + i + 1
                 # add
                 path_conv = "./conv_feature_map/{0}_repeat5/conv_feature_map_tensor({1}).npy".format(str(self.arch), str(index))
-                # path_nuc = "./feature_conv_nuc/resnet_56_repeat5/feature_conv_nuctensor({0}).npy".format(str(index))
-                # batch_ci = ci_score(path_conv, path_nuc)
+                
                 batch_ci = self.ci_score(path_conv)
                 single_repeat_ci_mean = np.mean(batch_ci, axis=0)
                 repeat_ci_mean.append(single_repeat_ci_mean)
@@ -770,4 +750,3 @@ class Chip(BasePruning):
 
         return losses.avg, top1.avg, top5.avg
 
-    # %%

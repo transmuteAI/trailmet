@@ -1,16 +1,4 @@
-# ---
-# jupyter:
-#   jupytext:
-#     text_representation:
-#       extension: .py
-#       format_name: light
-#       format_version: '1.5'
-#       jupytext_version: 1.11.4
-#   kernelspec:
-#     display_name: Python 3 (ipykernel)
-#     language: python
-#     name: python3
-# ---
+# issuessssssssss
 
 import os
 import sys
@@ -26,9 +14,7 @@ import torch.utils
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
 import torch.utils.data.distributed
-sys.path.append('/workspace/code/kushagrabhushan/TrAIL/trailmet/trailmet/algorithms/binarize')
-sys.path.append("../../../")
-from utils import *
+from trailmet.algorithms.binarize.utils import *
 from trailmet.algorithms.binarize.binarize import BaseBinarize
 from trailmet.utils import *
 

@@ -1,21 +1,14 @@
 import os
-import sys
 import shutil
 import numpy as np
-import time, datetime
 import torch
-import random
-import logging
-import argparse
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.modules import loss
 import torch.utils
-import torchvision.datasets as dset
-import torchvision.transforms as transforms
-import torch.backends.cudnn as cudnn
 from PIL import Image
-from torch.autograd import Variable
+
+__all__ = ['Lighting', 'CrossEntropyLabelSmooth', 'DistributionLoss', 'AverageMeter', 'ProgressMeter', 'save_checkpoint', 'adjust_learning_rate', 'accuracy']
 
 #lighting data augmentation
 imagenet_pca = {

@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from trailmet.algorithms.distill.utils import pdist
 
+__all__ = ['KDTransferLoss', 'RkdDistance', 'RKdAngle']
 
 class KDTransferLoss(nn.Module):
     def __init__(self,temperature,reduction):

@@ -4,7 +4,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from tqdm import tqdm as tqdm_notebook
-
 from trailmet.algorithms.distill.distill import Distillation, ForwardHookManager
 
 # Paraphrasing Complex Network: Network Compression via Factor Transfer

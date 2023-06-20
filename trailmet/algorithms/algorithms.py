@@ -114,7 +114,7 @@ class BaseAlgorithm(object):
                 extra_functionality()
         return running_loss/counter
 
-    def lp_loss(pred, tgt, p=2.0, reduction='none'):
+    def lp_loss(self, pred, tgt, p=2.0, reduction='none'):
         """loss function measured in Lp Norm"""
         if reduction == 'none':
             return (pred-tgt).abs().pow(p).sum(1).mean()
