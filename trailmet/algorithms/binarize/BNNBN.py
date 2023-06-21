@@ -10,8 +10,13 @@ import torch.backends.cudnn as cudnn
 import torch.utils.data.distributed
 
 import timm
-from .utils import CrossEntropyLabelSmooth, DistributionLoss
-from trailmet.utils import AverageMeter, save_checkpoint, accuracy
+from .utils import DistributionLoss
+from trailmet.utils import (
+    AverageMeter,
+    save_checkpoint,
+    accuracy,
+    CrossEntropyLabelSmooth,
+)
 import torchvision.models as models
 from timm.utils.agc import adaptive_clip_grad
 import logging

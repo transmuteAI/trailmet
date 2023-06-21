@@ -2,9 +2,6 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from tqdm import tqdm as tqdm_notebook
-
 from trailmet.algorithms.distill.distill import Distillation
 from trailmet.algorithms.distill.losses import KDTransferLoss
 

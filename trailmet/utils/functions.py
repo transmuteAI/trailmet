@@ -3,8 +3,9 @@ import os
 import numpy as np
 import torch
 import shutil
+import torch.nn as nn
 
-__all__ = ["AverageMeter", "save_checkpoint", "accuracy", "seed_everything", "pdist"]
+__all__ = ["AverageMeter", "save_checkpoint", "accuracy", "seed_everything", "pdist", "CrossEntropyLabelSmooth"]
 
 
 def seed_everything(seed):
@@ -84,3 +85,19 @@ def pdist(e, squared=False, eps=1e-12):
     res = res.clone()
     res[range(len(e)), range(len(e))] = 0
     return res
+
+# label smooth
+class CrossEntropyLabelSmooth(nn.Module):
+    def __init__(self, num_classes, epsilon):
+        super(CrossEntropyLabelSmooth, self).__init__()
+        self.num_classes = num_classes
+        self.epsilon = epsilon
+        self.logsoftmax = nn.LogSoftmax(dim=1)
+
+    def forward(self, inputs, targets):
+        log_probs = self.logsoftmax(inputs)
+        targets = torch.zeros_like(log_probs).scatter_(1, targets.unsqueeze(1), 1)
+        targets = (1 - self.epsilon) * targets + self.epsilon / self.num_classes
+        loss = (-targets * log_probs).mean(0).sum()
+        return loss
+

@@ -6,9 +6,13 @@ import torch.nn as nn
 import torch.utils
 import torch.backends.cudnn as cudnn
 import torch.utils.data.distributed
-from trailmet.algorithms.binarize.utils import CrossEntropyLabelSmooth
 from trailmet.algorithms.binarize.binarize import BaseBinarize
-from trailmet.utils import AverageMeter, save_checkpoint, accuracy
+from trailmet.utils import (
+    AverageMeter,
+    save_checkpoint,
+    accuracy,
+    CrossEntropyLabelSmooth,
+)
 
 import logging
 from datetime import datetime
