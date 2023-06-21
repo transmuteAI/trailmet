@@ -6,40 +6,57 @@ from torch.nn import DataParallel, Sequential, ModuleList
 from torch.nn.parallel import DistributedDataParallel
 from trailmet.algorithms.algorithms import BaseAlgorithm
 
-__all__ = ['Distillation']
+__all__ = ["Distillation"]
+
 
 class Distillation(BaseAlgorithm):
-
     def __init__(self, **kwargs):
         super(Distillation, self).__init__(**kwargs)
 
         pass
 
-#https://github.com/yoshitomo-matsubara/torchdistill/blob/8be107e00d6a481711e513f45824ecfaa8249c77/torchdistill/common/module_util.py
+
+# https://github.com/yoshitomo-matsubara/torchdistill/blob/8be107e00d6a481711e513f45824ecfaa8249c77/torchdistill/common/module_util.py
+
 
 def check_if_wrapped(model):
     return isinstance(model, (DataParallel, DistributedDataParallel))
 
+
 def get_module(root_module, module_path):
-    module_names = module_path.split('.')
+    module_names = module_path.split(".")
     module = root_module
     for module_name in module_names:
         if not hasattr(module, module_name):
             if isinstance(module, (DataParallel, DistributedDataParallel)):
                 module = module.module
                 if not hasattr(module, module_name):
-                    if isinstance(module, Sequential) and module_name.lstrip('-').isnumeric():
+                    if (
+                        isinstance(module, Sequential)
+                        and module_name.lstrip("-").isnumeric()
+                    ):
                         module = module[int(module_name)]
                     else:
-                        raise Exception('`{}` of `{}` could not be reached in `{}`'.format(module_name, module_path, type(root_module).__name__))
+                        raise Exception(
+                            "`{}` of `{}` could not be reached in `{}`".format(
+                                module_name, module_path, type(root_module).__name__
+                            )
+                        )
                         # logger.info('`{}` of `{}` could not be reached in `{}`'.format(module_name, module_path,
                         #                                                                type(root_module).__name__))
                 else:
                     module = getattr(module, module_name)
-            elif isinstance(module, (Sequential, ModuleList)) and module_name.lstrip('-').isnumeric():
+            elif (
+                isinstance(module, (Sequential, ModuleList))
+                and module_name.lstrip("-").isnumeric()
+            ):
                 module = module[int(module_name)]
             else:
-                raise Exception('`{}` of `{}` could not be reached in `{}`'.format(module_name, module_path, type(root_module).__name__))
+                raise Exception(
+                    "`{}` of `{}` could not be reached in `{}`".format(
+                        module_name, module_path, type(root_module).__name__
+                    )
+                )
                 # logger.info('`{}` of `{}` could not be reached in `{}`'.format(module_name, module_path,
                 #                                                                type(root_module).__name__))
                 return None
@@ -47,12 +64,14 @@ def get_module(root_module, module_path):
             module = getattr(module, module_name)
     return module
 
-#https://github.com/yoshitomo-matsubara/torchdistill/blob/main/torchdistill/core/forward_hook.py
+
+# https://github.com/yoshitomo-matsubara/torchdistill/blob/main/torchdistill/core/forward_hook.py
+
 
 def get_device_index(data):
     if isinstance(data, torch.Tensor):
         device = data.device
-        return 'cpu' if device.type == 'cpu' else device.index
+        return "cpu" if device.type == "cpu" else device.index
     elif isinstance(data, abc.Mapping):
         for key, data in data.items():
             result = get_device_index(data)
@@ -71,7 +90,9 @@ def get_device_index(data):
     return None
 
 
-def register_forward_hook_with_dict(module, module_path, requires_input, requires_output, io_dict):
+def register_forward_hook_with_dict(
+    module, module_path, requires_input, requires_output, io_dict
+):
     io_dict[module_path] = dict()
 
     def forward_hook4input(self, func_input, func_output):
@@ -80,9 +101,9 @@ def register_forward_hook_with_dict(module, module_path, requires_input, require
 
         device_index = get_device_index(func_output)
         sub_io_dict = io_dict[module_path]
-        if 'input' not in sub_io_dict:
-            sub_io_dict['input'] = dict()
-        sub_io_dict['input'][device_index] = func_input
+        if "input" not in sub_io_dict:
+            sub_io_dict["input"] = dict()
+        sub_io_dict["input"][device_index] = func_input
 
     def forward_hook4output(self, func_input, func_output):
         if isinstance(func_output, tuple) and len(func_output) == 1:
@@ -90,9 +111,9 @@ def register_forward_hook_with_dict(module, module_path, requires_input, require
 
         device_index = get_device_index(func_output)
         sub_io_dict = io_dict[module_path]
-        if 'output' not in sub_io_dict:
-            sub_io_dict['output'] = dict()
-        sub_io_dict['output'][device_index] = func_output
+        if "output" not in sub_io_dict:
+            sub_io_dict["output"] = dict()
+        sub_io_dict["output"][device_index] = func_output
 
     def forward_hook4io(self, func_input, func_output):
         if isinstance(func_input, tuple) and len(func_input) == 1:
@@ -102,14 +123,14 @@ def register_forward_hook_with_dict(module, module_path, requires_input, require
 
         device_index = get_device_index(func_output)
         sub_io_dict = io_dict[module_path]
-        if 'input' not in sub_io_dict:
-            sub_io_dict['input'] = dict()
+        if "input" not in sub_io_dict:
+            sub_io_dict["input"] = dict()
 
-        if 'output' not in sub_io_dict:
-            sub_io_dict['output'] = dict()
+        if "output" not in sub_io_dict:
+            sub_io_dict["output"] = dict()
 
-        sub_io_dict['input'][device_index] = func_input
-        sub_io_dict['output'][device_index] = func_output
+        sub_io_dict["input"][device_index] = func_input
+        sub_io_dict["output"][device_index] = func_output
 
     if requires_input and not requires_output:
         return module.register_forward_hook(forward_hook4input)
@@ -117,7 +138,7 @@ def register_forward_hook_with_dict(module, module_path, requires_input, require
         return module.register_forward_hook(forward_hook4output)
     elif requires_input and requires_output:
         return module.register_forward_hook(forward_hook4io)
-    raise ValueError('Either requires_input or requires_output should be True')
+    raise ValueError("Either requires_input or requires_output should be True")
 
 
 class ForwardHookManager(object):
@@ -136,17 +157,23 @@ class ForwardHookManager(object):
         >>> layer2_input_tensor = io_dict['layer2']['input']
         >>> layer2_output_tensor = io_dict['layer2']['output']
     """
+
     def __init__(self, target_device):
-        self.target_device = torch.device(target_device) if isinstance(target_device, str) else target_device
-        self.uses_cuda = self.target_device.type == 'cuda'
+        self.target_device = (
+            torch.device(target_device)
+            if isinstance(target_device, str)
+            else target_device
+        )
+        self.uses_cuda = self.target_device.type == "cuda"
         self.io_dict = dict()
         self.hook_list = list()
 
     def add_hook(self, module, module_path, requires_input=True, requires_output=True):
         unwrapped_module = module.module if check_if_wrapped(module) else module
         sub_module = get_module(unwrapped_module, module_path)
-        handle = \
-            register_forward_hook_with_dict(sub_module, module_path, requires_input, requires_output, self.io_dict)
+        handle = register_forward_hook_with_dict(
+            sub_module, module_path, requires_input, requires_output, self.io_dict
+        )
         self.hook_list.append((module_path, handle))
 
     def pop_io_dict(self):
@@ -156,13 +183,17 @@ class ForwardHookManager(object):
             for io_type in list(module_io_dict.keys()):
                 sub_dict = module_io_dict.pop(io_type)
                 values = [sub_dict[key] for key in sorted(sub_dict.keys())]
-                gathered_obj = gather(values, self.target_device) if self.uses_cuda and len(values) > 1 else values[-1]
+                gathered_obj = (
+                    gather(values, self.target_device)
+                    if self.uses_cuda and len(values) > 1
+                    else values[-1]
+                )
                 gathered_io_dict[module_path][io_type] = gathered_obj
         return gathered_io_dict
 
     def pop_io_dict_from_device(self, device):
         device_io_dict = dict()
-        device_key = device.index if device.type == 'cuda' else device.type
+        device_key = device.index if device.type == "cuda" else device.type
         for module_path, module_io_dict in self.io_dict.items():
             device_io_dict[module_path] = dict()
             for io_type in list(module_io_dict.keys()):

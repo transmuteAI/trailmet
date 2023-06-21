@@ -1,16 +1,18 @@
-version: 1
+# .readthedocs.yaml
+# Read the Docs configuration file
+# See https://docs.readthedocs.io/en/stable/config-file/v2.html for details
 
-formats:
-  - htmlzip
+# Required
+version: 2
 
 sphinx:
   configuration: docs/conf.py
-  fail_on_warning: true
 
 python:
   install:
     - requirements: docs/docs_requirements.txt
 
+# Set the OS, Python version and other tools you might need
 build:
   os: ubuntu-22.04
   tools:
