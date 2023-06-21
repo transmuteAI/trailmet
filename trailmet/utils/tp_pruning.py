@@ -19,7 +19,7 @@ class TP_Prune:
         input_size=32,
         device_name="cpu",
         root=None,
-        schema=None,
+        yaml_name="resnet50_cifar100.yaml",
     ):
         self.root = root
         self.method = method
@@ -33,7 +33,7 @@ class TP_Prune:
 
         # for network slimming
         if self.method == "network_slimming":
-            with open(os.path.join(self.root, "resnet50_cifar100.yaml"), "r") as stream:
+            with open(os.path.join(self.root, yaml_name), "r") as stream:
                 data_loaded = yaml.safe_load(stream)
             data_loaded["schema_root"] = self.root
             slim = Network_Slimming(**data_loaded)

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from trailmet.algorithms.distill.utils import pdist
+from trailmet.utils.functions import pdist
 
 __all__ = ["KDTransferLoss", "RkdDistance", "RKdAngle"]
 

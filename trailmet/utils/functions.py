@@ -4,7 +4,7 @@ import numpy as np
 import torch
 import shutil
 
-__all__ = ["AverageMeter", "save_checkpoint", "accuracy", "seed_everything"]
+__all__ = ["AverageMeter", "save_checkpoint", "accuracy", "seed_everything", "pdist"]
 
 
 def seed_everything(seed):
@@ -71,3 +71,16 @@ def save_checkpoint(state, is_best, save, file_name=None):
     if is_best:
         best_filename = os.path.join(save, "model_best.pth.tar")
         shutil.copyfile(filename, best_filename)
+
+
+def pdist(e, squared=False, eps=1e-12):
+    e_square = e.pow(2).sum(dim=1)
+    prod = e @ e.t()
+    res = (e_square.unsqueeze(1) + e_square.unsqueeze(0) - 2 * prod).clamp(min=eps)
+
+    if not squared:
+        res = res.sqrt()
+
+    res = res.clone()
+    res[range(len(e)), range(len(e))] = 0
+    return res
