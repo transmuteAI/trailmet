@@ -13,10 +13,10 @@ Code is taken from https://github.com/kuangliu/pytorch-cifar/blob/master/models/
 '''
 
 
-class Block(nn.Module):
+class InvertedResidual(nn.Module):
     '''expand + depthwise + pointwise'''
     def __init__(self, in_planes, out_planes, expansion, stride):
-        super(Block, self).__init__()
+        super(InvertedResidual, self).__init__()
         self.stride = stride
         self.is_shortcut = False
         planes = expansion * in_planes
@@ -47,7 +47,6 @@ class Block(nn.Module):
         out = F.relu(self.bn2(self.conv2(out)))
         out = self.bn3(self.conv3(out))
         out = out + self.shortcut(x) if self.stride==1 else out
-#         print(out.shape)
         return out
     
     def get_flops(self, inp):
@@ -114,7 +113,7 @@ class MobileNetv2(BaseModel):
         for expansion, out_planes, num_blocks, stride in self.cfg:
             strides = [stride] + [1]*(num_blocks-1)
             for stride in strides:
-                layers.append(Block(in_planes, out_planes, expansion, stride))
+                layers.append(InvertedResidual(in_planes, out_planes, expansion, stride))
                 in_planes = out_planes
         return nn.Sequential(*layers)
 

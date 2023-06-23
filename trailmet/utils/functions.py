@@ -4,8 +4,17 @@ import numpy as np
 import torch
 import shutil
 import torch.nn as nn
+import torch.optim as optim
 
-__all__ = ["AverageMeter", "save_checkpoint", "accuracy", "seed_everything", "pdist", "CrossEntropyLabelSmooth"]
+
+__all__ = ["AverageMeter", "save_checkpoint", "accuracy", "seed_everything", "pdist", "CrossEntropyLabelSmooth", "adjust_learning_rate", "strlist_to_list", "get_optimizer", "lp_loss"]
+
+def lp_loss(pred, tgt, p=2.0, reduction='none'):
+        """loss function measured in Lp Norm"""
+        if reduction == 'none':
+            return (pred-tgt).abs().pow(p).sum(1).mean()
+        else:
+            return (pred-tgt).abs().pow(p).mean()
 
 
 def seed_everything(seed):
@@ -101,3 +110,43 @@ class CrossEntropyLabelSmooth(nn.Module):
         loss = (-targets * log_probs).mean(0).sum()
         return loss
 
+def adjust_learning_rate(optimizer, epoch, num_epochs, scheduler_type, lr):
+    """Sets the learning rate to the initial LR decayed by 2 every 30 epochs"""
+    if scheduler_type==1:
+        new_lr = lr * (0.5 ** (epoch // 30))
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = new_lr
+    else:
+        if epoch in [num_epochs*0.5, num_epochs*0.75]:
+            for param_group in optimizer.param_groups:
+                param_group['lr'] *= 0.1
+
+def strlist_to_list(sstr, ttype):
+    '''
+        example:
+        # self.args.stage_pr = [0, 0.3, 0.3, 0.3, 0, ]
+        # self.args.skip_layers = ['1.0', '2.0', '2.3', '3.0', '3.5', ]
+        turn these into a list of <ttype> (float or str or int etc.)
+    '''
+    if not sstr:
+        return sstr
+    out = []
+    sstr = sstr.strip()
+    if sstr.startswith('[') and sstr.endswith(']'):
+        sstr = sstr[1:-1]
+    for x in sstr.split(','):
+        x = x.strip()
+        if x:
+            x = ttype(x)
+            out.append(x)
+    return out
+
+def get_optimizer(self, optimizer_name: str, model, lr, weight_decay):
+        """returns the optimizer with the given name"""
+        if optimizer_name == 'SGD':
+            optimizer = optim.SGD(model.parameters(), lr=lr, weight_decay=weight_decay)
+        if optimizer_name == 'Adam':
+            optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+        else:
+            raise ValueError('Unknown optimizer: %s' % optimizer_name)
+        return optimizer

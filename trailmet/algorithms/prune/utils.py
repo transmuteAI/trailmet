@@ -7,7 +7,20 @@ import pandas as pd
 
 # how to change weights.data https://discuss.pytorch.org/t/how-to-delete-every-grad-after-training/63644/8
 
-__all__ = ['update_bn_grad', 'summary_model', 'is_depthwise_conv2d', 'prune_conv2d', 'prune_bn2d', 'prune_fc', 'cal_threshold_by_bn2d_weights', 'mask2idxes', 'top_k_idxes', 'ceil', 'round_up_to_power_of_2']
+__all__ = [
+    "update_bn_grad",
+    "summary_model",
+    "is_depthwise_conv2d",
+    "prune_conv2d",
+    "prune_bn2d",
+    "prune_fc",
+    "cal_threshold_by_bn2d_weights",
+    "mask2idxes",
+    "top_k_idxes",
+    "ceil",
+    "round_up_to_power_of_2",
+]
+
 
 def update_bn_grad(model, s=0.0001):
     """

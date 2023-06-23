@@ -8,6 +8,4 @@ scipy==1.10.1
 gdown==4.7.1
 datasets==2.13.0
 scikit-learn==1.2.2 
-myst-parser==2.0.0
-sphinx_design==0.4.1
 pytest==7.3.1

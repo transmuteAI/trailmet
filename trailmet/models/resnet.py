@@ -319,10 +319,6 @@ def make_resnet18(num_classes, insize):
     model = ResNet(BasicBlock, [2, 2, 2, 2], num_classes=num_classes, insize=insize)
     return model
 
-model = make_resnet18(1000, 64)
-model
-
-
 def make_resnet10(num_classes, insize):
     model = ResNet(BasicBlock, [1, 1, 1, 1], num_classes=num_classes, insize=insize)
     return model

@@ -1,20 +1,29 @@
-
 import torch
 import torch.nn as nn
 import torch.nn.init as init
 from tqdm import tqdm_notebook
 from ..algorithms import BaseAlgorithm
 
-__all__ = ['BaseQuantization', 'StraightThrough', 'RoundSTE', 'Conv2dFunctor', 'LinearFunctor', 'FoldBN']
+__all__ = [
+    "BaseQuantization",
+    "StraightThrough",
+    "RoundSTE",
+    "Conv2dFunctor",
+    "LinearFunctor",
+    "FoldBN",
+]
+
+
 class BaseQuantization(BaseAlgorithm):
     """base class for quantization algorithms"""
+
     def __init__(self, **kwargs):
         super(BaseQuantization, self).__init__(**kwargs)
         pass
 
     def quantize(self, model, dataloaders, method, **kwargs):
         pass
-    
+
     def round_ste(x: torch.Tensor):
         """
         Implement Straight-Through Estimator for rounding operation.
@@ -28,7 +37,7 @@ class BaseQuantization(BaseAlgorithm):
         calib_data = []
         for batch in train_loader:
             calib_data.append(batch[0])
-            if len(calib_data)*batch[0].size(0) >= num_samples:
+            if len(calib_data) * batch[0].size(0) >= num_samples:
                 break
         return torch.cat(calib_data, dim=0)[:num_samples]
 
@@ -46,10 +55,12 @@ class BaseQuantization(BaseAlgorithm):
             w.mul_(bn_module.weight.data.view(w.size(0), 1, 1, 1).expand_as(w))
             b.mul_(bn_module.weight.data).add_(bn_module.bias.data)
 
-        bn_module.register_buffer('running_mean', torch.zeros(module.out_channels).cuda())
-        bn_module.register_buffer('running_var', torch.ones(module.out_channels).cuda())
-        bn_module.register_parameter('weight', None)
-        bn_module.register_parameter('bias', None)
+        bn_module.register_buffer(
+            "running_mean", torch.zeros(module.out_channels).cuda()
+        )
+        bn_module.register_buffer("running_var", torch.ones(module.out_channels).cuda())
+        bn_module.register_parameter("weight", None)
+        bn_module.register_parameter("bias", None)
         bn_module.affine = False
 
     def is_bn(self, m):
@@ -66,10 +77,11 @@ class BaseQuantization(BaseAlgorithm):
                 self.absorb_bn(prev, m)
             self.search_absorbe_bn(m)
             prev = m
-        
-    
+
+
 class StraightThrough(nn.Module):
     """used to place an identity function in place of a non-differentail operator for gradient calculation"""
+
     def __int__(self):
         super().__init__()
         pass
@@ -86,19 +98,25 @@ class RoundSTE(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-        return grad_output 
+        return grad_output
 
 
 class Conv2dFunctor:
     def __init__(self, conv2d):
         self.conv2d = conv2d
+
     def __call__(self, *input, weight, bias):
         res = torch.nn.functional.conv2d(
-            *input, weight, bias, 
-            self.conv2d.stride, self.conv2d.padding,
-            self.conv2d.dilation, self.conv2d.groups
+            *input,
+            weight,
+            bias,
+            self.conv2d.stride,
+            self.conv2d.padding,
+            self.conv2d.dilation,
+            self.conv2d.groups
         )
         return res
+
 
 class LinearFunctor:
     def __init__(self, linear):
@@ -108,9 +126,11 @@ class LinearFunctor:
         res = torch.nn.functional.linear(*input, weight, bias)
         return res
 
-# TODO : To migrate all BN-layer folding function calls to the ones defined inside BaseQuantization class 
-class FoldBN():
+
+# TODO : To migrate all BN-layer folding function calls to the ones defined inside BaseQuantization class
+class FoldBN:
     """used to fold batch norm to prev linear or conv layer which helps reduce comutational overhead during quantization"""
+
     def __init__(self):
         pass
 
@@ -136,7 +156,6 @@ class FoldBN():
                 bias = beta
         return weight, bias
 
-
     def fold_bn_into_conv(self, conv_module, bn_module):
         w, b = self._fold_bn(conv_module, bn_module)
         if conv_module.bias is None:
@@ -146,21 +165,18 @@ class FoldBN():
         conv_module.weight.data = w
         # set bn running stats
         bn_module.running_mean = bn_module.bias.data
-        bn_module.running_var = bn_module.weight.data ** 2
-
+        bn_module.running_var = bn_module.weight.data**2
 
     def is_bn(self, m):
         return isinstance(m, nn.BatchNorm2d) or isinstance(m, nn.BatchNorm1d)
 
-
     def is_absorbing(self, m):
         return (isinstance(m, nn.Conv2d)) or isinstance(m, nn.Linear)
 
-
     def search_fold_and_remove_bn(self, model: nn.Module):
         """
-        method to recursively search for batch norm layers, absorb them into 
-        the previous linear or conv layers, and set it to an identity layer 
+        method to recursively search for batch norm layers, absorb them into
+        the previous linear or conv layers, and set it to an identity layer
         """
         model.eval()
         prev = None
