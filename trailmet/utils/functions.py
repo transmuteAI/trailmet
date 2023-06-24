@@ -5,9 +5,72 @@ import torch
 import shutil
 import torch.nn as nn
 import torch.optim as optim
+import re
+import math
 
 
-__all__ = ["AverageMeter", "save_checkpoint", "accuracy", "seed_everything", "pdist", "CrossEntropyLabelSmooth", "adjust_learning_rate", "strlist_to_list", "get_optimizer", "lp_loss"]
+__all__ = ["AverageMeter", "save_checkpoint", "accuracy", "seed_everything", "pdist", "CrossEntropyLabelSmooth", "adjust_learning_rate", "strlist_to_list", "get_optimizer", "lp_loss", "extract_sparsity", "chip_adjust_learning_rate"]
+
+def chip_adjust_learning_rate(self, optimizer, epoch, step, len_iter):
+
+        if self.lr_type == "step":
+            factor = epoch // 125
+            # if epoch >= 80:
+            #     factor = factor + 1
+            lr = self.learning_rate * (0.1**factor)
+
+        elif self.lr_type == "step_5":
+            factor = epoch // 10
+            if epoch >= 80:
+                factor = factor + 1
+            lr = self.learning_rate * (0.5**factor)
+
+        elif self.lr_type == "cos":  # cos without warm-up
+            if self.epochs > 5:
+                lr = (
+                    0.5
+                    * self.learning_rate
+                    * (1 + math.cos(math.pi * (epoch - 5) / (self.epochs - 5)))
+                )
+            else:
+                lr = self.learning_rate
+
+        elif self.lr_type == "exp":
+            step = 1
+            decay = 0.96
+            lr = self.learning_rate * (decay ** (epoch // step))
+
+        elif self.lr_type == "fixed":
+            lr = self.learning_rate
+        else:
+            raise NotImplementedError
+
+        if epoch < 5:
+            lr = lr * float(1 + step + epoch * len_iter) / (5.0 * len_iter)
+
+        for param_group in optimizer.param_groups:
+            param_group["lr"] = lr
+
+        if step == 0:
+            print("learning_rate: " + str(lr))
+
+def extract_sparsity(sparsity):
+    cprate_str = sparsity
+    cprate_str_list = cprate_str.split("+")
+    pat_cprate = re.compile(r"\d+\.\d*")
+    pat_num = re.compile(r"\*\d+")
+    cprate = []
+    for x in cprate_str_list:
+        num = 1
+        find_num = re.findall(pat_num, x)
+        if find_num:
+            assert len(find_num) == 1
+            num = int(find_num[0].replace("*", ""))
+        find_cprate = re.findall(pat_cprate, x)
+        assert len(find_cprate) == 1
+        cprate += [float(find_cprate[0])] * num
+
+    return cprate
 
 def lp_loss(pred, tgt, p=2.0, reduction='none'):
         """loss function measured in Lp Norm"""

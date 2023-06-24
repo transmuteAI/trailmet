@@ -4,11 +4,6 @@ import copy
 import numpy as np
 from math import ceil
 from collections import OrderedDict
-import sys
-
-sys.path.append("../../")
-sys.path.append("../../../")
-sys.path.append("../../../../")
 
 
 # +
@@ -67,9 +62,6 @@ class MetaPruner:
         self.model = model
         self.args = args
         self.logger = logger
-        self.logprint = logger.log_printer.logprint
-        self.accprint = logger.log_printer.accprint
-        self.netprint = logger.log_printer.netprint
         self.test = lambda net: passer.test(
             passer.test_loader, net, passer.criterion, passer.args
         )
@@ -281,7 +273,7 @@ class MetaPruner:
                 n_pruned = len(self.pruned_wg_pr_model[k])
                 n_kept = len(self.kept_wg_pr_model[k])
                 self.pr[k] = float(n_pruned) / (n_pruned + n_kept)
-            self.logprint(
+            print(
                 "==> Load base_pr_model successfully and inherit its pruning ratio: '{}'".format(
                     self.args.base_pr_model
                 )
@@ -291,7 +283,7 @@ class MetaPruner:
         if self.args.base_pr_model and self.args.inherit_pruned == "index":
             self.pruned_wg = self.pruned_wg_pr_model
             self.kept_wg = self.kept_wg_pr_model
-            self.logprint(
+            print(
                 "==> Inherit the pruned index from base_pr_model: '{}'".format(
                     self.args.base_pr_model
                 )
@@ -469,7 +461,7 @@ class MetaPruner:
         self.model = new_model
         print("MODEL PRUNING COMPLETE : META PRUNER")
         n_filter = self._get_n_filter(self.model)
-        self.logprint(n_filter)
+        print(n_filter)
 
     def _get_masks(self):
         """Get masks for unstructured pruning"""
@@ -480,4 +472,4 @@ class MetaPruner:
                 pruned = self.pruned_wg[name]
                 mask[pruned] = 0
                 self.mask[name] = mask.view_as(m.weight.data)
-        self.logprint("Get masks done for weight pruning")
+        print("Get masks done for weight pruning")
