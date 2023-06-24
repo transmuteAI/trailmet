@@ -6,32 +6,33 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = 'TrAILMET'
-copyright = '2023, deepak, rishabh'
-author = 'deepak, rishabh'
-release = 'v0.1'
-master_doc = 'index'
+project = "TrAILMET"
+copyright = "2023, deepak, rishabh"
+author = "deepak, rishabh"
+release = "v0.1"
+master_doc = "index"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
 
-
 import sys
 import os
+
 # import subprocess
 
 extensions = [
-    'sphinx.ext.duration',
-    'sphinx.ext.doctest',
-    'sphinx.ext.autodoc',
-    'sphinx.ext.autosummary',
-    'sphinx.ext.intersphinx',
-    'myst_parser', 'sphinx_design'
+    "sphinx.ext.duration",
+    "sphinx.ext.doctest",
+    "sphinx.ext.autodoc",
+    "sphinx.ext.autosummary",
+    "sphinx.ext.intersphinx",
+    "myst_parser",
+    "sphinx_design",
 ]
 
-templates_path = ['_templates']
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
+templates_path = ["_templates"]
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
 # sys.path.insert(0, os.path.abspath('../'))
 
@@ -43,6 +44,6 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = 'bizstyle'
+html_theme = "bizstyle"
 html_static_path = []
 html_logo = "source/imgs/Group 13.png"

@@ -5,6 +5,7 @@ import sys
 import torchvision
 from .dataset import BaseDataset
 
+
 class CIFAR10Dataset(BaseDataset):
     """
     `CIFAR10 <https://www.cs.toronto.edu/~kriz/cifar.html>`_ Dataset.
@@ -40,35 +41,45 @@ class CIFAR10Dataset(BaseDataset):
             default is True. If shuffle is true, there should be 'val' in split_types.
         random_seed (int): RandomState instance, default=None.
     """
-    def __init__(self, name=None, root=None,
-                 transform=None,
-                 target_transform=None,
-                 download=True,
-                 split_types = None,
-                 val_fraction = 0.2,
-                 shuffle=True,
-                 random_seed = None):
-        super(CIFAR10Dataset, self).__init__(name=name, root=root,
-                 transform=transform,
-                 target_transform=target_transform,
-                 download=download,
-                 split_types =split_types,
-                 val_fraction =val_fraction,
-                 shuffle=shuffle,
-                 random_seed=random_seed)
+
+    def __init__(
+        self,
+        name=None,
+        root=None,
+        transform=None,
+        target_transform=None,
+        download=True,
+        split_types=None,
+        val_fraction=0.2,
+        shuffle=True,
+        random_seed=None,
+    ):
+        super(CIFAR10Dataset, self).__init__(
+            name=name,
+            root=root,
+            transform=transform,
+            target_transform=target_transform,
+            download=download,
+            split_types=split_types,
+            val_fraction=val_fraction,
+            shuffle=shuffle,
+            random_seed=random_seed,
+        )
 
         dataset = torchvision.datasets.CIFAR10
         self.dataset_dict = {}
 
         for item in self.split_types:
             dataset_type = item
-            if item == 'val' and not self.val_exists:
+            if item == "val" and not self.val_exists:
                 self.dataset_dict[dataset_type] = None
-            data = dataset(root=self.root,
-                        train=(item !="test"),
-                        transform=self.transform[item],
-                        target_transform =self.target_transform[item],
-                        download=self.download)
+            data = dataset(
+                root=self.root,
+                train=(item != "test"),
+                transform=self.transform[item],
+                target_transform=self.target_transform[item],
+                download=self.download,
+            )
             self.dataset_dict[dataset_type] = data
 
     def build_dict_info(self):
@@ -80,14 +91,19 @@ class CIFAR10Dataset(BaseDataset):
         Returns:
             dataset_dict (dict): Updated with info key that contains details related to the data splits
         """
-        self.dataset_dict['info'] = {}
-        self.dataset_dict['info']['train_size'] = len(self.dataset_dict['train_sampler'])
-        self.dataset_dict['info']['val_size'] = len(self.dataset_dict['val_sampler'])
-        self.dataset_dict['info']['test_size'] = len(self.dataset_dict['test'])
-        self.dataset_dict['info']['note'] = 'Note that we use the CIFAR10 instance of torchvision for train and validation, ' \
-                                            'due to which the length of these will be displayed as 50000 when len() is invoked.' \
-                                            'For accurate details, extract information from the info keyword in this dict '
+        self.dataset_dict["info"] = {}
+        self.dataset_dict["info"]["train_size"] = len(
+            self.dataset_dict["train_sampler"]
+        )
+        self.dataset_dict["info"]["val_size"] = len(self.dataset_dict["val_sampler"])
+        self.dataset_dict["info"]["test_size"] = len(self.dataset_dict["test"])
+        self.dataset_dict["info"]["note"] = (
+            "Note that we use the CIFAR10 instance of torchvision for train and validation, "
+            "due to which the length of these will be displayed as 50000 when len() is invoked."
+            "For accurate details, extract information from the info keyword in this dict "
+        )
         return self.dataset_dict
+
 
 class CIFAR100Dataset(BaseDataset):
     """
@@ -125,22 +141,30 @@ class CIFAR100Dataset(BaseDataset):
             default is True. If shuffle is true, there should be 'val' in split_types.
         random_seed (int): RandomState instance, default=None.
     """
-    def __init__(self, name=None, root=None,
-                transform=None,
-                target_transform=None,
-                 download=True,
-                 split_types = None,
-                 val_fraction = 0.2,
-                 shuffle=True,
-                 random_seed = None):
-        super(CIFAR100Dataset, self).__init__(name=name, root=root,
-                 transform=transform,
-                 target_transform=target_transform,
-                 download=download,
-                 split_types =split_types,
-                 val_fraction =val_fraction,
-                 shuffle=shuffle,
-                 random_seed=random_seed)
+
+    def __init__(
+        self,
+        name=None,
+        root=None,
+        transform=None,
+        target_transform=None,
+        download=True,
+        split_types=None,
+        val_fraction=0.2,
+        shuffle=True,
+        random_seed=None,
+    ):
+        super(CIFAR100Dataset, self).__init__(
+            name=name,
+            root=root,
+            transform=transform,
+            target_transform=target_transform,
+            download=download,
+            split_types=split_types,
+            val_fraction=val_fraction,
+            shuffle=shuffle,
+            random_seed=random_seed,
+        )
 
         ## To do: chcek val_frac is float, else raise error
         ## To do: if shuffle is true, there should be 'val' in train test split
@@ -149,13 +173,15 @@ class CIFAR100Dataset(BaseDataset):
 
         for item in self.split_types:
             dataset_type = item
-            if item == 'val' and not self.val_exists:
+            if item == "val" and not self.val_exists:
                 self.dataset_dict[dataset_type] = None
-            data = dataset(root=self.root,
-                        train=(item !="test"),
-                        transform=self.transform[item],
-                        target_transform = self.target_transform[item],
-                        download=self.download)
+            data = dataset(
+                root=self.root,
+                train=(item != "test"),
+                transform=self.transform[item],
+                target_transform=self.target_transform[item],
+                download=self.download,
+            )
             self.dataset_dict[dataset_type] = data
 
     def build_dict_info(self):
@@ -167,15 +193,15 @@ class CIFAR100Dataset(BaseDataset):
         Returns:
             dataset_dict (dict): Updated with info key that contains details related to the data splits
         """
-        self.dataset_dict['info'] = {}
-        self.dataset_dict['info']['train_size'] = len(self.dataset_dict['train_sampler'])
-        self.dataset_dict['info']['val_size'] = len(self.dataset_dict['val_sampler'])
-        self.dataset_dict['info']['test_size'] = len(self.dataset_dict['test'])
-        self.dataset_dict['info']['note'] = 'Note that we use the CIFAR100 instance of torchvision for train and validation, ' \
-                                            'due to which the length of these will be displayed as 50000 when len() is invoked.' \
-                                            'For accurate details, extract information from the info keyword in this dict '
+        self.dataset_dict["info"] = {}
+        self.dataset_dict["info"]["train_size"] = len(
+            self.dataset_dict["train_sampler"]
+        )
+        self.dataset_dict["info"]["val_size"] = len(self.dataset_dict["val_sampler"])
+        self.dataset_dict["info"]["test_size"] = len(self.dataset_dict["test"])
+        self.dataset_dict["info"]["note"] = (
+            "Note that we use the CIFAR100 instance of torchvision for train and validation, "
+            "due to which the length of these will be displayed as 50000 when len() is invoked."
+            "For accurate details, extract information from the info keyword in this dict "
+        )
         return self.dataset_dict
-
-
-
-

@@ -3,7 +3,7 @@ from .resnet import get_resnet_model
 
 class ModelsFactory(object):
     @staticmethod
-    def create_model(name, num_classes=100, pretrained = False, **kwargs):
+    def create_model(name, num_classes=100, pretrained=False, **kwargs):
         """
         Returns the requested model, ready for training/pruning with the specified method
 
@@ -14,10 +14,10 @@ class ModelsFactory(object):
             model object
         """
 
-        if 'resnet' in name:
-            assert 'insize' in kwargs, "should provide input size"
-            insize = kwargs['insize']
-            model = get_resnet_model(name, num_classes, insize, pretrained = pretrained)
+        if "resnet" in name:
+            assert "insize" in kwargs, "should provide input size"
+            insize = kwargs["insize"]
+            model = get_resnet_model(name, num_classes, insize, pretrained=pretrained)
         else:
-            raise Exception("unknown model {}".format(kwargs['name']))
+            raise Exception("unknown model {}".format(kwargs["name"]))
         return model

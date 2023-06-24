@@ -1,11 +1,11 @@
-
 import torchvision
 from .dataset import BaseDataset
+
 
 class ImageNetDataset(BaseDataset):
     """
     ImageNet <http://image-net.org/>`_ 2012 Classification Dataset.
-    
+
     Parameters
     ----------
         name (string): dataset name 'ImageNet', default=None.
@@ -26,22 +26,30 @@ class ImageNetDataset(BaseDataset):
             default is True. If shuffle is true, there should be 'val' in split_types.
         random_seed (int): RandomState instance, default=None.
     """
-    def __init__(self, name=None, root=None,
-                transform=None,
-                target_transform=None,
-                 download=True,
-                 split_types = None,
-                 val_fraction = 0.2,
-                 shuffle=True,
-                 random_seed = None):
-        super(ImageNetDataset, self).__init__(name=name, root=root,
-                 transform=transform,
-                 target_transform=target_transform,
-                 download=download,
-                 split_types =split_types,
-                 val_fraction =val_fraction,
-                 shuffle=shuffle,
-                 random_seed=random_seed)
+
+    def __init__(
+        self,
+        name=None,
+        root=None,
+        transform=None,
+        target_transform=None,
+        download=True,
+        split_types=None,
+        val_fraction=0.2,
+        shuffle=True,
+        random_seed=None,
+    ):
+        super(ImageNetDataset, self).__init__(
+            name=name,
+            root=root,
+            transform=transform,
+            target_transform=target_transform,
+            download=download,
+            split_types=split_types,
+            val_fraction=val_fraction,
+            shuffle=shuffle,
+            random_seed=random_seed,
+        )
 
         ## To do: chcek val_frac is float, else raise error
         ## To do: if shuffle is true, there should be 'val' in train test split
@@ -49,14 +57,18 @@ class ImageNetDataset(BaseDataset):
         self.dataset_dict = {}
         for item in self.split_types:
             dataset_type = item + "_dataset"
-            if item == 'test':
-                data = dataset(root=self.root,
-                            split='val',
-                            transform=self.transform[item],
-                            target_transform=self.target_transform[item])
+            if item == "test":
+                data = dataset(
+                    root=self.root,
+                    split="val",
+                    transform=self.transform[item],
+                    target_transform=self.target_transform[item],
+                )
             else:
-                data = dataset(root=self.root,
-                            split='train',
-                            transform=self.transform[item],
-                            target_transform = self.target_transform[item])
+                data = dataset(
+                    root=self.root,
+                    split="train",
+                    transform=self.transform[item],
+                    target_transform=self.target_transform[item],
+                )
             self.dataset_dict[dataset_type] = data

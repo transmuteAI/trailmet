@@ -1,11 +1,11 @@
-'''
+"""
 React-birealnet-18(modified from resnet)
 
 BN setting: remove all BatchNorm layers
 Conv setting: original Conv2d
 Binary setting: both activation and weight are binarized
 
-'''
+"""
 
 
 import torch
@@ -15,21 +15,32 @@ import torch.nn.functional as F
 
 from .layers import *
 
+
 def conv3x3(in_planes, out_planes, stride=1):
     """3x3 convolution with padding"""
-    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=1, bias=False)
+    return nn.Conv2d(
+        in_planes, out_planes, kernel_size=3, stride=stride, padding=1, bias=False
+    )
+
 
 def conv1x1(in_planes, out_planes, stride=1):
     """1x1 convolution"""
     return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
 
+
 def binaryconv3x3(in_planes, out_planes, stride=1):
     """3x3 convolution with padding"""
-    return HardBinaryConv(in_planes, out_planes, kernel_size=3, stride=stride, padding=1)
+    return HardBinaryConv(
+        in_planes, out_planes, kernel_size=3, stride=stride, padding=1
+    )
+
 
 def binaryconv1x1(in_planes, out_planes, stride=1):
     """1x1 convolution"""
-    return HardBinaryConv(in_planes, out_planes, kernel_size=1, stride=stride, padding=0)
+    return HardBinaryConv(
+        in_planes, out_planes, kernel_size=1, stride=stride, padding=0
+    )
+
 
 class BasicBlock(nn.Module):
     expansion = 1
@@ -64,16 +75,20 @@ class BasicBlock(nn.Module):
 
         return out
 
-class BiRealNet(nn.Module):
 
+class BiRealNet(nn.Module):
     def __init__(self, block, layers, imagenet=True, num_classes=1000):
         super(BiRealNet, self).__init__()
         self.inplanes = 64
         if imagenet:
-            self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)
+            self.conv1 = nn.Conv2d(
+                3, 64, kernel_size=7, stride=2, padding=3, bias=False
+            )
             self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         else:
-            self.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
+            self.conv1 = nn.Conv2d(
+                3, 64, kernel_size=3, stride=1, padding=1, bias=False
+            )
             self.maxpool = nn.Identity()
 
         self.layer1 = self._make_layer(block, 64, layers[0])
@@ -116,9 +131,6 @@ class BiRealNet(nn.Module):
 
 
 def birealnet18(pretrained=False, **kwargs):
-    """Constructs a BiRealNet-18 model. """
+    """Constructs a BiRealNet-18 model."""
     model = BiRealNet(BasicBlock, [4, 4, 4, 4], **kwargs)
     return model
-
-
-

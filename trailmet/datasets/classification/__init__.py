@@ -6,11 +6,13 @@ from .cifar import CIFAR10Dataset, CIFAR100Dataset
 from .imagenet import ImageNetDataset
 from .chest import ChestDataset
 
+
 class DatasetFactory(object):
     """
     This class forms the generic wrapper for the different dataset classes. The module includes utilities to load datasets,
     including methods to load and fetch popular reference datasets.
     """
+
     @staticmethod
     def create_dataset(**kwargs):
         """
@@ -22,16 +24,16 @@ class DatasetFactory(object):
         Return:
             dataset(tuple): dataset
         """
-        assert 'name' in kwargs, "should provide dataset name"
-        name = kwargs['name']
-        assert 'root' in kwargs, "should provide dataset root"
-        if 'CIFAR10' == name:
+        assert "name" in kwargs, "should provide dataset name"
+        name = kwargs["name"]
+        assert "root" in kwargs, "should provide dataset root"
+        if "CIFAR10" == name:
             obj_dfactory = CIFAR10Dataset(**kwargs)
-        elif 'CIFAR100' == name:
+        elif "CIFAR100" == name:
             obj_dfactory = CIFAR100Dataset(**kwargs)
-        elif 'ImageNet' == name:
+        elif "ImageNet" == name:
             obj_dfactory = ImageNetDataset(**kwargs)
-        elif 'CHEST' == name:
+        elif "CHEST" == name:
             obj_dfactory = ChestDataset(**kwargs)
         else:
             raise Exception(f"unknown dataset{kwargs['name']}")
