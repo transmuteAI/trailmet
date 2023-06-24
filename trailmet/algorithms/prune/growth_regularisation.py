@@ -1,42 +1,33 @@
-import os
-pjoin = os.path.join
-import numpy as np
-import pandas as pd
-import sys
-sys.path.append("../../")
-sys.path.append("../../../")
-sys.path.append("../../../../")
-
 import torch
-import torch.optim as optim
 import torch.nn as nn
-import torch.nn.parallel
 import torch.utils.data
-import torch.utils.data.distributed
 import torchvision.models as models
 
-from trailmet.algorithms.utils import strlist_to_list
-from trailmet.algorithms.prune.prune import BasePruning
-from trailmet.algorithms.utils import Logger
 from trailmet.algorithms.prune.pruner import pruner_dict
-from tqdm import tqdm as tqdm_notebook
+from trailmet.algorithms.prune.prune import BasePruning
+
+import logging
+from datetime import datetime
+from tqdm import tqdm
+import wandb
+import pandas as pd
 import numpy as np
+import os
+import time
 
+from trailmet.utils import (
+    AverageMeter,
+    accuracy,
+    save_checkpoint,
+    strlist_to_list,
+    adjust_learning_rate,
+)
 
-def adjust_learning_rate(optimizer, epoch, num_epochs, scheduler_type, lr):
-    """Sets the learning rate to the initial LR decayed by 2 every 30 epochs"""
-    if scheduler_type==1:
-        new_lr = lr * (0.3 ** (epoch // 30))
-        for param_group in optimizer.param_groups:
-            param_group['lr'] = new_lr
-    else:
-        if epoch in [num_epochs*0.5, num_epochs*0.75]:
-            for param_group in optimizer.param_groups:
-                param_group['lr'] *= 0.1
+logger = logging.getLogger(__name__)
+
 
 def is_single_branch(name):
     return False
-
 
 
 class Growth_Regularisation(BasePruning):
@@ -48,326 +39,414 @@ class Growth_Regularisation(BasePruning):
     For methods that require to perform pretraining and fine-tuning, the implementation of base_train() method can
     directly be used for both the tasks. In case of modifications, overwrite this function based on the needs.
     """
-    def __init__(self,**kwargs):
-        self.device = 'cuda'
-        if os.path.exists('logs') is False:
-            os.mkdir('logs')
-#         if os.path.exists('checkpoints') is False:
-#             os.mkdir('checkpoints_1')
-        class cfg:
-            data = ''
-            dataset = 'cifar100'
-            arch = 'resnet50'
-            workers = 2
-            epochs = 125
-            start_epoch = 0
-            batch_size = 256
-            lr = 1e-1
-            momentum = 0.9
-            weight_decay = 1e-4
-            wd = 1e-4
-            print_freq = 100
-            prune_ratio = 0.5
-            log_name = 'r50_50_c100'
-            resume = ''
-            evaluate = True
-            pretrained = False
-            world_size = -1
-            rank = -1
-            dist_url = None
-            dist_backend = None
-            seed = 42
-            gpu = 0
 
-            project_name = "TrAIL"
-            debug = False
-            screen_print = False
-            note = " "
-            print_interval = 100
-            test_interval = 2000
-            plot_interval = 1e+8
-            save_interval = 2000
-            params_json = ''
+    def __init__(self, model, dataloaders, **kwargs):
+        self.device = "cuda"
+        self.train_loader = dataloaders["train"]
+        self.val_loader = dataloaders["val"]
+        self.test_loader = dataloaders["test"]
+        self.model = model
+        self.kwargs = kwargs
+        self.dataset = self.kwargs.get("DATASET", "c100")
+        self.num_classes = self.kwargs.get("num_classes", 100)
+        self.label_smooth = self.kwargs.get("label_smooth", 0.1)
+        self.pretrained = self.kwargs.get("pretrained", "")
+        self.resume = self.kwargs.get("resume", "False")
+        self.epochs = self.kwargs.get("epoch", "120")
+        self.weight_decay = self.kwargs.get("weight_decay", 0)
+        self.learning_rate = self.kwargs.get("learning_rate", 0.001)
+        self.stage_pr = self.kwargs.get("stage_pr", None)
+        self.skip_layers = self.kwargs.get("skip_layers", None)
+        self.base_pr_model = self.kwargs.get("base_pr_model", None)
+        self.base_model_path = self.kwargs.get("base_model_path", None)
+        self.momentum = self.kwargs.get("momentum", 0.9)
+        self.save = self.kwargs.get("save", "./checkpoint")
+        self.method = self.kwargs.get("method", "GReg-1")
 
-            resume_path = None
-            directly_ft_weights = None
-            base_model_path = 'r50_50_c100.pth'
-            start_epoch = 0
+        self.wandb_monitor = self.kwargs.get("wandb", "False")
+        self.dataset_name = dataloaders["train"].dataset.__class__.__name__
 
-            method = 'GReg-1'
-            stage_pr = "[0.5,0.5,0.5,0.5,0.5,0.5]"
-            skip_layers = ""
-            lr_ft = {"0":0.01,"60":0.001,"90":0.0001}
-            data_path = "./data"
-            wg = "filter"
-            pick_pruned = "min"
-            reinit = ""
-            use_bn = True
-            block_loss_grad = False
-            save_mag_reg_log = False
-            save_order_log = False
-            mag_ratio_limit = 1000
-            base_pr_model = None
-            inherit_pruned = 'index'
-            model_noise_std =  0
-            model_noise_sum = 10
-            orcal_pruning = False
-            ft_in_oracle_pruning = False
-        #     check_jsv_loop = 0
+        self.name = "_".join(
+            [
+                self.dataset_name,
+                f"{self.epochs}",
+                f"{self.learning_rate}",
+                datetime.now().strftime("%b-%d_%H:%M:%S"),
+            ]
+        )
 
-            batch_size_prune = 256
-            lr_prune = 1e-3
-            update_reg_interval = 1
-            stabilize_reg_interval = 1
-            reg_upper_limit = 1e-4
-            reg_upper_limit_pick = 1e-2
-            reg_granularity_pick = 1e-5
-            reg_granularity_prune = 2e-4
-            reg_granularity_recover = 1e-4
+        os.makedirs(f"{os.getcwd()}/logs/Growth_Regularisation", exist_ok=True)
+        os.makedirs(self.save, exist_ok=True)
+        self.logger_file = f"{os.getcwd()}/logs/Growth_Regularisation/{self.name}.log"
 
-            copy_bn_w = True
-            copy_bn_b = True
-            reg_multiplier = 1
-        self.args = cfg()
-        self.args.arch = kwargs.get('arch','resnet50')
-        self.args.num_classes = kwargs.get('num_classes',100)
-        self.args.dataset = kwargs.get('dataset','cifar100')
-        self.args.epochs = kwargs.get('epochs',125)
-        self.args.lr = kwargs.get('lr',1e-1)
-        self.args.momentum = kwargs.get('momentum',0.9)
-        self.args.weight_decay = kwargs.get('weight_decay',1e-4)
-        self.args.wd = kwargs.get('wd',1e-4)
-        self.args.prune_ratio = kwargs.get('prune_ratio',0.5)
-        self.args.method = 'GReg-1'
-        self.args.stage_pr = kwargs.get('stage_pr',"[0.5,0.5,0.5,0.5,0.5,0.5]")
-        self.args.reg_upper_limit = kwargs.get('reg_upper_limit', 1e-4)
-        self.args.reg_upper_pick = kwargs.get('reg_upper_pick', 1e-2)
-        self.args.reg_granularity_pick  = kwargs.get('reg_granularity_pick' , 1e-5)
-        self.args.reg_granularity_prune = kwargs.get('reg_granularity_prune',2e-4)
-        self.args.reg_granularity_recover = kwargs.get('reg_granularity_recover',1e-4)
-        global logger  
-        logger = Logger(self.args)
-        global logprint
-        logprint = logger.log_printer.logprint
-        global accprint
-        accprint = logger.log_printer.accprint
-        global netprint
-        netprint = logger.netprint
-        if self.args.stage_pr:
-#             if is_single_branch(self.args.arch): # e.g., alexnet, vgg
-#                 self.args.stage_pr = parse_prune_ratio_vgg(self.args.stage_pr, num_layers=num_layers[self.args.arch]) # example: [0-4:0.5, 5:0.6, 8-10:0.2]
-#                 self.args.skip_layers = strlist_to_list(self.args.skip_layers, str) # example: [0, 2, 6]
-#             else: # e.g., resnet
-            self.args.stage_pr = strlist_to_list(self.args.stage_pr, float) # example: [0, 0.4, 0.5, 0]
-            self.args.skip_layers = strlist_to_list(self.args.skip_layers, str) # example: [2.3.1, 3.1]
+        logging.basicConfig(
+            filename=self.logger_file,
+            format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+            datefmt="%m/%d/%Y %H:%M:%S",
+            level=logging.INFO,
+        )
+
+        logger.info(f"Experiment Arguments: {self.kwargs}")
+
+        if self.wandb_monitor:
+            wandb.init(project="Trailmet Growth_Regularisation", name=self.name)
+            wandb.config.update(self.kwargs)
+
+        if self.stage_pr:
+            self.stage_pr = strlist_to_list(
+                self.stage_pr, float
+            )  # example: [0, 0.4, 0.5, 0]
+            self.skip_layers = strlist_to_list(
+                self.skip_layers, str
+            )  # example: [2.3.1, 3.1]
         else:
-            assert self.args.base_pr_model, 'If stage_pr is not provided, base_pr_model must be provided'
-            
+            assert (
+                self.base_pr_model
+            ), "If stage_pr is not provided, base_pr_model must be provided"
 
-        
-        
-        
-    def compress_model(self,dataloaders) -> None:
+    def compress_model(self, dataloaders) -> None:
         """Template function to be overwritten for each model compression method"""
 
-        self.args.epochs = 1
-        model = getattr(models, self.args.arch)(num_classes=self.args.num_classes)
-        model.conv1 = torch.nn.Conv2d(
-            3, 64, kernel_size=3, stride=1, padding=1, bias=False
-        )
-        model.maxpool = torch.nn.Identity()
-        model = self.base_train(self.args,model,dataloaders,fine_tune = False)
-        self.args.log_name = f"{self.args.arch}_{self.args.dataset}_{self.args.prune_ratio}_pruned"
-        self.prune_and_finetune(self.args,dataloaders)
+        self.epochs = 1
 
-    def prune_and_finetune(self,args,dataloader):
-        model = getattr(models, args.arch)(num_classes=args.num_classes)
-        # to get better result on cifar10
-        model.conv1 = torch.nn.Conv2d(
-            3, 64, kernel_size=3, stride=1, padding=1, bias=False
-        )
-        model.maxpool = torch.nn.Identity()
-        torch.cuda.set_device(args.gpu)
-        model = model.cuda(args.gpu)
-        
-        if args.base_model_path:
-#         ckpt = torch.load(args.base_model_path)
-#         if 'model' in ckpt:
-#             model = ckpt['model']
-#         model.load_state_dict(ckpt['state_dict'])
-            X = torch.load(args.base_model_path)
-            X1 = X['state_dict']
+        self.model.maxpool = torch.nn.Identity()
+        self.model = self.base_train(self.model, dataloaders, fine_tune=False)
+
+        self.prune_and_finetune(self.kwargs, dataloaders)
+
+    def prune_and_finetune(self, args, dataloader):
+        """Prune and finetune the model"""
+
+        # if self.base_model_path != None:
+        if 0:
+            X = torch.load(self.base_model_path)
+            X1 = X["state_dict"]
             L = list(X1.keys())
             for key in L:
-                new_key = key.replace('model.','')
+                new_key = key.replace("model.", "")
                 X1[new_key] = X1.pop(key)
-            model.load_state_dict(X1)
-            #print(validate(val_loader,  model, nn.CrossEntropyLoss().cuda(args.gpu),args))
-            logprint("==> Load pretrained model successfully: '%s'" % args.base_model_path)
-        
-        
-        criterion = nn.CrossEntropyLoss().cuda(args.gpu)
+            self.model.load_state_dict(X1)
+            print("==> Load pretrained model successfully: '%s'" % self.base_model_path)
+            logger.info(
+                "==> Load pretrained model successfully: '%s'" % self.base_model_path
+            )
 
-        optimizer = torch.optim.SGD(model.parameters(), args.lr,
-                                momentum=args.momentum,
-                                weight_decay=args.weight_decay) 
-        prune_state, pruner = '', None
-        if prune_state != 'finetune':
-            class passer: pass # to pass arguments
-#             passer.test = validate
-#             passer.finetune = finetune
-            passer.train_loader = dataloader['train']
-            passer.test_loader = dataloader['val']
-            passer.save = self.save_model
+        criterion = nn.CrossEntropyLoss()
+
+        optimizer = torch.optim.SGD(
+            self.model.parameters(),
+            self.learning_rate,
+            momentum=self.momentum,
+            weight_decay=self.weight_decay,
+        )
+        prune_state, pruner = "", None
+        if prune_state != "finetune":
+
+            class passer:
+                pass  # to pass arguments
+
+            passer.train_loader = dataloader["train"]
+            passer.test_loader = dataloader["val"]
+            passer.save = save_checkpoint
             passer.criterion = criterion
             passer.train_sampler = None
             passer.pruner = pruner
-            passer.args = args
+            passer.args = self.kwargs
             passer.is_single_branch = is_single_branch
-            pruner = pruner_dict[args.method].Pruner(model, args, logger, passer)
-            if(args.method == 'L1'):
-                model  = pruner.prune()
-                print("**Saving model without key**")
+            pruner = pruner_dict[self.method](self.model, self.kwargs, logger, passer)
+            if self.method == "L1":
+                model = pruner.prune()
+                print("==> Saving model without key <==")
                 print(model)
-                torch.save({
-                            "arch" : args.arch,
-                            "model" : model,
-                            "state_dict" : model.state_dict(),
-                            }, f"{args.log_name}.pth")  
+                save_checkpoint(
+                    {
+                        "arch": args.arch,
+                        "model": model,
+                        "state_dict": model.state_dict(),
+                    },
+                    False,
+                    self.save,
+                )
             else:
-                pruning_key , model = pruner.prune() # get the pruned model
-                #print(model)
-                print("**Saving model with key**")
+                pruning_key, model = pruner.prune()  # get the pruned model
+                print("==> Saving model with key <==")
                 print(model)
-                torch.save({
-                            "arch" : args.arch,
-                            "model" : model,
-                            "state_dict" : model.state_dict(),
-                            "pruning_key" : pruning_key,
-                            }, f"{args.log_name}.pth") 
-        self.base_train(args,model,dataloader,pruning_key)
-        
+                save_checkpoint(
+                    {
+                        "arch": args.arch,
+                        "model": model,
+                        "state_dict": model.state_dict(),
+                        "pruning_key": pruning_key,
+                    },
+                    False,
+                    self.save,
+                )
+        self.base_train(model, dataloader, pruning_key)
 
-    def base_train(self, args, model, dataloaders,fine_tune = False):
+    def base_train(self, model, dataloaders, fine_tune=False):
         """
         This function is used to perform standard model training and can be used for various purposes, such as model
         pretraining, fine-tuning of compressed models, among others. For cases, where base_train is not directly
         applicable, feel free to overwrite wherever this parent class is inherited.
         """
-        num_epochs = args.epochs
-        best_acc = 0    # setting to lowest possible value
-        lr = args.lr 
+        best_top1_acc = 0  # setting to lowest possible value
         scheduler_type = 1
-        weight_decay = 1e-4
         self.pr = None
-        optimizer = optim.SGD(model.parameters(), lr=lr, weight_decay=weight_decay)
+        optimizer = torch.optim.SGD(
+            model.parameters(),
+            lr=self.learning_rate,
+            momentum=self.momentum,
+            weight_decay=self.weight_decay,
+        )
         ###########################
-        model = model.to(self.device)
+
+        self.model.to(self.device)
         criterion = nn.CrossEntropyLoss()
-        train_losses = []
-        valid_losses = []
-        valid_accuracy = []
-        
- 
-        for epoch in range(args.epochs):
-            print("EPOCH NUMBER " , epoch)
-            adjust_learning_rate(optimizer, epoch, num_epochs, scheduler_type, lr)
-            t_loss = self.train_one_epoch(model, dataloaders['train'], criterion, optimizer)
-      
-            acc, v_loss = self.test(model, dataloaders['val'], criterion)
-            if acc > best_acc:
-                if self.pr is not None:  
-                    print("**Saving model with key**")
-                    best_acc=acc
-                    torch.save({
-                        "epoch": epoch + 1,
-                        "state_dict" : model.state_dict(),
-                        "pruning_key" : self.pr,
-                        "acc" : best_acc,
-                    }, f"{args.log_name}.pth")
+        epochs_list = []
+        val_top1_acc_list = []
+        val_top5_acc_list = []
+
+        for epoch in range(self.epochs):
+            adjust_learning_rate(
+                optimizer, epoch, self.epochs, scheduler_type, self.learning_rate
+            )
+
+            t_loss = self.train_one_epoch(
+                model,
+                dataloaders["train"],
+                criterion,
+                optimizer,
+                epoch,
+            )
+
+            valid_loss, valid_top1_acc, valid_top5_acc = self.test(
+                model,
+                dataloaders["val"],
+                criterion,
+                epoch,
+            )
+
+            is_best = False
+            if valid_top1_acc > best_top1_acc:
+                best_top1_acc = valid_top1_acc
+                is_best = True
+
+                if self.pr is not None:
+                    print("==> Saving model with key <==")
+                    logger.info("==> Saving model with key <==")
+                    save_checkpoint(
+                        {
+                            "epoch": epoch,
+                            "state_dict": model.state_dict(),
+                            "best_top1_acc": best_top1_acc,
+                            "pruning_key": self.pr,
+                            "optimizer": optimizer.state_dict(),
+                        },
+                        is_best,
+                        self.save,
+                    )
+
                 else:
-                    print("**Saving model**")
-                    best_acc=acc
-                    torch.save({
-                        "epoch": epoch + 1,
-                        "state_dict" : model.state_dict(),
-                        "acc" : best_acc,
-                    }, f"{args.log_name}.pth")                       
+                    print("==> Saving model without key <==")
+                    logger.info("==> Saving model without key <==")
+                    save_checkpoint(
+                        {
+                            "epoch": epoch,
+                            "state_dict": model.state_dict(),
+                            "best_top1_acc": best_top1_acc,
+                            "pruning_key": self.pr,
+                            "optimizer": optimizer.state_dict(),
+                        },
+                        is_best,
+                        self.save,
+                    )
 
-            train_losses.append(t_loss)
-            valid_losses.append(v_loss)
-            valid_accuracy.append(acc)
-            df_data=np.array([train_losses, valid_losses, valid_accuracy]).T
-            df = pd.DataFrame(df_data, columns = ['train_losses','valid_losses','valid_accuracy'])
-            df.to_csv(f'logs/{args.log_name}.csv')
+                if self.wandb_monitor:
+                    wandb.log({"best_top1_acc": best_top1_acc})
 
-    
+                epochs_list.append(epoch)
+                val_top1_acc_list.append(valid_top1_acc.cpu().numpy())
+                val_top5_acc_list.append(valid_top5_acc.cpu().numpy())
 
-    def get_optimizer(self, optimizer_name: str, model, lr, weight_decay):
-        """returns the optimizer with the given name"""
-        if optimizer_name == 'SGD':
-            optimizer = optim.SGD(model.parameters(), lr=lr, weight_decay=weight_decay)
-        if optimizer_name == 'Adam':
-            optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
-        else:
-            raise ValueError('Unknown optimizer: %s' % optimizer_name)
-        return optimizer
+                df_data = np.array(
+                    [
+                        epochs_list,
+                        val_top1_acc_list,
+                        val_top5_acc_list,
+                    ]
+                ).T
+                df = pd.DataFrame(
+                    df_data,
+                    columns=[
+                        "Epochs",
+                        "Validation Top1",
+                        "Validation Top5",
+                    ],
+                )
+                df.to_csv(
+                    f"{os.getcwd()}/logs/Growth_Regularisation/{self.name}.csv",
+                    index=False,
+                )
 
-    def train_one_epoch(self, model, dataloader, loss_fn, optimizer, extra_functionality = None):
+        return model
+
+    def train_one_epoch(
+        self,
+        model,
+        dataloader,
+        loss_fn,
+        optimizer,
+        epoch,
+        extra_functionality=None,
+    ):
         """standard training loop which can be used for various purposes with an extra functionality function to add to its working at the end of the loop."""
         model.train()
-        counter = 0
-        tk1 = tqdm_notebook(dataloader, total=len(dataloader))
-        running_loss = 0
-        for x_var, y_var in tk1:
-            counter +=1
-            x_var = x_var.to(device=self.device)
-            y_var = y_var.to(device=self.device)
-            scores = model(x_var)
 
-            loss = loss_fn(scores, y_var)
-            running_loss+=loss.item()
-            tk1.set_postfix(loss=running_loss/counter)
+        batch_time = AverageMeter("Time", ":6.3f")
+        data_time = AverageMeter("Data", ":6.3f")
+        losses = AverageMeter("Loss", ":.4e")
+
+        end = time.time()
+
+        epoch_iterator = tqdm(
+            dataloader,
+            desc="Training Epoch [X] (X / X Steps) (batch time=X.Xs) (data time=X.Xs) (loss=X.X)",
+            bar_format="{l_bar}{r_bar}",
+            dynamic_ncols=True,
+            disable=False,
+        )
+
+        for i, (images, labels) in enumerate(epoch_iterator):
+            data_time.update(time.time() - end)
+            images = images.to(device=self.device)
+            labels = labels.to(device=self.device)
+            scores = model(images)
+
+            loss = loss_fn(scores, labels)
+            n = images.size(0)
+            losses.update(loss.item(), n)
+
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+
+            batch_time.update(time.time() - end)
+            end = time.time()
+
+            epoch_iterator.set_description(
+                "Training Epoch [%d] (%d / %d Steps) (batch time=%2.5fs) (data time=%2.5fs) (loss=%2.5f)"
+                % (
+                    epoch,
+                    (i + 1),
+                    len(dataloader),
+                    batch_time.val,
+                    data_time.val,
+                    losses.val,
+                )
+            )
+
+            logger.info(
+                "Training Epoch [%d] (%d / %d Steps) (batch time=%2.5fs) (data time=%2.5fs) (loss=%2.5f)"
+                % (
+                    epoch,
+                    (i + 1),
+                    len(dataloader),
+                    batch_time.val,
+                    data_time.val,
+                    losses.val,
+                )
+            )
+
+            if self.wandb_monitor:
+                wandb.log(
+                    {
+                        f"train_loss": losses.val,
+                    }
+                )
+
             if extra_functionality is not None:
                 extra_functionality()
-        return running_loss/counter
 
-    def test(self, model, dataloader, loss_fn):
+        return losses.avg
+
+    def test(self, model, dataloader, loss_fn=None, epoch=0):
         """This method is used to test the performance of the trained model."""
+
         model.eval()
-        counter = 0
-        tk1 = tqdm_notebook(dataloader, total=len(dataloader))
-        running_loss = 0
-        running_acc = 0
-        total = 0
+        model.to(self.device)
+
+        batch_time = AverageMeter("Time", ":6.3f")
+        losses = AverageMeter("Loss", ":.4e")
+        top1 = AverageMeter("Acc@1", ":6.2f")
+        top5 = AverageMeter("Acc@5", ":6.2f")
+
+        epoch_iterator = tqdm(
+            dataloader,
+            desc="Validating Epoch [X] (X / X Steps) (batch time=X.Xs) (loss=X.X) (top1=X.X) (top5=X.X)",
+            bar_format="{l_bar}{r_bar}",
+            dynamic_ncols=True,
+            disable=False,
+        )
+
         with torch.no_grad():
-            for x_var, y_var in tk1:
-                counter +=1
-                x_var = x_var.to(device=self.device)
-                y_var = y_var.to(device=self.device)
-                scores = model(x_var)
-                loss = loss_fn(scores, y_var)
-                _, scores = torch.max(scores.data, 1)
-                y_var = y_var.cpu().detach().numpy()
-                scores = scores.cpu().detach().numpy()
+            end = time.time()
+            for i, (images, targets) in enumerate(epoch_iterator):
+                images = images.to(self.device)
+                targets = targets.to(self.device)
+                outputs = model(images)
+                pred1, pred5 = accuracy(outputs, targets, topk=(1, 5))
 
-                correct = (scores == y_var).sum().item()
-                running_loss+=loss.item()
-                running_acc+=correct
-                total+=scores.shape[0]
-                tk1.set_postfix(loss=running_loss/counter, acc=running_acc/total)
-        return running_acc/total, running_loss/counter
-    def save_model(self,state, is_best=False, mark=''):
-        print(logger.weights_path , state['acc1'] , state['acc5'] )
-        out = pjoin(logger.weights_path, "checkpoint.pth")
-        torch.save(state, out)
-        if is_best:
-            out_best = pjoin(logger.weights_path, "checkpoint_best.pth")
-            torch.save(state, 'ft_r50_9375_c100.pth')
-        if mark:
-            out_mark = pjoin(logger.weights_path, "checkpoint_{}.pth".format(mark))
-            torch.save(state, out_mark)
+                if loss_fn is not None:
+                    loss = loss_fn(outputs, targets)
 
+                n = images.size(0)
+                losses.update(loss.item(), n)
+                top1.update(pred1[0], n)
+                top5.update(pred5[0], n)
+
+                # measure elapsed time
+                batch_time.update(time.time() - end)
+                end = time.time()
+
+                epoch_iterator.set_description(
+                    "Validating Epoch [%d] (%d / %d Steps) (batch time=%2.5fs) (loss=%2.5f) (top1=%2.5f) (top5=%2.5f)"
+                    % (
+                        epoch,
+                        (i + 1),
+                        len(dataloader),
+                        batch_time.val,
+                        losses.val,
+                        top1.val,
+                        top5.val,
+                    )
+                )
+
+                logger.info(
+                    "Validating Epoch [%d] (%d / %d Steps) (batch time=%2.5fs) (loss=%2.5f) (top1=%2.5f) (top5=%2.5f)"
+                    % (
+                        epoch,
+                        (i + 1),
+                        len(dataloader),
+                        batch_time.val,
+                        losses.val,
+                        top1.val,
+                        top5.val,
+                    )
+                )
+
+                if self.wandb_monitor:
+                    wandb.log(
+                        {
+                            f"val_loss": losses.val,
+                            f"val_top1_acc": top1.val,
+                            f"val_top5_acc": top5.val,
+                        }
+                    )
+
+            print(
+                " * acc@1 {top1.avg:.3f} acc@5 {top5.avg:.3f}".format(
+                    top1=top1, top5=top5
+                )
+            )
+
+        return losses.avg, top1.avg, top5.avg

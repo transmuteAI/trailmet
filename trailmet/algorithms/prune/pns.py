@@ -22,7 +22,14 @@ from .utils import (
 SHORTCUTS_MERGE_OR = "or"
 SHORTCUTS_MERGE_AND = "and"
 
-__all__ = ['ChannelRounding', 'Conv2dWrapper', 'LinearWrapper', 'BN2dWrapper', 'SlimPruner']
+__all__ = [
+    "ChannelRounding",
+    "Conv2dWrapper",
+    "LinearWrapper",
+    "BN2dWrapper",
+    "SlimPruner",
+]
+
 
 class ChannelRounding(Enum):
     NONE = "none"
