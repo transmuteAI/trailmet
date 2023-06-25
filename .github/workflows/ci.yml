@@ -30,14 +30,9 @@ jobs:
         id: action_black
         with:
           black_args: "."
-      - name: Get base branch
-        id: vars
-        run: |
-           base_ref=${{ github.head_ref || github.ref }}
-           echo ::set-output name=base_branch::${base_ref#refs/*/}
       - name: Create Pull Request
         if: steps.action_black.outputs.is_formatted == 'true'
-        uses: peter-evans/create-pull-request@v3
+        uses: peter-evans/create-pull-request@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           title: "Format Python code with psf/black push"
@@ -45,6 +40,6 @@ jobs:
           body: |
             There appear to be some python formatting errors in ${{ github.sha }}. This pull request
             uses the [psf/black](https://github.com/psf/black) formatter to fix these issues.
-          base: ${{ steps.vars.outputs.base_branch }} # Creates pull request onto pull request or commit branch
+          base: ${{ github.head_ref }} # Creates pull request onto pull request or commit branch
           branch: actions/black
           delete-branch: true
