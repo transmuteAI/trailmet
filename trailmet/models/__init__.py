@@ -54,10 +54,12 @@ class ModelsFactory(object):
                 model = get_resnet_model(
                     name, num_classes, insize=insize, pretrained=pretrained
                 )
-            
+
             elif version == "chip":
                 assert "sparsity" in kwargs, "should provide sparsity for chip"
-                model = resnet_50_chip(sparsity=eval(kwargs["sparsity"]), num_classes=num_classes)
+                model = resnet_50_chip(
+                    sparsity=eval(kwargs["sparsity"]), num_classes=num_classes
+                )
             elif version == "bireal":
                 assert "insize" in kwargs, "should provide input size"
                 insize = kwargs["insize"]
