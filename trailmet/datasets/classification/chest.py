@@ -1,5 +1,5 @@
 # importing the required packages
-from .dataset import BaseDataset 
+from .dataset import BaseDataset
 from PIL import Image
 import os
 import numpy as np
@@ -8,8 +8,6 @@ import torch
 from torch.utils.data import Dataset
 import gdown
 import zipfile
-
-
 
 
 class Chest(Dataset):
@@ -46,37 +44,45 @@ class Chest(Dataset):
             default is True. If shuffle is true, there should be 'val' in split_types.
         random_seed (int): RandomState instance, default=None.
     """
-    def __init__(self, root=None,
-                 subname='atelectasis',
-                 transform=None,
-                 target_transform=None,
-                 mode='train',
-                 download=True,
-                ):
 
+    def __init__(
+        self,
+        root=None,
+        subname="atelectasis",
+        transform=None,
+        target_transform=None,
+        mode="train",
+        download=True,
+    ):
         self._image_paths = []
         self._labels = []
         self._mode = mode
         self.transform = transform
         self.target_transform = target_transform
-        self.dict = [{'1.0': 1, '': 0, '0.0': 0, '-1.0': 2},
-                     {'1.0': 1, '': 0, '0.0': 0, '-1.0': 1}, ]
+        self.dict = [
+            {"1.0": 1, "": 0, "0.0": 0, "-1.0": 2},
+            {"1.0": 1, "": 0, "0.0": 0, "-1.0": 1},
+        ]
 
         if mode == "train":
             label_path = os.path.join(root, "train.csv")
             total_files = 224316
         elif mode == "test":
-            label_path = os.path.join(root, "valid.csv") # using valid.csv in testing mode
+            label_path = os.path.join(
+                root, "valid.csv"
+            )  # using valid.csv in testing mode
             total_files = 234
-        
+
         with open(label_path) as f:
-            header = f.readline().strip('\n').split(',')
+            header = f.readline().strip("\n").split(",")
             for i, value in enumerate(header):
-                if subname == value.lower() or (subname == "effusion" and value.split(" ")[-1].lower() == subname):
+                if subname == value.lower() or (
+                    subname == "effusion" and value.split(" ")[-1].lower() == subname
+                ):
                     subname_index = i
 
             for line in tqdm(f, desc="Loading {} data".format(mode), total=total_files):
-                fields = line.strip('\n').split(',')
+                fields = line.strip("\n").split(",")
                 image_path = os.path.join(root, "/".join(fields[0].split("/")[1:]))
                 if subname in ["atelectasis", "edema"]:
                     value = fields[subname_index]
@@ -87,7 +93,7 @@ class Chest(Dataset):
 
                 self._image_paths.append(image_path)
                 assert os.path.exists(image_path), image_path
-        self._num_image = len(self._image_paths)        
+        self._num_image = len(self._image_paths)
 
     def __len__(self):
         return self._num_image
@@ -103,53 +109,69 @@ class Chest(Dataset):
 
         path = self._image_paths[idx]
 
-        if self._mode == 'train' or self._mode == 'val' or self._mode == 'test':
+        if self._mode == "train" or self._mode == "val" or self._mode == "test":
             return (image, label)
-        elif self._mode == 'heatmap':
+        elif self._mode == "heatmap":
             return (image, path, label)
         else:
-            raise Exception('Unknown mode : {}'.format(self._mode))
+            raise Exception("Unknown mode : {}".format(self._mode))
+
 
 class ChestDataset(BaseDataset):
-    def __init__(self, name=None, root=None,
-                 transform=None,
-                 subname='atelectasis',
-                 target_transform=None,
-                 download=True,
-                 split_types = None,
-                 val_fraction = 0.2,
-                 shuffle=True,
-                 random_seed = None):
-        super(ChestDataset, self).__init__(name=name, root=root,
-                 transform=transform,
-                 target_transform=target_transform,
-                 download=download,
-                 split_types =split_types,
-                 val_fraction =val_fraction,
-                 shuffle=shuffle,
-                 random_seed=random_seed)
+    def __init__(
+        self,
+        name=None,
+        root=None,
+        transform=None,
+        subname="atelectasis",
+        target_transform=None,
+        download=True,
+        split_types=None,
+        val_fraction=0.2,
+        shuffle=True,
+        random_seed=None,
+    ):
+        super(ChestDataset, self).__init__(
+            name=name,
+            root=root,
+            transform=transform,
+            target_transform=target_transform,
+            download=download,
+            split_types=split_types,
+            val_fraction=val_fraction,
+            shuffle=shuffle,
+            random_seed=random_seed,
+        )
 
         os.makedirs(root, exist_ok=True)
         final_path = os.path.join(root, "CheXpert-v1.0-small")
 
         if not os.path.exists(final_path + "/train.csv"):
             print(f"Chest dataset is not present in {root}. Downloading the dataset")
-            gdown.download(id="1UT4_JsaMV_-KV9hMwNaYnBqhXy5pMZSi", output=f"{root}/CheXpert-v1.0-small.zip", quiet=False)
+            gdown.download(
+                id="1UT4_JsaMV_-KV9hMwNaYnBqhXy5pMZSi",
+                output=f"{root}/CheXpert-v1.0-small.zip",
+                quiet=False,
+            )
             os.makedirs(final_path, exist_ok=True)
-            
+
             # unzipping the dataset
-            with zipfile.ZipFile(f'{root}/CheXpert-v1.0-small.zip', 'r') as zip_ref:
-                for member in tqdm(zip_ref.infolist(), desc='Extracting '):
+            with zipfile.ZipFile(f"{root}/CheXpert-v1.0-small.zip", "r") as zip_ref:
+                for member in tqdm(zip_ref.infolist(), desc="Extracting "):
                     try:
                         zip_ref.extract(member, final_path)
                     except zipfile.error as e:
-                        raise Exception(f"Unable to extract the dataset. Please check the path {root}")
+                        raise Exception(
+                            f"Unable to extract the dataset. Please check the path {root}"
+                        )
             print("Removing the zip file")
             os.remove(f"{root}/CheXpert-v1.0-small.zip")
             print("Done! downloading the dataset.")
 
             if not os.path.exists(final_path + "/train.csv"):
-                raise Exception(f"Unable to download the dataset. Please check the path {root}")
+                raise Exception(
+                    f"Unable to download the dataset. Please check the path {root}"
+                )
         else:
             print(f"Chest dataset is present in {final_path}")
 
@@ -158,18 +180,17 @@ class ChestDataset(BaseDataset):
 
         for item in self.split_types:
             dataset_type = item
-            if item == 'val' and not self.val_exists:
+            if item == "val" and not self.val_exists:
                 self.dataset_dict[dataset_type] = None
                 continue
-            data = dataset(root=final_path,
-                        subname=subname,
-                        mode=item,
-                        transform=self.transform[item],
-                        target_transform =self.target_transform[item],
-                        )
+            data = dataset(
+                root=final_path,
+                subname=subname,
+                mode=item,
+                transform=self.transform[item],
+                target_transform=self.target_transform[item],
+            )
             self.dataset_dict[dataset_type] = data
-
-
 
     def build_dict_info(self):
         """
@@ -180,11 +201,11 @@ class ChestDataset(BaseDataset):
         Returns:
             dataset_dict (dict): Updated with info key that contains details related to the data splits
         """
-        self.dataset_dict['info'] = {}
-        self.dataset_dict['info']['train_size'] = len(self.dataset_dict['train_sampler'])
-        self.dataset_dict['info']['val_size'] = len(self.dataset_dict['val_sampler'])
-        self.dataset_dict['info']['test_size'] = len(self.dataset_dict['test'])
-        self.dataset_dict['info']['note'] = ''
+        self.dataset_dict["info"] = {}
+        self.dataset_dict["info"]["train_size"] = len(
+            self.dataset_dict["train_sampler"]
+        )
+        self.dataset_dict["info"]["val_size"] = len(self.dataset_dict["val_sampler"])
+        self.dataset_dict["info"]["test_size"] = len(self.dataset_dict["test"])
+        self.dataset_dict["info"]["note"] = ""
         return self.dataset_dict
-
-

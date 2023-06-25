@@ -4,6 +4,7 @@
 import numpy as np
 from torch.utils.data.sampler import SubsetRandomSampler
 
+
 class BaseDataset:
     """
     BaseDataset class is to be inherited by all dataset classes. All the generic attributes and methods will be a
@@ -31,15 +32,19 @@ class BaseDataset:
             default is True. If shuffle is true, there should be 'val' in split_types.
         random_seed (int): RandomState instance, default=None.
     """
-    def __init__(self, name=None, root=None,
-                transform=None,
-                target_transform=None,
-                 download=True, 
-                 split_types = None,
-                 val_fraction = 0.2,
-                 shuffle=True,
-                 random_seed = 42):
 
+    def __init__(
+        self,
+        name=None,
+        root=None,
+        transform=None,
+        target_transform=None,
+        download=True,
+        split_types=None,
+        val_fraction=0.2,
+        shuffle=True,
+        random_seed=42,
+    ):
         self.name = name
         self.root = root
         self.transform = transform
@@ -54,18 +59,24 @@ class BaseDataset:
 
         # performing QC of the input parameters
         try:
-            self.val_fraction = float(self.val_fraction) # check for float type
+            self.val_fraction = float(self.val_fraction)  # check for float type
         except ValueError:
-            raise ValueError('val_fraction needs to be of float type')
+            raise ValueError("val_fraction needs to be of float type")
 
-        assert (self.val_fraction >= 0.0) and (self.val_fraction < 1.0), 'val_fraction should be in range [0.0, 1.0]'
+        assert (self.val_fraction >= 0.0) and (
+            self.val_fraction < 1.0
+        ), "val_fraction should be in range [0.0, 1.0]"
 
         # check if split_types contain nothing beyond train, val and test
-        assert (len(set(self.split_types) - set(['train', 'val', 'test'])) == 0), 'Only train, val and test permitted as inputs in split_types'
+        assert (
+            len(set(self.split_types) - set(["train", "val", "test"])) == 0
+        ), "Only train, val and test permitted as inputs in split_types"
 
         if self.shuffle:
             # ensure that val exists in split_types
-            assert 'val' in self.split_types, 'Required param val missing in the defined split types (split_type)'
+            assert (
+                "val" in self.split_types
+            ), "Required param val missing in the defined split types (split_type)"
 
     def stack_dataset(self):
         """
@@ -83,7 +94,7 @@ class BaseDataset:
         self.dataset_dict["val_sampler"] = None
         self.dataset_dict["test_sampler"] = None
 
-        if self.name in ['CIFAR10', 'CIFAR100' , "CHEST"]:
+        if self.name in ["CIFAR10", "CIFAR100", "CHEST"]:
             num_train = len(self.dataset_dict["train"])
             indices = list(range(num_train))
             split = int(np.floor(self.val_fraction * num_train))

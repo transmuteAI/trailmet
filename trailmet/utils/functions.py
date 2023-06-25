@@ -9,50 +9,64 @@ import re
 import math
 
 
-__all__ = ["AverageMeter", "save_checkpoint", "accuracy", "seed_everything", "pdist", "CrossEntropyLabelSmooth", "adjust_learning_rate", "strlist_to_list", "get_optimizer", "lp_loss", "extract_sparsity", "chip_adjust_learning_rate"]
+__all__ = [
+    "AverageMeter",
+    "save_checkpoint",
+    "accuracy",
+    "seed_everything",
+    "pdist",
+    "CrossEntropyLabelSmooth",
+    "adjust_learning_rate",
+    "strlist_to_list",
+    "get_optimizer",
+    "lp_loss",
+    "extract_sparsity",
+    "chip_adjust_learning_rate",
+]
+
 
 def chip_adjust_learning_rate(self, optimizer, epoch, step, len_iter):
+    if self.lr_type == "step":
+        factor = epoch // 125
+        # if epoch >= 80:
+        #     factor = factor + 1
+        lr = self.learning_rate * (0.1**factor)
 
-        if self.lr_type == "step":
-            factor = epoch // 125
-            # if epoch >= 80:
-            #     factor = factor + 1
-            lr = self.learning_rate * (0.1**factor)
+    elif self.lr_type == "step_5":
+        factor = epoch // 10
+        if epoch >= 80:
+            factor = factor + 1
+        lr = self.learning_rate * (0.5**factor)
 
-        elif self.lr_type == "step_5":
-            factor = epoch // 10
-            if epoch >= 80:
-                factor = factor + 1
-            lr = self.learning_rate * (0.5**factor)
-
-        elif self.lr_type == "cos":  # cos without warm-up
-            if self.epochs > 5:
-                lr = (
-                    0.5
-                    * self.learning_rate
-                    * (1 + math.cos(math.pi * (epoch - 5) / (self.epochs - 5)))
-                )
-            else:
-                lr = self.learning_rate
-
-        elif self.lr_type == "exp":
-            step = 1
-            decay = 0.96
-            lr = self.learning_rate * (decay ** (epoch // step))
-
-        elif self.lr_type == "fixed":
-            lr = self.learning_rate
+    elif self.lr_type == "cos":  # cos without warm-up
+        if self.epochs > 5:
+            lr = (
+                0.5
+                * self.learning_rate
+                * (1 + math.cos(math.pi * (epoch - 5) / (self.epochs - 5)))
+            )
         else:
-            raise NotImplementedError
+            lr = self.learning_rate
 
-        if epoch < 5:
-            lr = lr * float(1 + step + epoch * len_iter) / (5.0 * len_iter)
+    elif self.lr_type == "exp":
+        step = 1
+        decay = 0.96
+        lr = self.learning_rate * (decay ** (epoch // step))
 
-        for param_group in optimizer.param_groups:
-            param_group["lr"] = lr
+    elif self.lr_type == "fixed":
+        lr = self.learning_rate
+    else:
+        raise NotImplementedError
 
-        if step == 0:
-            print("learning_rate: " + str(lr))
+    if epoch < 5:
+        lr = lr * float(1 + step + epoch * len_iter) / (5.0 * len_iter)
+
+    for param_group in optimizer.param_groups:
+        param_group["lr"] = lr
+
+    if step == 0:
+        print("learning_rate: " + str(lr))
+
 
 def extract_sparsity(sparsity):
     cprate_str = sparsity
@@ -72,12 +86,13 @@ def extract_sparsity(sparsity):
 
     return cprate
 
-def lp_loss(pred, tgt, p=2.0, reduction='none'):
-        """loss function measured in Lp Norm"""
-        if reduction == 'none':
-            return (pred-tgt).abs().pow(p).sum(1).mean()
-        else:
-            return (pred-tgt).abs().pow(p).mean()
+
+def lp_loss(pred, tgt, p=2.0, reduction="none"):
+    """loss function measured in Lp Norm"""
+    if reduction == "none":
+        return (pred - tgt).abs().pow(p).sum(1).mean()
+    else:
+        return (pred - tgt).abs().pow(p).mean()
 
 
 def seed_everything(seed):
@@ -158,6 +173,7 @@ def pdist(e, squared=False, eps=1e-12):
     res[range(len(e)), range(len(e))] = 0
     return res
 
+
 # label smooth
 class CrossEntropyLabelSmooth(nn.Module):
     def __init__(self, num_classes, epsilon):
@@ -173,43 +189,46 @@ class CrossEntropyLabelSmooth(nn.Module):
         loss = (-targets * log_probs).mean(0).sum()
         return loss
 
+
 def adjust_learning_rate(optimizer, epoch, num_epochs, scheduler_type, lr):
     """Sets the learning rate to the initial LR decayed by 2 every 30 epochs"""
-    if scheduler_type==1:
+    if scheduler_type == 1:
         new_lr = lr * (0.5 ** (epoch // 30))
         for param_group in optimizer.param_groups:
-            param_group['lr'] = new_lr
+            param_group["lr"] = new_lr
     else:
-        if epoch in [num_epochs*0.5, num_epochs*0.75]:
+        if epoch in [num_epochs * 0.5, num_epochs * 0.75]:
             for param_group in optimizer.param_groups:
-                param_group['lr'] *= 0.1
+                param_group["lr"] *= 0.1
+
 
 def strlist_to_list(sstr, ttype):
-    '''
-        example:
-        # self.args.stage_pr = [0, 0.3, 0.3, 0.3, 0, ]
-        # self.args.skip_layers = ['1.0', '2.0', '2.3', '3.0', '3.5', ]
-        turn these into a list of <ttype> (float or str or int etc.)
-    '''
+    """
+    example:
+    # self.args.stage_pr = [0, 0.3, 0.3, 0.3, 0, ]
+    # self.args.skip_layers = ['1.0', '2.0', '2.3', '3.0', '3.5', ]
+    turn these into a list of <ttype> (float or str or int etc.)
+    """
     if not sstr:
         return sstr
     out = []
     sstr = sstr.strip()
-    if sstr.startswith('[') and sstr.endswith(']'):
+    if sstr.startswith("[") and sstr.endswith("]"):
         sstr = sstr[1:-1]
-    for x in sstr.split(','):
+    for x in sstr.split(","):
         x = x.strip()
         if x:
             x = ttype(x)
             out.append(x)
     return out
 
+
 def get_optimizer(self, optimizer_name: str, model, lr, weight_decay):
-        """returns the optimizer with the given name"""
-        if optimizer_name == 'SGD':
-            optimizer = optim.SGD(model.parameters(), lr=lr, weight_decay=weight_decay)
-        if optimizer_name == 'Adam':
-            optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
-        else:
-            raise ValueError('Unknown optimizer: %s' % optimizer_name)
-        return optimizer
+    """returns the optimizer with the given name"""
+    if optimizer_name == "SGD":
+        optimizer = optim.SGD(model.parameters(), lr=lr, weight_decay=weight_decay)
+    if optimizer_name == "Adam":
+        optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+    else:
+        raise ValueError("Unknown optimizer: %s" % optimizer_name)
+    return optimizer

@@ -5,13 +5,18 @@ import torch
 import torch.nn as nn
 from torch.hub import load_state_dict_from_url
 from .base_model import BaseModel
+
 # -
 
 from collections import defaultdict
 
+
 def conv3x3(in_planes, out_planes, stride=1):
     """3x3 convolution with padding"""
-    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=1, bias=False)
+    return nn.Conv2d(
+        in_planes, out_planes, kernel_size=3, stride=stride, padding=1, bias=False
+    )
+
 
 class BasicBlock(nn.Module):
     expansion = 1
@@ -43,24 +48,39 @@ class BasicBlock(nn.Module):
         out = self.activ(out)
 
         return out
-    
+
     def get_flops(self, inp):
         flops = 0
         output = self.conv1(inp)
-        active_elements_count = output.shape[0] * reduce(lambda x, y: x * y, output.shape[2:])
-        flops += self.conv1.in_channels*self.conv1.out_channels*9*active_elements_count
-        flops += 4 * output.numel() #relu + bn
+        active_elements_count = output.shape[0] * reduce(
+            lambda x, y: x * y, output.shape[2:]
+        )
+        flops += (
+            self.conv1.in_channels * self.conv1.out_channels * 9 * active_elements_count
+        )
+        flops += 4 * output.numel()  # relu + bn
         output = self.conv2(output)
-        active_elements_count = output.shape[0] * reduce(lambda x, y: x * y, output.shape[2:])
-        flops += self.conv2.in_channels*self.conv2.out_channels*9*active_elements_count
-        flops += 5 * output.numel() #relu + bn + residual
+        active_elements_count = output.shape[0] * reduce(
+            lambda x, y: x * y, output.shape[2:]
+        )
+        flops += (
+            self.conv2.in_channels * self.conv2.out_channels * 9 * active_elements_count
+        )
+        flops += 5 * output.numel()  # relu + bn + residual
 
         if self.downsample is not None:
             r_output = self.downsample[0](inp)
-            active_elements_count = r_output.shape[0] * reduce(lambda x, y: x * y, r_output.shape[2:])
-            flops += self.downsample[0].in_channels*self.downsample[0].out_channels*active_elements_count
+            active_elements_count = r_output.shape[0] * reduce(
+                lambda x, y: x * y, r_output.shape[2:]
+            )
+            flops += (
+                self.downsample[0].in_channels
+                * self.downsample[0].out_channels
+                * active_elements_count
+            )
             flops += 2 * r_output.numel()
         return flops
+
 
 class Bottleneck(nn.Module):
     expansion = 4
@@ -69,9 +89,13 @@ class Bottleneck(nn.Module):
         super(Bottleneck, self).__init__()
         self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False)
         self.bn1 = nn.BatchNorm2d(planes)
-        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.conv2 = nn.Conv2d(
+            planes, planes, kernel_size=3, stride=stride, padding=1, bias=False
+        )
         self.bn2 = nn.BatchNorm2d(planes)
-        self.conv3 = nn.Conv2d(planes, planes * self.expansion, kernel_size=1, bias=False)
+        self.conv3 = nn.Conv2d(
+            planes, planes * self.expansion, kernel_size=1, bias=False
+        )
         self.bn3 = nn.BatchNorm2d(planes * self.expansion)
         self.activ = nn.ReLU(inplace=True)
         self.downsample = downsample
@@ -99,6 +123,7 @@ class Bottleneck(nn.Module):
 
         return out
 
+
 class ResNetCifar(BaseModel):
     def __init__(self, block, layers, width=1, num_classes=1000, insize=32):
         super(ResNetCifar, self).__init__()
@@ -109,8 +134,8 @@ class ResNetCifar(BaseModel):
         self.width = width
         self.conv1 = nn.Conv2d(3, 16, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(16)
-        self.prev_module=defaultdict()
-        self.prev_module[self.bn1]=None
+        self.prev_module = defaultdict()
+        self.prev_module[self.bn1] = None
         self.activ = nn.ReLU(inplace=True)
         self.layer1 = self._make_layer(block, 16 * width, layers[0])
         self.layer2 = self._make_layer(block, 32 * width, layers[1], stride=2)
@@ -128,14 +153,19 @@ class ResNetCifar(BaseModel):
                 if b.downsample is not None:
                     self.prev_module[b.downsample[1]] = prev
                 prev = b.bn2
-                
 
     def _make_layer(self, block, planes, blocks, stride=1):
         downsample = None
         if stride != 1 or self.inplanes != planes * block.expansion:
-            conv_module = nn.Conv2d(self.inplanes, planes * block.expansion, kernel_size=1, stride=stride, bias=False)
+            conv_module = nn.Conv2d(
+                self.inplanes,
+                planes * block.expansion,
+                kernel_size=1,
+                stride=stride,
+                bias=False,
+            )
             bn_module = nn.BatchNorm2d(planes * block.expansion)
-            if hasattr(bn_module, 'is_imp'):
+            if hasattr(bn_module, "is_imp"):
                 bn_module.is_imp = True
             downsample = nn.Sequential(conv_module, bn_module)
 
@@ -159,7 +189,7 @@ class ResNetCifar(BaseModel):
         x = self.avgpool(x)
         x = x.view(x.size(0), -1)
         x = self.fc(x)
-        
+
         return x
 
     def get_bn_layers(self):
@@ -172,7 +202,16 @@ class ResNetCifar(BaseModel):
 
 
 class ResNet(BaseModel):
-    def __init__(self, block, layers, width=1, num_classes=1000, produce_vectors=False, init_weights=True, insize=32):
+    def __init__(
+        self,
+        block,
+        layers,
+        width=1,
+        num_classes=1000,
+        produce_vectors=False,
+        init_weights=True,
+        insize=32,
+    ):
         super(ResNet, self).__init__()
         self.layers_size = layers
         self.num_classes = num_classes
@@ -180,13 +219,17 @@ class ResNet(BaseModel):
         self.produce_vectors = produce_vectors
         self.block_type = block.__class__.__name__
         self.inplanes = 64
-        if insize<128:
-            self.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
+        if insize < 128:
+            self.conv1 = nn.Conv2d(
+                3, 64, kernel_size=3, stride=1, padding=1, bias=False
+            )
         else:
-            self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)
+            self.conv1 = nn.Conv2d(
+                3, 64, kernel_size=7, stride=2, padding=3, bias=False
+            )
         self.bn1 = nn.BatchNorm2d(64)
-        self.prev_module=defaultdict()
-        self.prev_module[self.bn1]=None
+        self.prev_module = defaultdict()
+        self.prev_module[self.bn1] = None
         self.activ = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(block, 64 * width, layers[0])
@@ -200,9 +243,11 @@ class ResNet(BaseModel):
 
         for l in [self.layer1, self.layer2, self.layer3, self.layer4]:
             for b in l.children():
-                downs = next(b.downsample.children()) if b.downsample is not None else None
+                downs = (
+                    next(b.downsample.children()) if b.downsample is not None else None
+                )
 
-        #assert block is Bottleneck
+        # assert block is Bottleneck
         if block is Bottleneck:
             prev = self.bn1
             for l_block in [self.layer1, self.layer2, self.layer3, self.layer4]:
@@ -217,9 +262,15 @@ class ResNet(BaseModel):
     def _make_layer(self, block, planes, blocks, stride=1):
         downsample = None
         if stride != 1 or self.inplanes != planes * block.expansion:
-            conv_module = nn.Conv2d(self.inplanes, planes * block.expansion, kernel_size=1, stride=stride, bias=False)
+            conv_module = nn.Conv2d(
+                self.inplanes,
+                planes * block.expansion,
+                kernel_size=1,
+                stride=stride,
+                bias=False,
+            )
             bn_module = nn.BatchNorm2d(planes * block.expansion)
-            if hasattr(bn_module, 'is_imp'):
+            if hasattr(bn_module, "is_imp"):
                 bn_module.is_imp = True
             downsample = nn.Sequential(conv_module, bn_module)
 
@@ -255,55 +306,69 @@ class ResNet(BaseModel):
         bn_layers = []
         for l_blocks in [self.layer1, self.layer2, self.layer3, self.layer4]:
             for b in l_blocks:
-                if self.block_type == 'Bottleneck':
+                if self.block_type == "Bottleneck":
                     m1, m2, m3 = b.bn1, b.bn2, b.bn3
                     bn_layers.append([m1, m2, m3])
                 else:
                     m1, m2 = b.bn1, b.bn2
                     bn_layers.append([m1, m2])
         return bn_layers
-    
+
     def get_flops(self, insize):
         flops = 0
         inp = torch.rand(1, 3, insize, insize).to(self.conv1.weight.device)
         output = self.conv1(inp)
-        active_elements_count = output.shape[0] * reduce(lambda x, y: x * y, output.shape[2:])
-        flops += self.conv1.in_channels*self.conv1.out_channels*9*active_elements_count
+        active_elements_count = output.shape[0] * reduce(
+            lambda x, y: x * y, output.shape[2:]
+        )
+        flops += (
+            self.conv1.in_channels * self.conv1.out_channels * 9 * active_elements_count
+        )
         output = self.bn1(output)
-        flops += 2*output.numel()
+        flops += 2 * output.numel()
         output = self.activ(output)
-        flops += 2*output.numel()
+        flops += 2 * output.numel()
         output = self.maxpool(output)
-        flops += 8*output.numel()
-        
+        flops += 8 * output.numel()
+
         for l_block in [self.layer1, self.layer2, self.layer3, self.layer4]:
             for b in l_block:
                 flops += b.get_flops(output)
                 output = b(output)
-        
-        ops = output.shape[-1]*output.shape[-2]
+
+        ops = output.shape[-1] * output.shape[-2]
         output = self.avgpool(output)
-        flops += ops*output.numel()
-        
-        flops += (1 + self.fc.in_features)*self.fc.out_features
+        flops += ops * output.numel()
+
+        flops += (1 + self.fc.in_features) * self.fc.out_features
         return flops
 
 
 def make_wide_resnet(num_classes, insize):
-    model = ResNetCifar(BasicBlock, [4, 4, 4], width=12, num_classes=num_classes, insize=insize)
+    model = ResNetCifar(
+        BasicBlock, [4, 4, 4], width=12, num_classes=num_classes, insize=insize
+    )
     return model
+
 
 def make_resnet20(num_classes, insize):
-    model = ResNetCifar(BasicBlock, [3, 3, 3], width=1, num_classes=num_classes, insize=insize)
+    model = ResNetCifar(
+        BasicBlock, [3, 3, 3], width=1, num_classes=num_classes, insize=insize
+    )
     return model
 
+
 def make_resnet32(num_classes, insize):
-    model = ResNetCifar(BasicBlock, [5, 5, 5], width=1, num_classes=num_classes, insize=insize)
+    model = ResNetCifar(
+        BasicBlock, [5, 5, 5], width=1, num_classes=num_classes, insize=insize
+    )
     return model
+
 
 def make_resnet50(num_classes, insize):
     model = ResNet(Bottleneck, [3, 4, 6, 3], num_classes=num_classes, insize=insize)
     return model
+
 
 def make_resnet26(num_classes, insize):
     model = ResNet(BasicBlock, [3, 3, 3, 3], num_classes=num_classes, insize=insize)
@@ -319,26 +384,35 @@ def make_resnet18(num_classes, insize):
     model = ResNet(BasicBlock, [2, 2, 2, 2], num_classes=num_classes, insize=insize)
     return model
 
+
 def make_resnet10(num_classes, insize):
     model = ResNet(BasicBlock, [1, 1, 1, 1], num_classes=num_classes, insize=insize)
     return model
 
 
 def make_resnet56(num_classes, insize):
-    model = ResNetCifar(BasicBlock, [9, 9, 9], width=1, num_classes=num_classes, insize=insize)
+    model = ResNetCifar(
+        BasicBlock, [9, 9, 9], width=1, num_classes=num_classes, insize=insize
+    )
     return model
+
 
 def make_resnet101(num_classes, insize):
     model = ResNet(Bottleneck, [3, 4, 23, 3], num_classes=num_classes, insize=insize)
     return model
 
+
 def make_resnet110(num_classes, insize):
-    model = ResNetCifar(BasicBlock, [18, 18, 18], width=1, num_classes=num_classes, insize=insize)
+    model = ResNetCifar(
+        BasicBlock, [18, 18, 18], width=1, num_classes=num_classes, insize=insize
+    )
     return model
+
 
 def make_resnet152(num_classes, insize):
     model = ResNet(Bottleneck, [3, 8, 36, 3], num_classes=num_classes, insize=insize)
     return model
+
 
 def get_resnet_model(model, num_classes, insize, pretrained):
     """Returns the requested model, ready for training/pruning with the specified method.
@@ -346,47 +420,51 @@ def get_resnet_model(model, num_classes, insize, pretrained):
     :param num_classes: int, num classes in the dataset
     :return: A prunable ResNet model
     """
-    if model == 'wrn':
+    if model == "wrn":
         net = make_wide_resnet(num_classes, insize)
         pretrained_weights = None
 
-    elif model == 'resnet18':
+    elif model == "resnet18":
         net = make_resnet18(num_classes, insize)
         pretrained_weights = "https://download.pytorch.org/models/resnet18-f37072fd.pth"
-    elif model == 'resnet20':
+    elif model == "resnet20":
         net = make_resnet20(num_classes, insize)
         pretrained_weights = None
-    elif model == 'resnet32':
+    elif model == "resnet32":
         net = make_resnet32(num_classes, insize)
-        pretrained_weights =  None
-    elif model == 'resnet50':
+        pretrained_weights = None
+    elif model == "resnet50":
         net = make_resnet50(num_classes, insize)
         pretrained_weights = "https://download.pytorch.org/models/resnet50-11ad3fa6.pth"
-    elif model == 'resnet56':
+    elif model == "resnet56":
         net = make_resnet56(num_classes, insize)
-        pretrained_weights = None 
-    elif model == 'resnet101':
+        pretrained_weights = None
+    elif model == "resnet101":
         net = make_resnet101(num_classes, insize)
-        pretrained_weights = "https://download.pytorch.org/models/resnet101-cd907fc2.pth"
-    elif model == 'resnet110':
+        pretrained_weights = (
+            "https://download.pytorch.org/models/resnet101-cd907fc2.pth"
+        )
+    elif model == "resnet110":
         net = make_resnet110(num_classes, insize)
         pretrained_weights = None
-    elif model == 'resnet152':
+    elif model == "resnet152":
         net = make_resnet152(num_classes, insize)
-        pretrained_weights = "https://download.pytorch.org/models/resnet152-f82ba261.pth"
-    elif model == 'resnet34':
+        pretrained_weights = (
+            "https://download.pytorch.org/models/resnet152-f82ba261.pth"
+        )
+    elif model == "resnet34":
         net = make_resnet34(num_classes, insize)
         pretrained_weights = None
-    elif model == 'resnet26':
+    elif model == "resnet26":
         net = make_resnet26(num_classes, insize)
         pretrained_weights = None
-    elif model == 'resnet10':
+    elif model == "resnet10":
         net = make_resnet10(num_classes, insize)
         pretrained_weights = None
     if pretrained:
         if pretrained_weights != None:
             weights = load_state_dict_from_url(pretrained_weights, progress=True)
-            net.load_state_dict(weights, strict = False)
+            net.load_state_dict(weights, strict=False)
         else:
             print("pretrained weights not available")
     return net
