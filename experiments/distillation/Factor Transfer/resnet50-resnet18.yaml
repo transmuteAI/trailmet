@@ -21,4 +21,6 @@ PARAPHRASER : #hyperparameters for training paraphraser
   WEIGHT_DECAY : 0.0005 #weight decay for training paraphraser
 
 log_dir : ft_resnet50-resnet18 #checkpoints directory and model name
-cuda_id : 0 #device to be used
+DEVICE: cuda
+insize: 32
+wandb: True

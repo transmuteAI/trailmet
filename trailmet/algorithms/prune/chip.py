@@ -58,7 +58,7 @@ class Chip(BasePruning):
         self.lr_decay_step = self.CFG["lr_decay_step"]
         self.result_dir = self.CFG["result_dir"]
         self.pretrain_dir = self.CFG["pretrain_dir"]
-        self.conv_index = self.CFG["conv_index"]
+        self.conv_index = torch.tensor([self.CFG["conv_index"]])
 
         self.wandb_monitor = self.CFG.get("wandb", "False")
         self.dataset_name = dataloaders["train"].dataset.__class__.__name__
@@ -108,6 +108,7 @@ class Chip(BasePruning):
     def inference(self):
         model = self.model
         model.eval()
+        model.to(self.device)
         repeat = self.repeat
         with torch.no_grad():
             for batch_idx, (inputs, targets) in enumerate(self.dataloaders["train"]):

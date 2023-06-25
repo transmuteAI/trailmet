@@ -8,3 +8,5 @@ learning_rate : 0.002   #Learning rate for baseline
 fine_tune_epochs : 2  #Number of epochs for finetuning, set to 2 for demo notebook
 fine_tune_lr : 0.0004   #Finetuning learning rate
 prune_ratio : 0.5       #Channel pruning ratios
+wandb: True
+insize: 32

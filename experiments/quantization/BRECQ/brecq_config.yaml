@@ -36,3 +36,4 @@ W_ARGS:
   0.0625: 
     W_BITS: 2
     ITERS_W: 10000
+wandb: True

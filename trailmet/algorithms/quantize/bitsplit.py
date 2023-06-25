@@ -608,6 +608,7 @@ class BitSplit(BaseQuantization):
         )
 
         model.eval()
+        model.to(self.device)
 
         with torch.no_grad():
             end = time.time()
