@@ -7,8 +7,8 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = "TrAILMET"
-copyright = "2023, deepak, rishabh"
-author = "deepak, rishabh"
+copyright = "2023, NyunAI"
+author = "NyunAI"
 release = "v0.1"
 master_doc = "index"
 
