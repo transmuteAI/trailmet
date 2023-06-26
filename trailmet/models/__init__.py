@@ -40,7 +40,7 @@ class ModelsFactory(object):
         """
 
         if name in [
-            'resnet18',
+            "resnet18",
             "resnet20",
             "resnet32",
             "resnet50",
