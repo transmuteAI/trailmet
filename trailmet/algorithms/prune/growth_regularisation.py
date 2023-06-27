@@ -45,6 +45,7 @@ class Growth_Regularisation(BasePruning):
         self.train_loader = dataloaders["train"]
         self.val_loader = dataloaders["val"]
         self.test_loader = dataloaders["test"]
+        self.dataloaders = dataloaders
         self.model = model
         self.kwargs = kwargs
         self.dataset = self.kwargs.get("DATASET", "c100")
@@ -93,9 +94,7 @@ class Growth_Regularisation(BasePruning):
             wandb.config.update(self.kwargs)
 
         if self.stage_pr:
-            self.stage_pr = strlist_to_list(
-                self.stage_pr, float
-            )  # example: [0, 0.4, 0.5, 0]
+            self.stage_pr = self.stage_pr  # example: [0, 0.4, 0.5, 0]
             self.skip_layers = strlist_to_list(
                 self.skip_layers, str
             )  # example: [2.3.1, 3.1]
@@ -104,15 +103,15 @@ class Growth_Regularisation(BasePruning):
                 self.base_pr_model
             ), "If stage_pr is not provided, base_pr_model must be provided"
 
-    def compress_model(self, dataloaders) -> None:
+    def compress_model(self) -> None:
         """Template function to be overwritten for each model compression method"""
 
         self.epochs = 1
 
         self.model.maxpool = torch.nn.Identity()
-        self.model = self.base_train(self.model, dataloaders, fine_tune=False)
+        self.model = self.base_train(self.model, self.dataloaders, fine_tune=False)
 
-        self.prune_and_finetune(self.kwargs, dataloaders)
+        self.prune_and_finetune(self.kwargs, self.dataloaders)
 
     def prune_and_finetune(self, args, dataloader):
         """Prune and finetune the model"""
