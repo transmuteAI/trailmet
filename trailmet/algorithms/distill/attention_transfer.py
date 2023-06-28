@@ -118,9 +118,9 @@ class AttentionTransfer(Distillation):
         self.register_hooks()
 
         test_only = kwargs.get("TEST_ONLY", False)
-        weight_decay = kwargs["DISTILL_ARGS"].get("WEIGHT_DECAY", 0.0005)
-        milestones = kwargs["DISTILL_ARGS"].get("MILESTONES", [82, 123])
-        gamma = kwargs["DISTILL_ARGS"].get("GAMMA", 0.1)
+        weight_decay = kwargs.get("WEIGHT_DECAY", 0.0005)
+        milestones = kwargs.get("MILESTONES", [82, 123])
+        gamma = kwargs.get("GAMMA", 0.1)
 
         optimizer = torch.optim.SGD(
             student_model.parameters(),

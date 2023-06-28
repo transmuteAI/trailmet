@@ -9,4 +9,5 @@ GENERAL:
   MAX_ITER: 1000      # num of iterations for quantization scale optimization
   MAX_FEV: 1000
   VERBOSE: True
+wandb: True
   

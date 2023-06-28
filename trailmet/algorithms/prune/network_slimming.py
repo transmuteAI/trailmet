@@ -18,7 +18,6 @@ import os
 import time
 
 from trailmet.utils import AverageMeter, accuracy, save_checkpoint, adjust_learning_rate
-from trailmet.models import get_resnet_model
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +32,9 @@ class Network_Slimming(BasePruning):
     directly be used for both the tasks. In case of modifications, overwrite this function based on the needs.
     """
 
-    def __init__(self, dataloaders, **kwargs):
+    def __init__(self, model, dataloaders, **kwargs):
         self.device = "cuda"
+        self.model = model
         self.num_classes = kwargs.get("num_classes", 100)
         self.dataloaders = dataloaders
         self.pr = kwargs.get("pr", None)
@@ -90,18 +90,15 @@ class Network_Slimming(BasePruning):
         if self.ft_only:
             print("Error")
             return 0
-        model = get_resnet_model(
-            self.net, self.num_classes, insize=32, pretrained=False
-        )
-        model = self.base_train(model, self.dataloaders, fine_tune=False)
+        self.model = self.base_train(self.model, self.dataloaders, fine_tune=False)
         self.lr = self.fine_tune_lr
-        pruner = SlimPruner(model, self.prune_schema)
+        pruner = SlimPruner(self.model, self.prune_schema)
         pruning_result = pruner.run(self.prune_ratio)
         summary_model(pruner.pruned_model)
         pruned_model = pruner.pruned_model
         self.pr = pruning_result
         pruned_model.is_pruned = True
-        del model
+        del self.model
         pruned_model = self.base_train(pruned_model, self.dataloaders, fine_tune=True)
 
     def base_train(self, model, dataloaders, fine_tune=False):

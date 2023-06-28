@@ -10,4 +10,6 @@ DISTILL_ARGS : #hyperparameters for distillation process
   VERBOSE : TRUE #verbose - whether to print while training
 
 log_dir : at_resnet50-resnet18 #checkpoints directory and model name
-cuda_id : 0 #device to be used
+wandb: True
+insize: 32
+DEVICE: cuda:0

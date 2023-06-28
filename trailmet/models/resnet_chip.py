@@ -188,5 +188,5 @@ class ResNet50(nn.Module):
         return x
 
 
-def resnet_50(sparsity):
-    return ResNet50(sparsity=sparsity)
+def resnet_50(sparsity, num_classes):
+    return ResNet50(sparsity=sparsity, num_classes=num_classes)

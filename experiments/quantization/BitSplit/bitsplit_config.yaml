@@ -29,3 +29,5 @@ W_ARGS:
     HEAD_STEM_PRECISION: 8
   0.0625:
     w_BITS: 2
+
+wandb: True

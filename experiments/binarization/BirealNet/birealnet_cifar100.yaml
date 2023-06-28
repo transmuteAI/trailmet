@@ -14,4 +14,5 @@ device: 'cuda'
 dataset: 'c100'
 num_classes: 100                                         #number of classification classes {100 for cifar100, 200 for tiny imagenet}
 num_fp: 0                                                #number of full precision layers in the model (sets the budget)
-
+insize: 32                                               #input size of the image
+wandb: True
