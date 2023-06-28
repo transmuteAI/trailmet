@@ -4,6 +4,7 @@ import copy
 import numpy as np
 from math import ceil
 from collections import OrderedDict
+import logging
 
 
 # +
@@ -73,11 +74,11 @@ class MetaPruner:
         self.layers = OrderedDict()
         self._register_layers()
 
-        arch = self.args.arch
+        arch = self.args["arch"]
         if arch.startswith("resnet"):
             # TODO: add block
             self.n_conv_within_block = 0
-            if args.dataset == "imagenet":
+            if args["dataset"] == "imagenet":
                 if arch in ["resnet18", "resnet34"]:
                     self.n_conv_within_block = 2
                 elif arch in ["resnet50", "resnet101", "resnet152"]:
@@ -119,14 +120,16 @@ class MetaPruner:
                 max_len_name = max(max_len_name, len(name))
 
                 size = m.weight.size()
-                res = True if self.args.arch.startswith("resnet") else False
+                res = True if self.args["arch"].startswith("resnet") else False
                 self.layers[name] = Layer(name, size, ix, res)
 
         max_len_ix = len("%s" % ix)
         print("Register layer index and kernel shape:")
+        self.logger.info("Register layer index and kernel shape:")
         format_str = "[%{}d] %{}s -- kernel_shape: %s".format(max_len_ix, max_len_name)
         for name, (ix, ks) in layer_shape.items():
             print(format_str % (ix, name, ks))
+            self.logger.info(format_str % (ix, name, ks))
 
     def _next_conv(self, model, name, mm):
         if hasattr(self.layers[name], "block_index"):
@@ -206,8 +209,8 @@ class MetaPruner:
         6, 7 not mentioned, default value is 0
         """
         layer_index = self.layers[name].layer_index
-        pr = self.args.stage_pr[layer_index]
-        if str(layer_index) in self.args.skip_layers:
+        pr = self.args["stage_pr"][layer_index]
+        if str(layer_index) in self.args["skip_layers"]:
             pr = 0
         return pr
 
@@ -216,23 +219,23 @@ class MetaPruner:
         This function will determine the prune_ratio (pr) for each specific layer
         by a set of rules.
         """
-        wg = self.args.wg
+        wg = self.args["wg"]
         layer_index = self.layers[name].layer_index
         stage = self.layers[name].stage
         seq_index = self.layers[name].seq_index
         block_index = self.layers[name].block_index
         is_shortcut = self.layers[name].is_shortcut
-        pr = self.args.stage_pr[stage]
+        pr = self.args["stage_pr"][stage]
 
         # for unstructured pruning, no restrictions, every layer can be pruned
-        if self.args.wg != "weight":
+        if self.args["wg"] != "weight":
             # do not prune the shortcut layers for now
             if is_shortcut:
                 pr = 0
 
             # do not prune layers we set to be skipped
             layer_id = "%s.%s.%s" % (str(stage), str(seq_index), str(block_index))
-            for s in self.args.skip_layers:
+            for s in self.args["skip_layers"]:
                 if s and layer_id.startswith(s):
                     pr = 0
 
@@ -252,21 +255,21 @@ class MetaPruner:
         return pr
 
     def get_pr(self):
-        if self.is_single_branch(self.args.arch):
+        if self.is_single_branch(self.args["arch"]):
             get_layer_pr = self._get_layer_pr_vgg
         else:
             get_layer_pr = self._get_layer_pr_resnet
 
         self.pr = {}
-        if (
-            self.args.stage_pr
-        ):  # stage_pr may be None (in the case that base_pr_model is provided)
+        if self.args[
+            "stage_pr"
+        ]:  # stage_pr may be None (in the case that base_pr_model is provided)
             for name, m in self.model.named_modules():
                 if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
                     self.pr[name] = get_layer_pr(name)
         else:
-            assert self.args.base_pr_model
-            state = torch.load(self.args.base_pr_model)
+            assert self.args["base_pr_model"]
+            state = torch.load(self.args["base_pr_model"])
             self.pruned_wg_pr_model = state["pruned_wg"]
             self.kept_wg_pr_model = state["kept_wg"]
             for k in self.pruned_wg_pr_model:
@@ -275,21 +278,33 @@ class MetaPruner:
                 self.pr[k] = float(n_pruned) / (n_pruned + n_kept)
             print(
                 "==> Load base_pr_model successfully and inherit its pruning ratio: '{}'".format(
-                    self.args.base_pr_model
+                    self.args["base_pr_model"]
+                )
+            )
+
+            self.logger.info(
+                "==> Load base_pr_model successfully and inherit its pruning ratio: '{}'".format(
+                    self.args["base_pr_model"]
                 )
             )
 
     def _get_kept_wg_L1(self):
-        if self.args.base_pr_model and self.args.inherit_pruned == "index":
+        if self.args["base_pr_model"] and self.args["inherit_pruned"] == "index":
             self.pruned_wg = self.pruned_wg_pr_model
             self.kept_wg = self.kept_wg_pr_model
             print(
                 "==> Inherit the pruned index from base_pr_model: '{}'".format(
-                    self.args.base_pr_model
+                    self.args["base_pr_model"]
+                )
+            )
+
+            self.logger.info(
+                "==> Inherit the pruned index from base_pr_model: '{}'".format(
+                    self.args["base_pr_model"]
                 )
             )
         else:
-            wg = self.args.wg
+            wg = self.args["wg"]
             for name, m in self.model.named_modules():
                 if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
                     shape = m.weight.data.shape
@@ -310,7 +325,7 @@ class MetaPruner:
                     else:
                         raise NotImplementedError
                     self.pruned_wg[name] = self._pick_pruned(
-                        score, self.pr[name], self.args.pick_pruned
+                        score, self.pr[name], self.args["pick_pruned"]
                     )
                     self.kept_wg[name] = [
                         i for i in range(len(score)) if i not in self.pruned_wg[name]
@@ -318,12 +333,12 @@ class MetaPruner:
                     logtmp = "[%2d %s] got pruned wg by L1 sorting (%s), pr %.4f" % (
                         self.layers[name].layer_index,
                         name,
-                        self.args.pick_pruned,
+                        self.args["pick_pruned"],
                         self.pr[name],
                     )
 
                     # compare the pruned weights picked by L1-sorting vs. other criterion which provides the base_pr_model (e.g., OBD)
-                    if self.args.base_pr_model:
+                    if self.args["base_pr_model"]:
                         intersection = [
                             x
                             for x in self.pruned_wg_pr_model[name]
@@ -338,10 +353,10 @@ class MetaPruner:
                             ", intersection ratio of the weights picked by L1 vs. base_pr_model: %.4f (%d)"
                             % (intersection_ratio, len(intersection))
                         )
-                    self.netprint(logtmp)
+                    self.logger.info(logtmp)
 
     def _get_kept_filter_channel(self, m, name):
-        if self.args.wg == "channel":
+        if self.args["wg"] == "channel":
             kept_chl = self.kept_wg[name]
             next_conv = self._next_conv(self.model, name, m)
             if not next_conv:
@@ -349,7 +364,7 @@ class MetaPruner:
             else:
                 kept_filter = self.kept_wg[next_conv]
 
-        elif self.args.wg == "filter":
+        elif self.args["wg"] == "filter":
             kept_filter = self.kept_wg[name]
             prev_conv = self._prev_conv(self.model, name, m)
             if not prev_conv:
@@ -360,7 +375,7 @@ class MetaPruner:
         return kept_filter, kept_chl
 
     def _prune_and_build_new_model(self):
-        if self.args.wg == "weight":
+        if self.args["wg"] == "weight":
             self._get_masks()
             return
 
@@ -406,10 +421,10 @@ class MetaPruner:
                 ).cuda()
 
                 # copy bn weight and bias
-                if self.args.copy_bn_w:
+                if self.args["copy_bn_w"]:
                     weight = m.weight.data[kept_filter]
                     new_bn.weight.data.copy_(weight)
-                if self.args.copy_bn_b:
+                if self.args["copy_bn_b"]:
                     bias = m.bias.data[kept_filter]
                     new_bn.bias.data.copy_(bias)
 
@@ -460,6 +475,7 @@ class MetaPruner:
 
         self.model = new_model
         print("MODEL PRUNING COMPLETE : META PRUNER")
+        self.logger.info("MODEL PRUNING COMPLETE : META PRUNER")
         n_filter = self._get_n_filter(self.model)
         print(n_filter)
 
@@ -473,3 +489,4 @@ class MetaPruner:
                 mask[pruned] = 0
                 self.mask[name] = mask.view_as(m.weight.data)
         print("Get masks done for weight pruning")
+        self.logger.info("Get masks done for weight pruning")
