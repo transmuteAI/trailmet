@@ -5,21 +5,17 @@ import os, copy, time, pickle, numpy as np, math
 import torchvision.models as models
 from .meta_pruner import MetaPruner
 import matplotlib.pyplot as plt
+import logging
 
-pjoin = os.path.join
-
-import sys
-
-sys.path.append("../../../../")
-
-from trailmet.algorithms.prune.pns import SlimPruner
-from trailmet.algorithms.prune.utils import summary_model
+from ..pns import SlimPruner
+from ..utils import summary_model
+from trailmet.utils import save_checkpoint
 
 
 class LitModel(nn.Module):
     def __init__(self, args):
         super(LitModel, self).__init__()
-        model = getattr(models, args.arch)(num_classes=args.num_classes)
+        model = getattr(models, args["arch"])(num_classes=args["num_classes"])
         # to get better result on cifar10
         model.conv1 = torch.nn.Conv2d(
             3, 64, kernel_size=3, stride=1, padding=1, bias=False
@@ -53,19 +49,18 @@ class Pruner(MetaPruner):
         self.w_abs = {}
         self.smv = {}
         self.mag_reg_log = {}
-        if self.args.__dict__.get(
-            "AdaReg_only_picking"
-        ):  # AdaReg is the old name for GReg-2
+        self.logger = logger
+        if self.args["method"] == "GReg-2":  # AdaReg is the old name for GReg-2
             self.original_model = copy.deepcopy(self.model)
 
         # prune_init, to determine the pruned weights
         # this will update the 'self.kept_wg' and 'self.pruned_wg'
-        if self.args.method in ["GReg-1", "GReg-2"]:
+        if self.args["method"] in ["GReg-1", "GReg-2"]:
             self._get_kept_wg_L1()
         for k, v in self.pruned_wg.items():
             self.pruned_wg_L1[k] = v
         if (
-            self.args.method == "GReg-2"
+            self.args["method"] == "GReg-2"
         ):  # GReg-2 will determine which wgs to prune later, so clear it here
             self.kept_wg = {}
             self.pruned_wg = {}
@@ -76,7 +71,7 @@ class Pruner(MetaPruner):
                 shape = m.weight.data.shape
 
                 # initialize reg
-                if self.args.wg == "weight":
+                if self.args["wg"] == "weight":
                     self.reg[name] = torch.zeros_like(m.weight.data).flatten().cuda()
                 else:
                     self.reg[name] = torch.zeros(shape[0], shape[1]).cuda()
@@ -117,7 +112,7 @@ class Pruner(MetaPruner):
             max_index += n_not_consider
             return sorted_index[: max_index + 1]
         else:
-            self.logprint("Wrong pr. Please check.")
+            self.logger.info("Wrong pr. Please check.")
             exit(1)
 
     def _update_mag_ratio(self, m, name, w_abs, pruned=None):
@@ -140,12 +135,12 @@ class Pruner(MetaPruner):
 
         # print
         mag_ratio_now_before = ave_mag_kept / self.original_kept_w_mag[name]
-        if self.total_iter % self.args.print_interval == 0:
-            self.logprint(
+        if self.total_iter % self.args["print_interval"] == 0:
+            self.logger.info(
                 "    mag_ratio %.4f mag_ratio_momentum %.4f"
                 % (mag_ratio, self.hist_mag_ratio[name])
             )
-            self.logprint(
+            self.logger.info(
                 "    for kept weights, original_kept_w_mag %.6f, now_kept_w_mag %.6f ratio_now_over_original %.4f"
                 % (self.original_kept_w_mag[name], ave_mag_kept, mag_ratio_now_before)
             )
@@ -153,68 +148,68 @@ class Pruner(MetaPruner):
 
     def _get_score(self, m):
         shape = m.weight.data.shape
-        if self.args.wg == "channel":
+        if self.args["wg"] == "channel":
             w_abs = (
                 m.weight.abs().mean(dim=[0, 2, 3])
                 if len(shape) == 4
                 else m.weight.abs().mean(dim=0)
             )
-        elif self.args.wg == "filter":
+        elif self.args["wg"] == "filter":
             w_abs = (
                 m.weight.abs().mean(dim=[1, 2, 3])
                 if len(shape) == 4
                 else m.weight.abs().mean(dim=1)
             )
-        elif self.args.wg == "weight":
+        elif self.args["wg"] == "weight":
             w_abs = m.weight.abs().flatten()
         return w_abs
 
     def _fix_reg(self, m, name):
         if self.pr[name] == 0:
             return True
-        if self.args.wg != "weight":
+        if self.args["wg"] != "weight":
             self._update_mag_ratio(m, name, self.w_abs[name])
 
         pruned = self.pruned_wg[name]
-        if self.args.wg == "channel":
-            self.reg[name][:, pruned] = self.args.reg_upper_limit
-        elif self.args.wg == "filter":
-            self.reg[name][pruned, :] = self.args.reg_upper_limit
-        elif self.args.wg == "weight":
-            self.reg[name][pruned] = self.args.reg_upper_limit
+        if self.args["wg"] == "channel":
+            self.reg[name][:, pruned] = self.args["reg_upper_limit"]
+        elif self.args["wg"] == "filter":
+            self.reg[name][pruned, :] = self.args["reg_upper_limit"]
+        elif self.args["wg"] == "weight":
+            self.reg[name][pruned] = self.args["reg_upper_limit"]
 
-        finish_update_reg = self.total_iter > self.args.fix_reg_interval
+        finish_update_reg = self.total_iter > self.args["fix_reg_interval"]
         return finish_update_reg
 
     def _greg_1(self, m, name):
         if self.pr[name] == 0:
             return True
 
-        if self.args.wg != "weight":  # weight is too slow
+        if self.args["wg"] != "weight":  # weight is too slow
             self._update_mag_ratio(m, name, self.w_abs[name])
 
         pruned = self.pruned_wg[name]
-        if self.args.wg == "channel":
-            self.reg[name][:, pruned] += self.args.reg_granularity_prune
-        elif self.args.wg == "filter":
-            self.reg[name][pruned, :] += self.args.reg_granularity_prune
-        elif self.args.wg == "weight":
-            self.reg[name][pruned] += self.args.reg_granularity_prune
+        if self.args["wg"] == "channel":
+            self.reg[name][:, pruned] += self.args["reg_granularity_prune"]
+        elif self.args["wg"] == "filter":
+            self.reg[name][pruned, :] += self.args["reg_granularity_prune"]
+        elif self.args["wg"] == "weight":
+            self.reg[name][pruned] += self.args["reg_granularity_prune"]
         else:
             raise NotImplementedError
 
         # when all layers are pushed hard enough, stop
         if (
-            self.args.wg == "weight"
+            self.args["wg"] == "weight"
         ):  # for weight, do not use the magnitude ratio condition, because 'hist_mag_ratio' is not updated, too costly
             finish_update_reg = False
         else:
             finish_update_reg = True
             for k in self.hist_mag_ratio:
-                if self.hist_mag_ratio[k] < self.args.mag_ratio_limit:
+                if self.hist_mag_ratio[k] < self.args["mag_ratio_limit"]:
                     finish_update_reg = False
         self.smv[name] = self.reg[name].max()
-        return finish_update_reg or self.reg[name].max() > self.args.reg_upper_limit
+        return finish_update_reg or self.reg[name].max() > self.args["reg_upper_limit"]
 
     def _greg_2(self, m, name):
         layer_index = self.layers[name].layer_index
@@ -228,20 +223,22 @@ class Pruner(MetaPruner):
             return True
 
         if name in self.iter_finish_pick:
-            recover_reg = self.args.reg_granularity_recover
+            recover_reg = self.args["reg_granularity_recover"]
             # for pruned weights, push them more
-            if self.args.wg == "channel":
-                self.reg[name][
-                    :, self.pruned_wg[name]
-                ] += self.args.reg_granularity_prune
+            if self.args["wg"] == "channel":
+                self.reg[name][:, self.pruned_wg[name]] += self.args[
+                    "reg_granularity_prune"
+                ]
                 self.reg[name][:, self.kept_wg[name]] = recover_reg
-            elif self.args.wg == "filter":
-                self.reg[name][
-                    self.pruned_wg[name], :
-                ] += self.args.reg_granularity_prune
+            elif self.args["wg"] == "filter":
+                self.reg[name][self.pruned_wg[name], :] += self.args[
+                    "reg_granularity_prune"
+                ]
                 self.reg[name][self.kept_wg[name], :] = recover_reg
-            elif self.args.wg == "weight":
-                self.reg[name][self.pruned_wg[name]] += self.args.reg_granularity_prune
+            elif self.args["wg"] == "weight":
+                self.reg[name][self.pruned_wg[name]] += self.args[
+                    "reg_granularity_prune"
+                ]
                 self.reg[name][self.kept_wg[name]] = recover_reg
 
             # for kept weights, bring them back
@@ -249,27 +246,27 @@ class Pruner(MetaPruner):
             """
             current_w_mag = w_abs[self.kept_wg[name]].mean()
             recover_reg = (current_w_mag / self.original_kept_w_mag[name] - 1).item() \
-                * self.args.weight_decay * self.args.reg_multiplier * 10
+                * self.args["weight_decay"] * self.args["reg_multiplier"] * 10
             if recover_reg > 0:
                 recover_reg = 0
-            if self.args.wg == 'channel':
+            if self.args["wg"] == 'channel':
                 self.reg[name][:, self.kept_wg[name]] = recover_reg
-            elif self.args.wg == 'filter':
+            elif self.args["wg"] == 'filter':
                 self.reg[name][self.kept_wg[name], :] = recover_reg
             """
-            if self.total_iter % self.args.print_interval == 0:
-                self.logprint(
+            if self.total_iter % self.args["print_interval"] == 0:
+                self.logger.info(
                     "    prune stage, push the pruned (reg = %.5f) to zero; for kept weights, reg = %.5f"
                     % (self.reg[name].max().item(), recover_reg)
                 )
 
         else:
-            self.reg[name] += self.args.reg_granularity_pick
+            self.reg[name] += self.args["reg_granularity_pick"]
 
         # plot w_abs distribution
-        if self.total_iter % self.args.plot_interval == 0:
+        if self.total_iter % self.args["plot_interval"] == 0:
             self._plot_mag_ratio(w_abs, name)
-        if self.total_iter % self.args.plot_interval == 0:
+        if self.total_iter % self.args["plot_interval"] == 0:
             self._log_down_mag_reg(w_abs, name)
 
         # save order
@@ -283,8 +280,8 @@ class Pruner(MetaPruner):
         #     self.order_by_L1[name] = order
         #     self.wg_preprune[name] = wg_pruned
         if (
-            self.args.save_order_log
-            and self.total_iter % self.args.update_reg_interval == 0
+            self.args["save_order_log"]
+            and self.total_iter % self.args["update_reg_interval"] == 0
         ):
             if not hasattr(self, "order_log"):
                 self.order_log = open("%s/order_log.txt" % self.logger.log_path, "w+")
@@ -315,7 +312,7 @@ class Pruner(MetaPruner):
             print(logtmp, file=self.order_log, flush=True)
 
         # print to check magnitude ratio
-        if self.args.wg != "weight":
+        if self.args["wg"] != "weight":
             if name in self.iter_finish_pick:
                 self._update_mag_ratio(m, name, w_abs)
             else:
@@ -325,7 +322,7 @@ class Pruner(MetaPruner):
                 )  # just print to check
 
         # check if picking finishes
-        finish_pick_cond = self.reg[name].max() >= self.args.reg_upper_limit_pick
+        finish_pick_cond = self.reg[name].max() >= self.args["reg_upper_limit_pick"]
         if name not in self.iter_finish_pick and finish_pick_cond:
             self.iter_finish_pick[name] = self.total_iter
             pruned_wg = self._pick_pruned_wg(w_abs, pr)
@@ -337,7 +334,7 @@ class Pruner(MetaPruner):
                 len(picked_wg_in_common) / len(pruned_wg) if len(pruned_wg) else -1
             )
             n_finish_pick = len(self.iter_finish_pick)
-            self.logprint(
+            self.logger.info(
                 "    [%d] just finished pick (n_finish_pick = %d). %.2f in common chosen by L1 & GReg-2. Iter = %d"
                 % (layer_index, n_finish_pick, common_ratio, self.total_iter)
             )
@@ -345,7 +342,7 @@ class Pruner(MetaPruner):
             # re-scale the weights to recover the response magnitude
             # factor = self.original_w_mag[name] / m.weight.abs().mean()
             # m.weight.data.mul_(factor)
-            # self.logprint('    rescale weight by %.4f' % factor.item())
+            # self.logger.info('    rescale weight by %.4f' % factor.item())
 
             # check if all layers finish picking
             self.all_layer_finish_pick = True
@@ -355,27 +352,25 @@ class Pruner(MetaPruner):
                     break
 
         # save mag_reg_log
-        if self.args.save_mag_reg_log and (
-            self.total_iter % self.args.save_interval == 0
+        if self.args["save_mag_reg_log"] and (
+            self.total_iter % self.args["save_interval"] == 0
             or name in self.iter_finish_pick
         ):
-            out = pjoin(self.logger.log_path, "%d_mag_reg_log.npy" % layer_index)
+            out = os.path.join(self.logger.log_path, "%d_mag_reg_log.npy" % layer_index)
             np.save(out, self.mag_reg_log[name])
             if self.all_layer_finish_pick:
                 exit(0)
 
-        if self.args.__dict__.get("AdaReg_only_picking") or self.args.__dict__.get(
-            "AdaReg_revive_kept"
-        ):
+        if self.args["method"] == "GReg-2":
             finish_update_reg = False
         else:
             cond0 = name in self.iter_finish_pick  # finsihed picking
-            if self.args.wg == "weight":
-                cond1 = self.reg[name].max() > self.args.reg_upper_limit
+            if self.args["wg"] == "weight":
+                cond1 = self.reg[name].max() > self.args["reg_upper_limit"]
             else:
                 cond1 = (
-                    self.hist_mag_ratio[name] >= self.args.mag_ratio_limit
-                    or self.reg[name].max() > self.args.reg_upper_limit
+                    self.hist_mag_ratio[name] >= self.args["mag_ratio_limit"]
+                    or self.reg[name].max() > self.args["reg_upper_limit"]
                 )
             finish_update_reg = cond0 and cond1
         return finish_update_reg
@@ -389,8 +384,8 @@ class Pruner(MetaPruner):
                 if name in self.iter_update_reg_finished.keys():
                     continue
 
-                if self.total_iter % self.args.print_interval == 0:
-                    self.logprint(
+                if self.total_iter % self.args["print_interval"] == 0:
+                    self.logger.info(
                         "[%d] Update reg for layer '%s'. Pr = %s. Iter = %d"
                         % (cnt_m, name, pr, self.total_iter)
                     )
@@ -400,21 +395,21 @@ class Pruner(MetaPruner):
 
                 # update reg functions, two things:
                 # (1) update reg of this layer (2) determine if it is time to stop update reg
-                if self.args.method == "FixReg":
+                if self.args["method"] == "FixReg":
                     finish_update_reg = self._fix_reg(m, name)
-                elif self.args.method == "GReg-1":
+                elif self.args["method"] == "GReg-1":
                     finish_update_reg = self._greg_1(m, name)
-                elif self.args.method == "GReg-2":
+                elif self.args["method"] == "GReg-2":
                     finish_update_reg = self._greg_2(m, name)
                 else:
-                    self.logprint("Wrong '--method' argument, please check.")
+                    self.logger.info("Wrong '--method' argument, please check.")
                     exit(1)
 
                 # check prune state
                 if finish_update_reg:
                     # after 'update_reg' stage, keep the reg to stabilize weight magnitude
                     self.iter_update_reg_finished[name] = self.total_iter
-                    self.logprint(
+                    self.logger.info(
                         "==> [%d] Just finished 'update_reg'. Iter = %d"
                         % (cnt_m, self.total_iter)
                     )
@@ -428,15 +423,15 @@ class Pruner(MetaPruner):
                                 break
                     if self.prune_state == "stabilize_reg":
                         self.iter_stabilize_reg = self.total_iter
-                        self.logprint(
+                        self.logger.info(
                             "==> All layers just finished 'update_reg', go to 'stabilize_reg'. Iter = %d"
                             % self.total_iter
                         )
                         self._save_model(mark="just_finished_update_reg")
 
                 # after reg is updated, print to check
-                if self.total_iter % self.args.print_interval == 0:
-                    self.logprint(
+                if self.total_iter % self.args["print_interval"] == 0:
+                    self.logger.info(
                         "    reg_status: min = %.5f ave = %.5f max = %.5f"
                         % (
                             self.reg[name].min(),
@@ -449,13 +444,13 @@ class Pruner(MetaPruner):
         for name, m in self.model.named_modules():
             if name in self.reg:
                 reg = self.reg[name]  # [N, C]
-                if self.args.wg in ["filter", "channel"]:
+                if self.args["wg"] in ["filter", "channel"]:
                     if reg.shape != m.weight.data.shape:
                         reg = reg.unsqueeze(2).unsqueeze(3)  # [N, C, 1, 1]
-                elif self.args.wg == "weight":
+                elif self.args["wg"] == "weight":
                     reg = reg.view_as(m.weight.data)  # [N, C, H, W]
                 l2_grad = reg * m.weight
-                if self.args.block_loss_grad:
+                if self.args["block_loss_grad"]:
                     m.weight.grad = l2_grad
                 else:
                     m.weight.grad += l2_grad
@@ -466,11 +461,11 @@ class Pruner(MetaPruner):
         self.model.load_state_dict(state["state_dict"])
         self.optimizer = optim.SGD(
             self.model.parameters(),
-            lr=self.args.lr_pick
-            if self.args.__dict__.get("AdaReg_only_picking")
-            else self.args.lr_prune,
-            momentum=self.args.momentum,
-            weight_decay=self.args.weight_decay,
+            lr=self.args["lr_pick"]
+            if self.args["__dict__"].get("AdaReg_only_picking")
+            else self.args["lr_prune"],
+            momentum=self.args["momentum"],
+            weight_decay=self.args["weight_decay"],
         )
         self.optimizer.load_state_dict(state["optimizer"])
         self.prune_state = state["prune_state"]
@@ -483,7 +478,7 @@ class Pruner(MetaPruner):
         state = {
             "iter": self.total_iter,
             "prune_state": self.prune_state,  # we will resume prune_state
-            "arch": self.args.arch,
+            "arch": self.args["arch"],
             "model": self.model,
             "state_dict": self.model.state_dict(),
             "iter_stabilize_reg": self.iter_stabilize_reg,
@@ -492,30 +487,34 @@ class Pruner(MetaPruner):
             "optimizer": self.optimizer.state_dict(),
             "reg": self.reg,
             "hist_mag_ratio": self.hist_mag_ratio,
-            "ExpID": self.logger.ExpID,
         }
-        self.save(state, is_best=False, mark=mark)
+        save_checkpoint(
+            state,
+            is_best=False,
+            save="./checkpoints",
+            file_name="just_finished_update_reg",
+        )
 
     def prune(self):
         self.model = self.model.train()
         self.optimizer = optim.SGD(
             self.model.parameters(),
-            lr=self.args.lr_pick
-            if self.args.__dict__.get("AdaReg_only_picking")
-            else self.args.lr_prune,
-            momentum=self.args.momentum,
-            weight_decay=self.args.weight_decay,
+            lr=self.args["lr_pick"]
+            if self.args["method"] == "GReg-2"
+            else self.args["lr_prune"],
+            momentum=self.args["momentum"],
+            weight_decay=self.args["weight_decay"],
         )
 
         # resume model, optimzer, prune_status
         self.total_iter = -1
-        if self.args.resume_path:
-            self._resume_prune_status(self.args.resume_path)
+        if self.args["resume_path"]:
+            self._resume_prune_status(self.args["resume_path"])
             self._get_kept_wg_L1()  # get pruned and kept wg from the resumed model
             self.model = self.model.train()
-            self.logprint(
+            self.logger.info(
                 "Resume model successfully: '{}'. Iter = {}. prune_state = {}".format(
-                    self.args.resume_path, self.total_iter, self.prune_state
+                    self.args["resume_path"], self.total_iter, self.prune_state
                 )
             )
 
@@ -528,28 +527,28 @@ class Pruner(MetaPruner):
                 total_iter = self.total_iter
 
                 #                 # test
-                #                 if total_iter % self.args.test_interval == 0:
+                #                 if total_iter % self.args["test_interval"] == 0:
                 #                     acc1, acc5, *_ = self.test(self.model)
                 #                     self.accprint("Acc1 = %.4f Acc5 = %.4f Iter = %d (before update) [prune_state = %s, method = %s]" %
-                #                         (acc1, acc5, total_iter, self.prune_state, self.args.method))
+                #                         (acc1, acc5, total_iter, self.prune_state, self.args["method"]))
 
                 #                 # save model (save model before a batch starts)
-                #                 if total_iter % self.args.save_interval == 0:
+                #                 if total_iter % self.args["save_interval"] == 0:
                 #                     self._save_model(acc1, acc5)
-                #                     self.logprint('Periodically save model done. Iter = {}'.format(total_iter))
+                #                     self.logger.info('Periodically save model done. Iter = {}'.format(total_iter))
 
-                #                 if total_iter % self.args.print_interval == 0:
-                #                     self.logprint("")
-                #                     self.logprint("Iter = %d [prune_state = %s, method = %s] "
-                #                         % (total_iter, self.prune_state, self.args.method) + "-"*40)
+                #                 if total_iter % self.args["print_interval"] == 0:
+                #                     self.logger.info("")
+                #                     self.logger.info("Iter = %d [prune_state = %s, method = %s] "
+                #                         % (total_iter, self.prune_state, self.args["method"]) + "-"*40)
 
                 # forward
                 self.model.train()
                 y_ = self.model(inputs)
-                print(self.prune_state, total_iter, self.args.update_reg_interval)
+                print(self.prune_state, total_iter, self.args["update_reg_interval"])
                 if (
                     self.prune_state == "update_reg"
-                    and total_iter % self.args.update_reg_interval == 0
+                    and total_iter % self.args["update_reg_interval"] == 0
                 ):
                     self._update_reg()
 
@@ -566,9 +565,9 @@ class Pruner(MetaPruner):
                     print(self.smv)
                 #                 if(self.total_iter == 30): I added this
                 #                     self.prune_state = 'stabilize_reg'
-                #         total_iter = self.iter_stabilize_reg+self.args.stabilize_reg_interval
+                #         total_iter = self.iter_stabilize_reg+self.args["stabilize_reg_interval"]
                 # log print
-                if total_iter % self.args.print_interval == 0:
+                if total_iter % self.args["print_interval"] == 0:
                     w_abs_sum = 0
                     w_num_sum = 0
                     cnt_m = 0
@@ -581,13 +580,13 @@ class Pruner(MetaPruner):
                     _, predicted = y_.max(1)
                     correct = predicted.eq(targets).sum().item()
                     train_acc = correct / targets.size(0)
-                    self.logprint(
+                    self.logger.info(
                         "After optim update, ave_abs_weight: %.10f current_train_loss: %.4f current_train_acc: %.4f"
                         % (w_abs_sum / w_num_sum, loss.item(), train_acc)
                     )
 
                 # Save heatmap of weights to check the magnitude
-                # if total_iter % self.args.plot_interval == 0:
+                # if total_iter % self.args["plot_interval"] == 0:
                 #     cnt_m = 0
                 #     for m in self.modules:
                 #         cnt_m += 1
@@ -599,17 +598,14 @@ class Pruner(MetaPruner):
                 #             plot_weights_heatmap(m.weight.mean(dim=[2, 3]), out_path1)
                 #             plot_weights_heatmap(self.reg[name], out_path2)
 
-                if (
-                    self.args.__dict__.get("AdaReg_only_picking")
-                    and self.all_layer_finish_pick
-                ):
-                    self.logprint(
+                if self.args["method"] == "GReg-1" and self.all_layer_finish_pick:
+                    self.logger.info(
                         "GReg-2 just finished picking for all layers. Resume original model and switch to GReg-1. Iter = %d"
                         % total_iter
                     )
 
                     # save picked wg
-                    pkl_path = os.path.join(self.logger.log_path, "picked_wg.pkl")
+                    pkl_path = os.path.join("./logs", "picked_wg.pkl")
                     with open(pkl_path, "wb") as f:
                         pickle.dump(self.pruned_wg, f)
                     exit(0)
@@ -618,23 +614,20 @@ class Pruner(MetaPruner):
                     self.model = self.original_model  # reload the original model
                     self.optimizer = optim.SGD(
                         self.model.parameters(),
-                        lr=self.args.lr_prune,
-                        momentum=self.args.momentum,
-                        weight_decay=self.args.weight_decay,
+                        lr=self.args["lr_prune"],
+                        momentum=self.args["momentum"],
+                        weight_decay=self.args["weight_decay"],
                     )
-                    self.args.method = "GReg-1"
-                    self.args.AdaReg_only_picking = False  # do not get in again
+                    self.args["method"] = "GReg-1"
+                    self.args["AdaReg_only_picking"] = False  # do not get in again
                     # reinit
                     for k in self.reg:
                         self.reg[k] = torch.zeros_like(self.reg[k]).cuda()
                     self.hist_mag_ratio = {}
 
-                if (
-                    self.args.__dict__.get("AdaReg_revive_kept")
-                    and self.all_layer_finish_pick
-                ):
+                if self.args["method"] == "GReg-1" and self.all_layer_finish_pick:
                     self._prune_and_build_new_model()
-                    self.logprint(
+                    self.logger.info(
                         "GReg-2 just finished picking for all layers. Pruned and go to 'finetune'. Iter = %d"
                         % total_iter
                     )
@@ -644,10 +637,10 @@ class Pruner(MetaPruner):
                 if (
                     self.prune_state == "stabilize_reg"
                     and total_iter - self.iter_stabilize_reg
-                    == self.args.stabilize_reg_interval
+                    == self.args["stabilize_reg_interval"]
                 ):
                     #                   self._prune_and_build_new_model()
-                    #                   self.logprint("'stabilize_reg' is done. Pruned, go to 'finetune'. Iter = %d" % total_iter)
+                    #                   self.logger.info("'stabilize_reg' is done. Pruned, go to 'finetune'. Iter = %d" % total_iter)
                     new_model = LitModel(self.args)
                     A1 = copy.deepcopy(self.model.state_dict())
                     L1 = list(A1.keys())
@@ -656,12 +649,12 @@ class Pruner(MetaPruner):
                         A1[new_key] = A1.pop(key)
                     new_model.load_state_dict(A1)
                     self.model = new_model
-                    if self.args.arch == "resnet50":
+                    if self.args["arch"] == "resnet50":
                         schema = "./schema/resnet50.json"
-                    elif self.args.arch == "mobilenet_v2":
+                    elif self.args["arch"] == "mobilenet_v2":
                         schema = "./schema/mobilenet_v2.json"
                     pruner = SlimPruner(self.model, schema)
-                    pruning_result = pruner.run(self.args.prune_ratio)
+                    pruning_result = pruner.run(self.args["prune_ratio"])
                     print("Summary of pruned_model")
                     summary_model(pruner.pruned_model)
 
@@ -669,14 +662,15 @@ class Pruner(MetaPruner):
                 #                 if self.prune_state == "stabilize_reg":
                 #                     self._prune_and_build_new_model()
                 #                     #print(self.model)
-                #                     self.logprint("'stabilize_reg' is done. Pruned, go to 'finetune'. Iter = %d" % total_iter)
+                #                     self.logger.info("'stabilize_reg' is done. Pruned, go to 'finetune'. Iter = %d" % total_iter)
                 #                     return copy.deepcopy(self.model)
 
-                if total_iter % self.args.print_interval == 0:
+                if total_iter % self.args["print_interval"] == 0:
                     t2 = time.time()
                     total_time = t2 - t1
-                    self.logprint(
-                        "speed = %.4f iter/s" % (self.args.print_interval / total_time)
+                    self.logger.info(
+                        "speed = %.4f iter/s"
+                        % (self.args["print_interval"] / total_time)
                     )
                     t1 = t2
 
@@ -694,7 +688,7 @@ class Pruner(MetaPruner):
             "layer %d iter %d shape %s\n(max = %s)"
             % (layer_index, self.total_iter, shape, max_)
         )
-        out = pjoin(
+        out = os.path.join(
             self.logger.logplt_path,
             "%d_iter%d_w_abs_dist.jpg" % (layer_index, self.total_iter),
         )

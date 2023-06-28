@@ -8,3 +8,29 @@ prune_ratio : 0.5                  #Channel pruning ratios
 reg_upper_limit : 0.0004           #set to 4e-4 for demo notebook
 reg_granularity_prune : 0.0002     #Increment in sparsity weight
 method : 'GReg-1'                  #Pruning Method
+wandb: True
+base_pr_model: False
+stage_pr: [0.5,0.5,0.5,0.5,0.5,0.5]
+skip_layers: ""
+inherit_pruned: "index"
+pick_pruned: "min"
+copy_bn_w: True
+copy_bn_b: True
+wg: "filter"
+print_interval: 100
+lr_prune: 0.001
+momentum: 0.9
+lr_pick: 0.001
+resume_path: False
+update_reg_interval: 5
+stabilize_reg_interval: 40000
+mag_ratio_limit: 1000
+reg_granularity_recover: 0.00001
+reg_granularity_prune: 0.0001
+reg_granularity_recover: 0.0001
+plot_interval: 5
+save_order_log: False
+save_mag_reg_log: False
+save_interval: 5
+block_loss_grad: False
+insize: 32

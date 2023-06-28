@@ -13,6 +13,9 @@
     <a href="https://transmuteai-trailmet.readthedocs.io/en/latest/">
         <img alt="Documentation" src="https://img.shields.io/badge/docs-passing-brightgreen">
     </a>
+    <a href="https://github.com/transmuteAI/trailmet/actions/workflows/ci.yml">
+        <img alt="Run tests with pytest" src="https://github.com/transmuteAI/trailmet/actions/workflows/ci.yml/badge.svg">
+    </a>
     <a href="#">
         <img alt="GitHub Stars" src="https://img.shields.io/github/stars/transmuteAI/trailmet">
     </a>
