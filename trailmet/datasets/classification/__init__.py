@@ -5,6 +5,7 @@ import os
 from .cifar import CIFAR10Dataset, CIFAR100Dataset
 from .imagenet import ImageNetDataset
 from .chest import ChestDataset
+from .tcga import TCGADataset
 
 
 class DatasetFactory(object):
@@ -35,6 +36,8 @@ class DatasetFactory(object):
             obj_dfactory = ImageNetDataset(**kwargs)
         elif "CHEST" == name:
             obj_dfactory = ChestDataset(**kwargs)
+        elif "TCGA" == name:
+            obj_dfactory = TCGADataset(**kwargs)
         else:
             raise Exception(f"unknown dataset{kwargs['name']}")
         dataset = obj_dfactory.stack_dataset()
