@@ -108,5 +108,13 @@ class BaseDataset:
             valid_sampler = SubsetRandomSampler(self.valid_idx)
             self.dataset_dict["train_sampler"] = train_sampler
             self.dataset_dict["val_sampler"] = valid_sampler
+        elif self.name == "TCGA":
+            self.train_idx, self.valid_idx = range(
+                len(self.dataset_dict["train"])
+            ), range(len(self.dataset_dict["val"]))
+            train_sampler = SubsetRandomSampler(self.train_idx)
+            valid_sampler = SubsetRandomSampler(self.valid_idx)
+            self.dataset_dict["train_sampler"] = train_sampler
+            self.dataset_dict["val_sampler"] = valid_sampler
 
         return self.dataset_dict
