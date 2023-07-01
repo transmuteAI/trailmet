@@ -246,4 +246,4 @@ class TCGADataset(BaseDataset):
         self.dataset_dict["info"]["val_size"] = len(self.dataset_dict["val"])
         self.dataset_dict["info"]["test_size"] = len(self.dataset_dict["test"])
         self.dataset_dict["info"]["note"] = ""
-        return self.datasetkfold
+        return self.dataset_dict
