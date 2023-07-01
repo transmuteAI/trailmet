@@ -49,25 +49,29 @@ class TCGA(Dataset):
         root=None,
         transform=None,
         target_transform=None,
-        split=0,
+        kfold=0,
         mode="train",
         download=True,
     ):
         self.labels_dict = {}
-        self._split = split
+        self._kfold = kfold
         self.transform = transform
         self.target_transform = target_transform
-        self.class_dict = {'TCGA-LUAD':0, 'TCGA-LUSC':1}
-        self.split_file = os.path.join(root, f'tcga_lung/splits_{split}.csv')
-        self.data_path = os.path.join(root, f'512_imgs/fold-{split}/')
+        self.class_dict = {"TCGA-LUAD": 0, "TCGA-LUSC": 1}
+        self.split_file = os.path.join(root, f"tcga_lung/splits_{kfold}.csv")
+        self.data_path = os.path.join(root, f"512_imgs/fold-{kfold}/")
         df = pd.read_csv(self.split_file)
-        
-        files = glob(os.path.join(root, f'512_imgs/fold-{split}/*/*.png'))
-        
+
+        files = glob(os.path.join(root, f"512_imgs/fold-{kfold}/*/*.png"))
+
         for filename in files:
             self.labels_dict[filename.split("/")[-1][:-4]] = filename.split("/")[-2]
-        
-        self.Train_List, self.Val_List, self.Test_List = df.train.to_list(), df.val.dropna().to_list(), df.test.dropna().to_list()
+
+        self.Train_List, self.Val_List, self.Test_List = (
+            df.train.to_list(),
+            df.val.dropna().to_list(),
+            df.test.dropna().to_list(),
+        )
 
         if mode == "train":
             self._mode = "train"
@@ -90,21 +94,27 @@ class TCGA(Dataset):
     def __getitem__(self, idx):
         if self._mode == "train":
             path = self.Train_List[idx]
-            image_path = os.path.join(self.data_path, self.labels_dict[path], path + ".png")
+            image_path = os.path.join(
+                self.data_path, self.labels_dict[path], path + ".png"
+            )
             img = Image.open(image_path).convert("RGB")
             img = self.transform(img)
             class_name = self.labels_dict[path]
             return img, torch.tensor([self.class_dict[class_name]])
-        elif self._mode == 'val':
+        elif self._mode == "val":
             path = self.Val_List[idx]
-            image_path = os.path.join(self.data_path, self.labels_dict[path], path + ".png")
+            image_path = os.path.join(
+                self.data_path, self.labels_dict[path], path + ".png"
+            )
             img = Image.open(image_path).convert("RGB")
             img = self.target_transform(img)
             class_name = self.labels_dict[path]
             return img, torch.tensor([self.class_dict[class_name]])
         else:
             path = self.Test_List[idx]
-            image_path = os.path.join(self.data_path, self.labels_dict[path], path + ".png")
+            image_path = os.path.join(
+                self.data_path, self.labels_dict[path], path + ".png"
+            )
             img = Image.open(image_path).convert("RGB")
             img = self.target_transform(img)
             class_name = self.labels_dict[path]
@@ -118,7 +128,7 @@ class TCGADataset(BaseDataset):
         root=None,
         transform=None,
         target_transform=None,
-        split=0,
+        kfold=0,
         download=True,
         split_types=None,
         val_fraction=0.2,
@@ -141,7 +151,7 @@ class TCGADataset(BaseDataset):
         os.makedirs(root, exist_ok=True)
         final_path = os.path.join(root, "tcga_512")
 
-        if not os.path.exists(final_path + f"/512_imgs/fold-{split}"):
+        if not os.path.exists(final_path + f"/512_imgs/fold-{kfold}"):
             print(f"TCGA dataset is not present in {root}. Downloading the dataset")
             gdown.download(
                 id="1bnfg9mq-5NwnKjS7ZlVAySooLCTGAjqb",
@@ -163,15 +173,19 @@ class TCGADataset(BaseDataset):
             os.remove(f"{root}/tcga_512.zip")
             print("Done! downloading the dataset.")
 
-            if not os.path.exists(final_path + f"/512_imgs/fold-{split}"):
+            if not os.path.exists(final_path + f"/512_imgs/fold-{kfold}"):
                 raise Exception(
                     f"Unable to download the dataset. Please check the path {root}"
                 )
         else:
             print(f"TCGA dataset is present in {final_path}")
-        
-        if not os.path.exists(os.path.join(root, "tcga_512", "tcga_lung", f"splits_{split}.csv")):
-            print(f"TCGA split file is not present in {root}. Downloading the split file")
+
+        if not os.path.exists(
+            os.path.join(root, "tcga_512", "tcga_lung", f"splits_{kfold}.csv")
+        ):
+            print(
+                f"TCGA split file is not present in {root}. Downloading the split file"
+            )
             gdown.download(
                 id="1xBxLz2iToaHaJJovml7Bf4NcJRS_x2CQ",
                 output=f"{root}/tcga_512/tcga_lung.zip",
@@ -192,7 +206,9 @@ class TCGADataset(BaseDataset):
             os.remove(f"{root}/tcga_512/tcga_lung.zip")
             print("Done! downloading the split files.")
 
-            if not os.path.exists(os.path.join(root, "tcga_512", "tcga_lung", f"splits_{split}.csv")):
+            if not os.path.exists(
+                os.path.join(root, "tcga_512", "tcga_lung", f"splits_{kfold}.csv")
+            ):
                 raise Exception(
                     f"Unable to download the split files. Please check the path {root}"
                 )
@@ -210,9 +226,9 @@ class TCGADataset(BaseDataset):
             data = dataset(
                 root=final_path,
                 mode=item,
-                split=split,
+                kfold=kfold,
                 transform=self.transform[item],
-                target_transform=self.target_transform[item]
+                target_transform=self.target_transform[item],
             )
             self.dataset_dict[dataset_type] = data
 
@@ -226,9 +242,7 @@ class TCGADataset(BaseDataset):
             dataset_dict (dict): Updated with info key that contains details related to the data splits
         """
         self.dataset_dict["info"] = {}
-        self.dataset_dict["info"]["train_size"] = len(
-            self.dataset_dict["train"]
-        )
+        self.dataset_dict["info"]["train_size"] = len(self.dataset_dict["train"])
         self.dataset_dict["info"]["val_size"] = len(self.dataset_dict["val"])
         self.dataset_dict["info"]["test_size"] = len(self.dataset_dict["test"])
         self.dataset_dict["info"]["note"] = ""
