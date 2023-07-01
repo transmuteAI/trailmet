@@ -31,7 +31,7 @@ class TCGA(Dataset):
             and returns a transformed version. E.g, ``transforms.RandomCrop``. Default=None.
         target_transform (callable, optional): A function/transform that takes in the
             target and transforms it, default=None.
-        split(int): The split which you want. Possible values are 0-9
+        kfold(int): The fold which you want to use. Possible values are 0-9
         download (bool, optional): If true, downloads the dataset from the internet and
             puts it in root directory. If dataset is already downloaded, it is not
             downloaded again, default=True.
@@ -58,11 +58,11 @@ class TCGA(Dataset):
         self.transform = transform
         self.target_transform = target_transform
         self.class_dict = {"TCGA-LUAD": 0, "TCGA-LUSC": 1}
-        self.split_file = os.path.join(root, f"tcga_lung/splits_{kfold}.csv")
-        self.data_path = os.path.join(root, f"512_imgs/fold-{kfold}/")
+        self.split_file = os.path.join(root, f"tcga_lung/splits_{self._kfold}.csv")
+        self.data_path = os.path.join(root, f"512_imgs/fold-{self._kfold}/")
         df = pd.read_csv(self.split_file)
 
-        files = glob(os.path.join(root, f"512_imgs/fold-{kfold}/*/*.png"))
+        files = glob(os.path.join(root, f"512_imgs/fold-{self._kfold}/*/*.png"))
 
         for filename in files:
             self.labels_dict[filename.split("/")[-1][:-4]] = filename.split("/")[-2]
