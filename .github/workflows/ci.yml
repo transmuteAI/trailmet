@@ -35,3 +35,7 @@ jobs:
         uses: reviewdog/action-suggester@v1
         with:
           tool_name: blackfmt
+      - name: Check docstring coverage
+        run: |
+            pip install interrogate
+            interrogate -vv --ignore-init-method --ignore-module --ignore-nested-functions --ignore-magic --ignore-regex "__repr__" --fail-under 85 trailmet
