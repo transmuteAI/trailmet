@@ -1,3 +1,24 @@
+# MIT License
+#
+# Copyright (c) 2023 Transmute AI Lab
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
 # importing the required packages
 from .dataset import BaseDataset
 from PIL import Image
@@ -48,10 +69,10 @@ class Chest(Dataset):
     def __init__(
         self,
         root=None,
-        subname="atelectasis",
+        subname='atelectasis',
         transform=None,
         target_transform=None,
-        mode="train",
+        mode='train',
         download=True,
     ):
         self._image_paths = []
@@ -60,34 +81,46 @@ class Chest(Dataset):
         self.transform = transform
         self.target_transform = target_transform
         self.dict = [
-            {"1.0": 1, "": 0, "0.0": 0, "-1.0": 2},
-            {"1.0": 1, "": 0, "0.0": 0, "-1.0": 1},
+            {
+                '1.0': 1,
+                '': 0,
+                '0.0': 0,
+                '-1.0': 2
+            },
+            {
+                '1.0': 1,
+                '': 0,
+                '0.0': 0,
+                '-1.0': 1
+            },
         ]
 
-        if mode == "train":
-            label_path = os.path.join(root, "train.csv")
+        if mode == 'train':
+            label_path = os.path.join(root, 'train.csv')
             total_files = 224316
-        elif mode == "test":
+        elif mode == 'test':
             label_path = os.path.join(
-                root, "valid.csv"
-            )  # using valid.csv in testing mode
+                root, 'valid.csv')  # using valid.csv in testing mode
             total_files = 234
 
         with open(label_path) as f:
-            header = f.readline().strip("\n").split(",")
+            header = f.readline().strip('\n').split(',')
             for i, value in enumerate(header):
                 if subname == value.lower() or (
-                    subname == "effusion" and value.split(" ")[-1].lower() == subname
-                ):
+                        subname == 'effusion'
+                        and value.split(' ')[-1].lower() == subname):
                     subname_index = i
 
-            for line in tqdm(f, desc="Loading {} data".format(mode), total=total_files):
-                fields = line.strip("\n").split(",")
-                image_path = os.path.join(root, "/".join(fields[0].split("/")[1:]))
-                if subname in ["atelectasis", "edema"]:
+            for line in tqdm(f,
+                             desc='Loading {} data'.format(mode),
+                             total=total_files):
+                fields = line.strip('\n').split(',')
+                image_path = os.path.join(root,
+                                          '/'.join(fields[0].split('/')[1:]))
+                if subname in ['atelectasis', 'edema']:
                     value = fields[subname_index]
                     self._labels.append(self.dict[1].get(value))
-                elif subname in ["cardiomegaly", "effusion"]:
+                elif subname in ['cardiomegaly', 'effusion']:
                     value = fields[subname_index]
                     self._labels.append(self.dict[0].get(value))
 
@@ -99,9 +132,9 @@ class Chest(Dataset):
         return self._num_image
 
     def __getitem__(self, idx):
-        image = Image.open(self._image_paths[idx]).convert("RGB")
+        image = Image.open(self._image_paths[idx]).convert('RGB')
 
-        if self._mode == "train":
+        if self._mode == 'train':
             image = self.transform(image)
         else:
             image = self.target_transform(image)
@@ -109,21 +142,22 @@ class Chest(Dataset):
 
         path = self._image_paths[idx]
 
-        if self._mode == "train" or self._mode == "val" or self._mode == "test":
+        if self._mode == 'train' or self._mode == 'val' or self._mode == 'test':
             return (image, label)
-        elif self._mode == "heatmap":
+        elif self._mode == 'heatmap':
             return (image, path, label)
         else:
-            raise Exception("Unknown mode : {}".format(self._mode))
+            raise Exception('Unknown mode : {}'.format(self._mode))
 
 
 class ChestDataset(BaseDataset):
+
     def __init__(
         self,
         name=None,
         root=None,
         transform=None,
-        subname="atelectasis",
+        subname='atelectasis',
         target_transform=None,
         download=True,
         split_types=None,
@@ -144,43 +178,46 @@ class ChestDataset(BaseDataset):
         )
 
         os.makedirs(root, exist_ok=True)
-        final_path = os.path.join(root, "CheXpert-v1.0-small")
+        final_path = os.path.join(root, 'CheXpert-v1.0-small')
 
-        if not os.path.exists(final_path + "/train.csv"):
-            print(f"Chest dataset is not present in {root}. Downloading the dataset")
+        if not os.path.exists(final_path + '/train.csv'):
+            print(
+                f'Chest dataset is not present in {root}. Downloading the dataset'
+            )
             gdown.download(
-                id="1UT4_JsaMV_-KV9hMwNaYnBqhXy5pMZSi",
-                output=f"{root}/CheXpert-v1.0-small.zip",
+                id='1UT4_JsaMV_-KV9hMwNaYnBqhXy5pMZSi',
+                output=f'{root}/CheXpert-v1.0-small.zip',
                 quiet=False,
             )
             os.makedirs(final_path, exist_ok=True)
 
             # unzipping the dataset
-            with zipfile.ZipFile(f"{root}/CheXpert-v1.0-small.zip", "r") as zip_ref:
-                for member in tqdm(zip_ref.infolist(), desc="Extracting "):
+            with zipfile.ZipFile(f'{root}/CheXpert-v1.0-small.zip',
+                                 'r') as zip_ref:
+                for member in tqdm(zip_ref.infolist(), desc='Extracting '):
                     try:
                         zip_ref.extract(member, final_path)
                     except zipfile.error as e:
                         raise Exception(
-                            f"Unable to extract the dataset. Please check the path {root}"
+                            f'Unable to extract the dataset. Please check the path {root}'
                         )
-            print("Removing the zip file")
-            os.remove(f"{root}/CheXpert-v1.0-small.zip")
-            print("Done! downloading the dataset.")
+            print('Removing the zip file')
+            os.remove(f'{root}/CheXpert-v1.0-small.zip')
+            print('Done! downloading the dataset.')
 
-            if not os.path.exists(final_path + "/train.csv"):
+            if not os.path.exists(final_path + '/train.csv'):
                 raise Exception(
-                    f"Unable to download the dataset. Please check the path {root}"
+                    f'Unable to download the dataset. Please check the path {root}'
                 )
         else:
-            print(f"Chest dataset is present in {final_path}")
+            print(f'Chest dataset is present in {final_path}')
 
         dataset = Chest
         self.dataset_dict = {}
 
         for item in self.split_types:
             dataset_type = item
-            if item == "val" and not self.val_exists:
+            if item == 'val' and not self.val_exists:
                 self.dataset_dict[dataset_type] = None
                 continue
             data = dataset(
@@ -201,11 +238,11 @@ class ChestDataset(BaseDataset):
         Returns:
             dataset_dict (dict): Updated with info key that contains details related to the data splits
         """
-        self.dataset_dict["info"] = {}
-        self.dataset_dict["info"]["train_size"] = len(
-            self.dataset_dict["train_sampler"]
-        )
-        self.dataset_dict["info"]["val_size"] = len(self.dataset_dict["val_sampler"])
-        self.dataset_dict["info"]["test_size"] = len(self.dataset_dict["test"])
-        self.dataset_dict["info"]["note"] = ""
+        self.dataset_dict['info'] = {}
+        self.dataset_dict['info']['train_size'] = len(
+            self.dataset_dict['train_sampler'])
+        self.dataset_dict['info']['val_size'] = len(
+            self.dataset_dict['val_sampler'])
+        self.dataset_dict['info']['test_size'] = len(self.dataset_dict['test'])
+        self.dataset_dict['info']['note'] = ''
         return self.dataset_dict

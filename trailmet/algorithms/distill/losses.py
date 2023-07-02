@@ -1,12 +1,34 @@
+# MIT License
+#
+# Copyright (c) 2023 Transmute AI Lab
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from trailmet.utils.functions import pdist
 
-__all__ = ["KDTransferLoss", "RkdDistance", "RKdAngle"]
+__all__ = ['KDTransferLoss', 'RkdDistance', 'RKdAngle']
 
 
 class KDTransferLoss(nn.Module):
+
     def __init__(self, temperature, reduction):
         super().__init__()
         self.temperature = temperature
@@ -21,6 +43,7 @@ class KDTransferLoss(nn.Module):
 
 
 class RkdDistance(nn.Module):
+
     def forward(self, student, teacher):
         with torch.no_grad():
             t_d = pdist(teacher, squared=False)
@@ -31,11 +54,12 @@ class RkdDistance(nn.Module):
         mean_d = d[d > 0].mean()
         d = d / mean_d
 
-        loss = F.smooth_l1_loss(d, t_d, reduction="elementwise_mean")
+        loss = F.smooth_l1_loss(d, t_d, reduction='elementwise_mean')
         return loss
 
 
 class RKdAngle(nn.Module):
+
     def forward(self, student, teacher):
         # N x C
         # N x N x C
@@ -49,5 +73,5 @@ class RKdAngle(nn.Module):
         norm_sd = F.normalize(sd, p=2, dim=2)
         s_angle = torch.bmm(norm_sd, norm_sd.transpose(1, 2)).view(-1)
 
-        loss = F.smooth_l1_loss(s_angle, t_angle, reduction="elementwise_mean")
+        loss = F.smooth_l1_loss(s_angle, t_angle, reduction='elementwise_mean')
         return loss

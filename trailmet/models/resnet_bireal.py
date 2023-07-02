@@ -1,3 +1,24 @@
+# MIT License
+#
+# Copyright (c) 2023 Transmute AI Lab
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
 import torch
 import torch.nn.functional as F
 import torch.nn as nn
@@ -8,15 +29,22 @@ from collections import defaultdict
 
 
 def conv3x3(in_planes, out_planes, stride=1):
-    """3x3 convolution with padding"""
-    return nn.Conv2d(
-        in_planes, out_planes, kernel_size=3, stride=stride, padding=1, bias=False
-    )
+    """3x3 convolution with padding."""
+    return nn.Conv2d(in_planes,
+                     out_planes,
+                     kernel_size=3,
+                     stride=stride,
+                     padding=1,
+                     bias=False)
 
 
 def conv1x1(in_planes, out_planes, stride=1):
-    """1x1 convolution"""
-    return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
+    """1x1 convolution."""
+    return nn.Conv2d(in_planes,
+                     out_planes,
+                     kernel_size=1,
+                     stride=stride,
+                     bias=False)
 
 
 class BasicBlock(nn.Module):
@@ -26,7 +54,7 @@ class BasicBlock(nn.Module):
         super(BasicBlock, self).__init__()
         self.conv1 = conv3x3(inplanes, planes, stride)
         self.bn1 = nn.BatchNorm2d(planes)
-        self.activ = nn.ReLU(inplace=True)
+        self.active = nn.ReLU(inplace=True)
         self.conv2 = conv3x3(planes, planes)
         self.bn2 = nn.BatchNorm2d(planes)
         self.downsample = downsample
@@ -37,7 +65,7 @@ class BasicBlock(nn.Module):
 
         out = self.conv1(x)
         out = self.bn1(out)
-        out = self.activ(out)
+        out = self.active(out)
 
         out = self.conv2(out)
         out = self.bn2(out)
@@ -46,7 +74,7 @@ class BasicBlock(nn.Module):
             residual = self.downsample(x)
 
         out += residual
-        out = self.activ(out)
+        out = self.active(out)
 
         return out
 
@@ -58,15 +86,19 @@ class Bottleneck(nn.Module):
         super(Bottleneck, self).__init__()
         self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False)
         self.bn1 = nn.BatchNorm2d(planes)
-        self.conv2 = nn.Conv2d(
-            planes, planes, kernel_size=3, stride=stride, padding=1, bias=False
-        )
+        self.conv2 = nn.Conv2d(planes,
+                               planes,
+                               kernel_size=3,
+                               stride=stride,
+                               padding=1,
+                               bias=False)
         self.bn2 = nn.BatchNorm2d(planes)
-        self.conv3 = nn.Conv2d(
-            planes, planes * self.expansion, kernel_size=1, bias=False
-        )
+        self.conv3 = nn.Conv2d(planes,
+                               planes * self.expansion,
+                               kernel_size=1,
+                               bias=False)
         self.bn3 = nn.BatchNorm2d(planes * self.expansion)
-        self.activ = nn.ReLU(inplace=True)
+        self.active = nn.ReLU(inplace=True)
         self.downsample = downsample
         self.stride = stride
 
@@ -75,11 +107,11 @@ class Bottleneck(nn.Module):
 
         out = self.conv1(x)
         out = self.bn1(out)
-        out = self.activ(out)
+        out = self.active(out)
 
         out = self.conv2(out)
         out = self.bn2(out)
-        out = self.activ(out)
+        out = self.active(out)
 
         out = self.conv3(out)
         out = self.bn3(out)
@@ -88,12 +120,13 @@ class Bottleneck(nn.Module):
             residual = self.downsample(x)
 
         out += residual
-        out = self.activ(out)
+        out = self.active(out)
 
         return out
 
 
 class ResNetCifar(BaseModel):
+
     def __init__(self, block, layers, width=1, num_classes=1000, insize=32):
         super(ResNetCifar, self).__init__()
         self.inplanes = 16
@@ -101,11 +134,16 @@ class ResNetCifar(BaseModel):
         self.layers_size = layers
         self.num_classes = num_classes
         self.width = width
-        self.conv1 = nn.Conv2d(3, 16, kernel_size=3, stride=1, padding=1, bias=False)
+        self.conv1 = nn.Conv2d(3,
+                               16,
+                               kernel_size=3,
+                               stride=1,
+                               padding=1,
+                               bias=False)
         self.bn1 = nn.BatchNorm2d(16)
         self.prev_module = defaultdict()
         self.prev_module[self.bn1] = None
-        self.activ = nn.ReLU(inplace=True)
+        self.active = nn.ReLU(inplace=True)
         self.layer1 = self._make_layer(block, 16 * width, layers[0])
         self.layer2 = self._make_layer(block, 32 * width, layers[1], stride=2)
         self.layer3 = self._make_layer(block, 64 * width, layers[2], stride=2)
@@ -134,7 +172,7 @@ class ResNetCifar(BaseModel):
                 bias=False,
             )
             bn_module = nn.BatchNorm2d(planes * block.expansion)
-            if hasattr(bn_module, "is_imp"):
+            if hasattr(bn_module, 'is_imp'):
                 bn_module.is_imp = True
             downsample = nn.Sequential(conv_module, bn_module)
 
@@ -149,7 +187,7 @@ class ResNetCifar(BaseModel):
     def forward(self, x):
         x = self.conv1(x)
         x = self.bn1(x)
-        x = self.activ(x)
+        x = self.active(x)
 
         x = self.layer1(x)
         x = self.layer2(x)
@@ -171,6 +209,7 @@ class ResNetCifar(BaseModel):
 
 
 class ResNet(BaseModel):
+
     def __init__(
         self,
         block,
@@ -189,17 +228,23 @@ class ResNet(BaseModel):
         self.block_type = block.__class__.__name__
         self.inplanes = 64
         if insize < 128:
-            self.conv1 = nn.Conv2d(
-                3, 64, kernel_size=3, stride=1, padding=1, bias=False
-            )
+            self.conv1 = nn.Conv2d(3,
+                                   64,
+                                   kernel_size=3,
+                                   stride=1,
+                                   padding=1,
+                                   bias=False)
         else:
-            self.conv1 = nn.Conv2d(
-                3, 64, kernel_size=7, stride=2, padding=3, bias=False
-            )
+            self.conv1 = nn.Conv2d(3,
+                                   64,
+                                   kernel_size=7,
+                                   stride=2,
+                                   padding=3,
+                                   bias=False)
         self.bn1 = nn.BatchNorm2d(64)
         self.prev_module = defaultdict()
         self.prev_module[self.bn1] = None
-        self.activ = nn.ReLU(inplace=True)
+        self.active = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(block, 64 * width, layers[0])
         self.layer2 = self._make_layer(block, 128 * width, layers[1], stride=2)
@@ -211,9 +256,8 @@ class ResNet(BaseModel):
 
         for l in [self.layer1, self.layer2, self.layer3, self.layer4]:
             for b in l.children():
-                downs = (
-                    next(b.downsample.children()) if b.downsample is not None else None
-                )
+                downs = (next(b.downsample.children())
+                         if b.downsample is not None else None)
 
         prev = self.bn1
         for l_block in [self.layer1, self.layer2, self.layer3, self.layer4]:
@@ -236,7 +280,7 @@ class ResNet(BaseModel):
                 bias=False,
             )
             bn_module = nn.BatchNorm2d(planes * block.expansion)
-            if hasattr(bn_module, "is_imp"):
+            if hasattr(bn_module, 'is_imp'):
                 bn_module.is_imp = True
             downsample = nn.Sequential(conv_module, bn_module)
 
@@ -251,7 +295,7 @@ class ResNet(BaseModel):
     def forward(self, x):
         x = self.conv1(x)
         x = self.bn1(x)
-        x = self.activ(x)
+        x = self.active(x)
         x = self.maxpool(x)
 
         x = self.layer1(x)
@@ -272,7 +316,7 @@ class ResNet(BaseModel):
         bn_layers = []
         for l_blocks in [self.layer1, self.layer2, self.layer3, self.layer4]:
             for b in l_blocks:
-                if self.block_type == "Bottleneck":
+                if self.block_type == 'Bottleneck':
                     m1, m2, m3 = b.bn1, b.bn2, b.bn3
                     bn_layers.append([m1, m2, m3])
                 else:
@@ -282,108 +326,123 @@ class ResNet(BaseModel):
 
 
 def make_wide_resnet(num_classes, insize):
-    model = ResNetCifar(
-        BasicBlock, [4, 4, 4], width=12, num_classes=num_classes, insize=insize
-    )
+    model = ResNetCifar(BasicBlock, [4, 4, 4],
+                        width=12,
+                        num_classes=num_classes,
+                        insize=insize)
     return model
 
 
 def make_resnet20(num_classes, insize):
-    model = ResNetCifar(
-        BasicBlock, [3, 3, 3], width=1, num_classes=num_classes, insize=insize
-    )
+    model = ResNetCifar(BasicBlock, [3, 3, 3],
+                        width=1,
+                        num_classes=num_classes,
+                        insize=insize)
     return model
 
 
 def make_resnet32(num_classes, insize):
-    model = ResNetCifar(
-        BasicBlock, [5, 5, 5], width=1, num_classes=num_classes, insize=insize
-    )
+    model = ResNetCifar(BasicBlock, [5, 5, 5],
+                        width=1,
+                        num_classes=num_classes,
+                        insize=insize)
     return model
 
 
 def make_resnet50(num_classes, insize):
-    model = ResNet(Bottleneck, [3, 4, 6, 3], num_classes=num_classes, insize=insize)
+    model = ResNet(Bottleneck, [3, 4, 6, 3],
+                   num_classes=num_classes,
+                   insize=insize)
     return model
 
 
 def make_resnet56(num_classes, insize):
-    model = ResNetCifar(
-        BasicBlock, [9, 9, 9], width=1, num_classes=num_classes, insize=insize
-    )
+    model = ResNetCifar(BasicBlock, [9, 9, 9],
+                        width=1,
+                        num_classes=num_classes,
+                        insize=insize)
     return model
 
 
 def make_resnet18(num_classes, insize):
-    model = ResNet(BasicBlock, [2, 2, 2, 2], num_classes=num_classes, insize=insize)
+    model = ResNet(BasicBlock, [2, 2, 2, 2],
+                   num_classes=num_classes,
+                   insize=insize)
     return model
 
 
 def make_resnet101(num_classes, insize):
-    model = ResNet(Bottleneck, [3, 4, 23, 3], num_classes=num_classes, insize=insize)
+    model = ResNet(Bottleneck, [3, 4, 23, 3],
+                   num_classes=num_classes,
+                   insize=insize)
     return model
 
 
 def make_resnet110(num_classes, insize):
-    model = ResNetCifar(
-        BasicBlock, [18, 18, 18], width=1, num_classes=num_classes, insize=insize
-    )
+    model = ResNetCifar(BasicBlock, [18, 18, 18],
+                        width=1,
+                        num_classes=num_classes,
+                        insize=insize)
     return model
 
 
 def make_resnet152(num_classes, insize):
-    model = ResNet(Bottleneck, [3, 8, 36, 3], num_classes=num_classes, insize=insize)
+    model = ResNet(Bottleneck, [3, 8, 36, 3],
+                   num_classes=num_classes,
+                   insize=insize)
     return model
 
 
 def get_resnet_model(model, num_classes, insize, pretrained):
-    """Returns the requested model, ready for training/pruning with the specified method.
+    """Returns the requested model, ready for training/pruning with the
+    specified method.
+
     :param model: str, either wrn or r50
     :param num_classes: int, num classes in the dataset
     :return: A prunable ResNet model
     """
-    if model == "wrn":
+    if model == 'wrn':
         net = make_wide_resnet(num_classes, insize)
         pretrained_weights = None
 
-    elif model == "resnet18":
+    elif model == 'resnet18':
         net = make_resnet18(num_classes, insize)
-        pretrained_weights = "https://download.pytorch.org/models/resnet18-f37072fd.pth"
-    elif model == "resnet20":
+        pretrained_weights = 'https://download.pytorch.org/models/resnet18-f37072fd.pth'
+    elif model == 'resnet20':
         net = make_resnet20(num_classes, insize)
         pretrained_weights = None
-    elif model == "resnet32":
+    elif model == 'resnet32':
         net = make_resnet32(num_classes, insize)
         pretrained_weights = None
-    elif model == "resnet50":
+    elif model == 'resnet50':
         net = make_resnet50(num_classes, insize)
-        pretrained_weights = "https://download.pytorch.org/models/resnet50-11ad3fa6.pth"
-    elif model == "resnet56":
+        pretrained_weights = 'https://download.pytorch.org/models/resnet50-11ad3fa6.pth'
+    elif model == 'resnet56':
         net = make_resnet56(num_classes, insize)
         pretrained_weights = None
-    elif model == "resnet101":
+    elif model == 'resnet101':
         net = make_resnet101(num_classes, insize)
         pretrained_weights = (
-            "https://download.pytorch.org/models/resnet101-cd907fc2.pth"
-        )
-    elif model == "resnet110":
+            'https://download.pytorch.org/models/resnet101-cd907fc2.pth')
+    elif model == 'resnet110':
         net = make_resnet110(num_classes, insize)
         pretrained_weights = None
-    elif model == "resnet152":
+    elif model == 'resnet152':
         net = make_resnet152(num_classes, insize)
         pretrained_weights = (
-            "https://download.pytorch.org/models/resnet152-f82ba261.pth"
-        )
+            'https://download.pytorch.org/models/resnet152-f82ba261.pth')
     if pretrained:
         if pretrained_weights != None:
-            weights = load_state_dict_from_url(pretrained_weights, progress=True)
+            weights = load_state_dict_from_url(pretrained_weights,
+                                               progress=True)
             net.load_state_dict(weights, strict=False)
         else:
-            print("pretrained weights not available")
+            print('pretrained weights not available')
     return net
 
 
 class BinaryActivation(nn.Module):
+
     def __init__(self):
         super(BinaryActivation, self).__init__()
 
@@ -395,28 +454,28 @@ class BinaryActivation(nn.Module):
         mask1 = x < -1
         mask2 = x < 0
         mask3 = x < 1
-        out1 = (-1) * mask1.type(torch.float32) + (x * x + 2 * x) * (
-            1 - mask1.type(torch.float32)
-        )
-        out2 = out1 * mask2.type(torch.float32) + (-x * x + 2 * x) * (
-            1 - mask2.type(torch.float32)
-        )
-        out3 = out2 * mask3.type(torch.float32) + 1 * (1 - mask3.type(torch.float32))
+        out1 = (-1) * mask1.type(
+            torch.float32) + (x * x + 2 * x) * (1 - mask1.type(torch.float32))
+        out2 = out1 * mask2.type(
+            torch.float32) + (-x * x + 2 * x) * (1 - mask2.type(torch.float32))
+        out3 = out2 * mask3.type(
+            torch.float32) + 1 * (1 - mask3.type(torch.float32))
         out = out_forward.detach() - out3.detach() + out3
 
         return out
 
 
 class HardBinaryConv(nn.Module):
+
     def __init__(self, in_chn, out_chn, kernel_size=3, stride=1, padding=1):
         super(HardBinaryConv, self).__init__()
         self.stride = stride
         self.padding = padding
         self.number_of_weights = in_chn * out_chn * kernel_size * kernel_size
         self.shape = (out_chn, in_chn, kernel_size, kernel_size)
-        self.weights = nn.Parameter(
-            torch.rand((self.number_of_weights, 1)) * 0.001, requires_grad=True
-        )
+        self.weights = nn.Parameter(torch.rand(
+            (self.number_of_weights, 1)) * 0.001,
+                                    requires_grad=True)
 
     def forward(self, x):
         real_weights = self.weights.view(self.shape)
@@ -433,11 +492,13 @@ class HardBinaryConv(nn.Module):
         scaling_factor = scaling_factor.detach()
         binary_weights_no_grad = scaling_factor * torch.sign(real_weights)
         cliped_weights = torch.clamp(real_weights, -1.0, 1.0)
-        binary_weights = (
-            binary_weights_no_grad.detach() - cliped_weights.detach() + cliped_weights
-        )
+        binary_weights = (binary_weights_no_grad.detach() -
+                          cliped_weights.detach() + cliped_weights)
         #         print(binary_weights.shape)
-        y = F.conv2d(x, binary_weights, stride=self.stride, padding=self.padding)
+        y = F.conv2d(x,
+                     binary_weights,
+                     stride=self.stride,
+                     padding=self.padding)
 
         return y
 
@@ -445,7 +506,12 @@ class HardBinaryConv(nn.Module):
 class BinaryBasicBlock(nn.Module):
     expansion = 1
 
-    def __init__(self, inplanes, planes, stride=1, downsample=None, binarise=True):
+    def __init__(self,
+                 inplanes,
+                 planes,
+                 stride=1,
+                 downsample=None,
+                 binarise=True):
         super(BinaryBasicBlock, self).__init__()
         self.binarise = binarise
         if self.binarise:
@@ -473,6 +539,7 @@ class BinaryBasicBlock(nn.Module):
 
 
 class BirealNet(ResNet):
+
     def __init__(
         self,
         block,
@@ -498,9 +565,18 @@ class BirealNet(ResNet):
         self.count_fp = 0
         self.inplanes = 64
         self.layer1 = self._make_layer1(block, 64 * width, layers[0])
-        self.layer2 = self._make_layer1(block, 128 * width, layers[1], stride=2)
-        self.layer3 = self._make_layer1(block, 256 * width, layers[2], stride=2)
-        self.layer4 = self._make_layer1(block, 512 * width, layers[3], stride=2)
+        self.layer2 = self._make_layer1(block,
+                                        128 * width,
+                                        layers[1],
+                                        stride=2)
+        self.layer3 = self._make_layer1(block,
+                                        256 * width,
+                                        layers[2],
+                                        stride=2)
+        self.layer4 = self._make_layer1(block,
+                                        512 * width,
+                                        layers[3],
+                                        stride=2)
 
     def _make_layer1(self, block, planes, blocks, stride=1):
         downsample = None
@@ -514,8 +590,11 @@ class BirealNet(ResNet):
 
             layers = []
             layers.append(
-                block(self.inplanes, planes, stride, downsample, binarise=False)
-            )
+                block(self.inplanes,
+                      planes,
+                      stride,
+                      downsample,
+                      binarise=False))
             self.inplanes = planes * block.expansion
             for _ in range(1, blocks):
                 layers.append(block(self.inplanes, planes, binarise=False))
@@ -531,8 +610,8 @@ class BirealNet(ResNet):
 
             layers = []
             layers.append(
-                block(self.inplanes, planes, stride, downsample, binarise=True)
-            )
+                block(self.inplanes, planes, stride, downsample,
+                      binarise=True))
             self.inplanes = planes * block.expansion
             for _ in range(1, blocks):
                 layers.append(block(self.inplanes, planes, binarise=True))

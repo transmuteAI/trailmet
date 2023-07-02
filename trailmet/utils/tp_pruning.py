@@ -1,3 +1,24 @@
+# MIT License
+#
+# Copyright (c) 2023 Transmute AI Lab
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
 import torch
 import os
 import yaml
@@ -10,6 +31,7 @@ from ..algorithms.prune.utils import cal_threshold_by_bn2d_weights
 
 
 class TP_Prune:
+
     def __init__(
         self,
         method=None,
@@ -17,9 +39,9 @@ class TP_Prune:
         org_model=None,
         batch_size=64,
         input_size=32,
-        device_name="cpu",
+        device_name='cpu',
         root=None,
-        yaml_name="resnet50_cifar100.yaml",
+        yaml_name='resnet50_cifar100.yaml',
     ):
         self.root = root
         self.method = method
@@ -32,10 +54,10 @@ class TP_Prune:
         self.org_model.to(self.device)
 
         # for network slimming
-        if self.method == "network_slimming":
-            with open(os.path.join(self.root, yaml_name), "r") as stream:
+        if self.method == 'network_slimming':
+            with open(os.path.join(self.root, yaml_name), 'r') as stream:
                 data_loaded = yaml.safe_load(stream)
-            data_loaded["schema_root"] = self.root
+            data_loaded['schema_root'] = self.root
             slim = Network_Slimming(**data_loaded)
             self.pruner = SlimPruner(self.prune_model, slim.prune_schema)
             self.threshold = cal_threshold_by_bn2d_weights(
@@ -46,26 +68,21 @@ class TP_Prune:
     def prune(self):
         DG = tp.DependencyGraph().build_dependency(
             self.org_model,
-            example_inputs=torch.randn(1, 3, self.input_size, self.input_size).to(
-                self.device
-            ),
+            example_inputs=torch.randn(1, 3, self.input_size,
+                                       self.input_size).to(self.device),
         )
 
-        if self.method == "chipnet":
-            print("==> Chipnet method is selected for pruning")
-            print("==> Pruning model started")
+        if self.method == 'chipnet':
+            print('==> Chipnet method is selected for pruning')
+            print('==> Pruning model started')
 
             for prune_model_modules, org_model_modules in zip(
-                self.prune_model.named_modules(), self.org_model.named_modules()
-            ):
-                if hasattr(prune_model_modules[1], "pruned_zeta") and (
-                    0 in prune_model_modules[1].pruned_zeta
-                ):
-                    indices = (
-                        torch.where(prune_model_modules[1].pruned_zeta == 0)[0]
-                        .cpu()
-                        .tolist()
-                    )
+                    self.prune_model.named_modules(),
+                    self.org_model.named_modules()):
+                if hasattr(prune_model_modules[1], 'pruned_zeta') and (
+                        0 in prune_model_modules[1].pruned_zeta):
+                    indices = (torch.where(prune_model_modules[1].pruned_zeta
+                                           == 0)[0].cpu().tolist())
                     group = DG.get_pruning_group(
                         org_model_modules[1],
                         tp.prune_batchnorm_out_channels,
@@ -74,30 +91,30 @@ class TP_Prune:
 
                     # # 3. prune all grouped layers that are coupled with model.conv1 (included).
                     if DG.check_pruning_group(
-                        group
-                    ):  # avoid full pruning, i.e., channels=0.
+                            group):  # avoid full pruning, i.e., channels=0.
                         group.prune()
 
-            print("==> Pruning model completed.")
+            print('==> Pruning model completed.')
 
-        elif self.method == "network_slimming":
-            print("==> Network Slimming method is selected for pruning")
-            print("==> Pruning model started")
+        elif self.method == 'network_slimming':
+            print('==> Network Slimming method is selected for pruning')
+            print('==> Pruning model started')
 
             for name, module in self.org_model.named_modules():
-                if "model." + name in list(self.pruner.bn2d_modules.keys()):
-                    self.pruner.bn2d_modules["model." + name].cal_keep_idxes(
+                if 'model.' + name in list(self.pruner.bn2d_modules.keys()):
+                    self.pruner.bn2d_modules['model.' + name].cal_keep_idxes(
                         self.threshold,
                         min_keep_ratio=0.02,
-                        channel_rounding=ChannelRounding(self.pruner.channel_rounding),
+                        channel_rounding=ChannelRounding(
+                            self.pruner.channel_rounding),
                     )
 
                     total_idxs = np.arange(
-                        self.pruner.bn2d_modules["model." + name].module.num_features
-                    )
+                        self.pruner.bn2d_modules['model.' +
+                                                 name].module.num_features)
                     remove_idxs = np.setdiff1d(
-                        total_idxs, self.pruner.bn2d_modules["model." + name].keep_idxes
-                    )
+                        total_idxs,
+                        self.pruner.bn2d_modules['model.' + name].keep_idxes)
 
                     group = DG.get_pruning_group(
                         module,
@@ -107,17 +124,15 @@ class TP_Prune:
 
                     # # 3. prune all grouped layers that are coupled with model.conv1 (included).
                     if DG.check_pruning_group(
-                        group
-                    ):  # avoid full pruning, i.e., channels=0.
+                            group):  # avoid full pruning, i.e., channels=0.
                         group.prune()
 
         return self.prune_model, self.org_model
 
     def benchmark_model(self, model):
-        print("==> Model for benchmarking")
+        print('==> Model for benchmarking')
         print(model)
-        print("==> Benchmarking model started")
-        model_benchmark = ModelBenchmark(
-            model, self.batch_size, self.input_size, self.device
-        )
+        print('==> Benchmarking model started')
+        model_benchmark = ModelBenchmark(model, self.batch_size,
+                                         self.input_size, self.device)
         model_benchmark.benchmark()

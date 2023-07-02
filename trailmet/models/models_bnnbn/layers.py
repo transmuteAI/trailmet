@@ -1,33 +1,58 @@
+# MIT License
+#
+# Copyright (c) 2023 Transmute AI Lab
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-
 __all__ = [
-    "LambdaLayer",
-    "ScaledStdConv2d",
-    "HardBinaryScaledStdConv2d",
-    "LearnableBias",
-    "BinaryActivation",
-    "HardBinaryConv",
+    'LambdaLayer',
+    'ScaledStdConv2d',
+    'HardBinaryScaledStdConv2d',
+    'LearnableBias',
+    'BinaryActivation',
+    'HardBinaryConv',
 ]
 
 
 def get_weight(module):
-    std, mean = torch.std_mean(
-        module.weight, dim=[1, 2, 3], keepdim=True, unbiased=False
-    )
+    std, mean = torch.std_mean(module.weight,
+                               dim=[1, 2, 3],
+                               keepdim=True,
+                               unbiased=False)
     weight = (module.weight - mean) / (std + module.eps)
     return weight
 
 
 # Calculate symmetric padding for a convolution
-def get_padding(kernel_size: int, stride: int = 1, dilation: int = 1, **_) -> int:
+def get_padding(kernel_size: int,
+                stride: int = 1,
+                dilation: int = 1,
+                **_) -> int:
     padding = ((stride - 1) + dilation * (kernel_size - 1)) // 2
     return padding
 
 
 class LambdaLayer(nn.Module):
+
     def __init__(self, lambd):
         super(LambdaLayer, self).__init__()
         self.lambd = lambd
@@ -72,19 +97,20 @@ class ScaledStdConv2d(nn.Conv2d):
             bias=bias,
         )
         self.gain = nn.Parameter(torch.ones(self.out_channels, 1, 1, 1))
-        self.scale = gamma * self.weight[0].numel() ** -0.5  # gamma * 1 / sqrt(fan-in)
+        self.scale = gamma * self.weight[0].numel(
+        )**-0.5  # gamma * 1 / sqrt(fan-in)
         self.eps = eps**2 if use_layernorm else eps
         self.use_layernorm = use_layernorm  # experimental, slightly faster/less GPU memory to hijack LN kernel
 
     def get_weight(self):
         if self.use_layernorm:
             weight = self.scale * F.layer_norm(
-                self.weight, self.weight.shape[1:], eps=self.eps
-            )
+                self.weight, self.weight.shape[1:], eps=self.eps)
         else:
-            std, mean = torch.std_mean(
-                self.weight, dim=[1, 2, 3], keepdim=True, unbiased=False
-            )
+            std, mean = torch.std_mean(self.weight,
+                                       dim=[1, 2, 3],
+                                       keepdim=True,
+                                       unbiased=False)
             weight = self.scale * (self.weight - mean) / (std + self.eps)
         return self.gain * weight
 
@@ -101,6 +127,7 @@ class ScaledStdConv2d(nn.Conv2d):
 
 
 class HardBinaryScaledStdConv2d(nn.Module):
+
     def __init__(
         self,
         in_chn,
@@ -116,48 +143,53 @@ class HardBinaryScaledStdConv2d(nn.Module):
         self.stride = stride
         self.padding = padding
         self.shape = (out_chn, in_chn, kernel_size, kernel_size)
-        self.weight = nn.Parameter(torch.rand(self.shape) * 0.001, requires_grad=True)
+        self.weight = nn.Parameter(torch.rand(self.shape) * 0.001,
+                                   requires_grad=True)
 
         self.gain = nn.Parameter(torch.ones(out_chn, 1, 1, 1))
-        self.scale = gamma * self.weight[0].numel() ** -0.5
+        self.scale = gamma * self.weight[0].numel()**-0.5
         self.eps = eps**2 if use_layernorm else eps
         self.use_layernorm = use_layernorm
 
     def get_weight(self):
         if self.use_layernorm:
             weight = self.scale * F.layer_norm(
-                self.weight, self.weight.shape[1:], eps=self.eps
-            )
+                self.weight, self.weight.shape[1:], eps=self.eps)
         else:
-            std, mean = torch.std_mean(
-                self.weight, dim=[1, 2, 3], keepdim=True, unbiased=False
-            )
+            std, mean = torch.std_mean(self.weight,
+                                       dim=[1, 2, 3],
+                                       keepdim=True,
+                                       unbiased=False)
             weight = self.scale * (self.weight - mean) / (std + self.eps)
 
         scaling_factor = torch.mean(
-            torch.mean(
-                torch.mean(abs(weight), dim=3, keepdim=True), dim=2, keepdim=True
-            ),
+            torch.mean(torch.mean(abs(weight), dim=3, keepdim=True),
+                       dim=2,
+                       keepdim=True),
             dim=1,
             keepdim=True,
         )
         scaling_factor = scaling_factor.detach()
         binary_weights_no_grad = scaling_factor * torch.sign(weight)
         cliped_weights = torch.clamp(weight, -1.0, 1.0)
-        binary_weights = (
-            binary_weights_no_grad.detach() - cliped_weights.detach() + cliped_weights
-        )
+        binary_weights = (binary_weights_no_grad.detach() -
+                          cliped_weights.detach() + cliped_weights)
 
         return self.gain * binary_weights
 
     def forward(self, x):
-        return F.conv2d(x, self.get_weight(), stride=self.stride, padding=self.padding)
+        return F.conv2d(x,
+                        self.get_weight(),
+                        stride=self.stride,
+                        padding=self.padding)
 
 
 class LearnableBias(nn.Module):
+
     def __init__(self, out_chn):
         super(LearnableBias, self).__init__()
-        self.bias = nn.Parameter(torch.zeros(1, out_chn, 1, 1), requires_grad=True)
+        self.bias = nn.Parameter(torch.zeros(1, out_chn, 1, 1),
+                                 requires_grad=True)
 
     def forward(self, x):
         out = x + self.bias.expand_as(x)
@@ -165,6 +197,7 @@ class LearnableBias(nn.Module):
 
 
 class BinaryActivation(nn.Module):
+
     def __init__(self):
         super(BinaryActivation, self).__init__()
 
@@ -176,19 +209,19 @@ class BinaryActivation(nn.Module):
         mask1 = x < -1
         mask2 = x < 0
         mask3 = x < 1
-        out1 = (-1) * mask1.type(torch.float32) + (x * x + 2 * x) * (
-            1 - mask1.type(torch.float32)
-        )
-        out2 = out1 * mask2.type(torch.float32) + (-x * x + 2 * x) * (
-            1 - mask2.type(torch.float32)
-        )
-        out3 = out2 * mask3.type(torch.float32) + 1 * (1 - mask3.type(torch.float32))
+        out1 = (-1) * mask1.type(
+            torch.float32) + (x * x + 2 * x) * (1 - mask1.type(torch.float32))
+        out2 = out1 * mask2.type(
+            torch.float32) + (-x * x + 2 * x) * (1 - mask2.type(torch.float32))
+        out3 = out2 * mask3.type(
+            torch.float32) + 1 * (1 - mask3.type(torch.float32))
         out = out_forward.detach() - out3.detach() + out3
 
         return out
 
 
 class HardBinaryConv(nn.Module):
+
     def __init__(self, in_chn, out_chn, kernel_size=3, stride=1, padding=1):
         super(HardBinaryConv, self).__init__()
         self.stride = stride
@@ -196,23 +229,26 @@ class HardBinaryConv(nn.Module):
         self.number_of_weights = in_chn * out_chn * kernel_size * kernel_size
         self.shape = (out_chn, in_chn, kernel_size, kernel_size)
         # self.weight = nn.Parameter(torch.rand((self.number_of_weights,1)) * 0.001, requires_grad=True)
-        self.weight = nn.Parameter(torch.rand((self.shape)) * 0.001, requires_grad=True)
+        self.weight = nn.Parameter(torch.rand((self.shape)) * 0.001,
+                                   requires_grad=True)
 
     def forward(self, x):
         real_weights = self.weight
         scaling_factor = torch.mean(
-            torch.mean(
-                torch.mean(abs(real_weights), dim=3, keepdim=True), dim=2, keepdim=True
-            ),
+            torch.mean(torch.mean(abs(real_weights), dim=3, keepdim=True),
+                       dim=2,
+                       keepdim=True),
             dim=1,
             keepdim=True,
         )
         scaling_factor = scaling_factor.detach()
         binary_weights_no_grad = scaling_factor * torch.sign(real_weights)
         cliped_weights = torch.clamp(real_weights, -1.0, 1.0)
-        binary_weights = (
-            binary_weights_no_grad.detach() - cliped_weights.detach() + cliped_weights
-        )
-        y = F.conv2d(x, binary_weights, stride=self.stride, padding=self.padding)
+        binary_weights = (binary_weights_no_grad.detach() -
+                          cliped_weights.detach() + cliped_weights)
+        y = F.conv2d(x,
+                     binary_weights,
+                     stride=self.stride,
+                     padding=self.padding)
 
         return y

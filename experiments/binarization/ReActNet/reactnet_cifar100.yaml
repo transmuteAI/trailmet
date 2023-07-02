@@ -5,7 +5,7 @@ GENERAL:
   workers: 4
   valid_size: 0.1
   num_train: 0
-  
+
   num_classes: 100                              #class size
   insize: 32                                    #insize of input image
 

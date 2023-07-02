@@ -1,12 +1,30 @@
-"""
-ReActNet(modified from MobileNetv1)
+# MIT License
+#
+# Copyright (c) 2023 Transmute AI Lab
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+"""ReActNet(modified from MobileNetv1)
 
 BN setting: remove all BatchNorm layers
 Conv setting: replace conv2d with ScaledstdConv2d (add alpha beta each blocks)
 Binary setting: only activation are binarized
-
 """
-
 
 import torch
 import torch.nn as nn
@@ -16,38 +34,49 @@ import numpy as np
 
 from .layers import *
 
-stage_out_channel = [32] + [64] + [128] * 2 + [256] * 2 + [512] * 6 + [1024] * 2
+stage_out_channel = [32] + [64
+                            ] + [128] * 2 + [256] * 2 + [512] * 6 + [1024] * 2
 
 
 def conv3x3(in_planes, out_planes, stride=1):
-    """3x3 convolution with padding"""
-    return ScaledStdConv2d(
-        in_planes, out_planes, kernel_size=3, stride=stride, padding=1, bias=False
-    )
+    """3x3 convolution with padding."""
+    return ScaledStdConv2d(in_planes,
+                           out_planes,
+                           kernel_size=3,
+                           stride=stride,
+                           padding=1,
+                           bias=False)
 
 
 def conv1x1(in_planes, out_planes, stride=1):
-    """1x1 convolution"""
-    return ScaledStdConv2d(
-        in_planes, out_planes, kernel_size=1, stride=stride, bias=False
-    )
+    """1x1 convolution."""
+    return ScaledStdConv2d(in_planes,
+                           out_planes,
+                           kernel_size=1,
+                           stride=stride,
+                           bias=False)
 
 
 def binaryconv3x3(in_planes, out_planes, stride=1):
-    """3x3 convolution with padding"""
-    return HardBinaryScaledStdConv2d(
-        in_planes, out_planes, kernel_size=3, stride=stride, padding=1
-    )
+    """3x3 convolution with padding."""
+    return HardBinaryScaledStdConv2d(in_planes,
+                                     out_planes,
+                                     kernel_size=3,
+                                     stride=stride,
+                                     padding=1)
 
 
 def binaryconv1x1(in_planes, out_planes, stride=1):
-    """1x1 convolution"""
-    return HardBinaryScaledStdConv2d(
-        in_planes, out_planes, kernel_size=1, stride=stride, padding=0
-    )
+    """1x1 convolution."""
+    return HardBinaryScaledStdConv2d(in_planes,
+                                     out_planes,
+                                     kernel_size=1,
+                                     stride=stride,
+                                     padding=0)
 
 
 class firstconv3x3(nn.Module):
+
     def __init__(self, inp, oup, stride):
         super(firstconv3x3, self).__init__()
         self.conv1 = ScaledStdConv2d(inp, oup, 3, stride, 1, bias=False)
@@ -58,6 +87,7 @@ class firstconv3x3(nn.Module):
 
 
 class BasicBlock(nn.Module):
+
     def __init__(self, inplanes, planes, alpha, beta1, beta2, stride=1):
         super(BasicBlock, self).__init__()
         norm_layer = nn.BatchNorm2d
@@ -135,6 +165,7 @@ class BasicBlock(nn.Module):
 
 
 class reactnet(nn.Module):
+
     def __init__(self, alpha=0.2, num_classes=1000):
         super(reactnet, self).__init__()
 
@@ -147,10 +178,8 @@ class reactnet(nn.Module):
                 beta2 = 1.0 / expected_var**0.5
 
                 self.feature.append(firstconv3x3(3, stage_out_channel[i], 2))
-            elif (
-                stage_out_channel[i - 1] != stage_out_channel[i]
-                and stage_out_channel[i] != 64
-            ):
+            elif (stage_out_channel[i - 1] != stage_out_channel[i]
+                  and stage_out_channel[i] != 64):
                 self.feature.append(
                     BasicBlock(
                         stage_out_channel[i - 1],
@@ -159,8 +188,7 @@ class reactnet(nn.Module):
                         beta1,
                         beta2,
                         2,
-                    )
-                )
+                    ))
                 # Reset expected var at a transition block
                 expected_var = 1.0
                 beta1 = 1.0 / expected_var**0.5
@@ -176,8 +204,7 @@ class reactnet(nn.Module):
                         beta1,
                         beta2,
                         1,
-                    )
-                )
+                    ))
 
                 expected_var += alpha**2
                 beta1 = 1.0 / expected_var**0.5

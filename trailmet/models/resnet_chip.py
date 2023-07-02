@@ -1,3 +1,24 @@
+# MIT License
+#
+# Copyright (c) 2023 Transmute AI Lab
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
 import torch.nn as nn
 
 stage_repeat = [3, 4, 6, 3]
@@ -11,15 +32,19 @@ def adapt_channel(sparsity):
         stage_oup_cprate += [sparsity[i + 1]] * stage_repeat[i]
     stage_oup_cprate += [0.0] * stage_repeat[-1]
 
-    mid_scale_cprate = sparsity[len(stage_repeat) :]
+    mid_scale_cprate = sparsity[len(stage_repeat):]
 
     overall_channel = []
     mid_channel = []
     for i in range(len(stage_out_channel)):
         if i == 0:
-            overall_channel += [int(stage_out_channel[i] * (1 - stage_oup_cprate[i]))]
+            overall_channel += [
+                int(stage_out_channel[i] * (1 - stage_oup_cprate[i]))
+            ]
         else:
-            overall_channel += [int(stage_out_channel[i] * (1 - stage_oup_cprate[i]))]
+            overall_channel += [
+                int(stage_out_channel[i] * (1 - stage_oup_cprate[i]))
+            ]
             mid_channel += [
                 int(stage_out_channel[i] // 4 * (1 - mid_scale_cprate[i - 1]))
             ]
@@ -28,19 +53,32 @@ def adapt_channel(sparsity):
 
 
 def conv3x3(in_planes, out_planes, stride=1):
-    """3x3 convolution with padding"""
-    return nn.Conv2d(
-        in_planes, out_planes, kernel_size=3, stride=stride, padding=1, bias=False
-    )
+    """3x3 convolution with padding."""
+    return nn.Conv2d(in_planes,
+                     out_planes,
+                     kernel_size=3,
+                     stride=stride,
+                     padding=1,
+                     bias=False)
 
 
 def conv1x1(in_planes, out_planes, stride=1):
-    """1x1 convolution"""
-    return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
+    """1x1 convolution."""
+    return nn.Conv2d(in_planes,
+                     out_planes,
+                     kernel_size=1,
+                     stride=stride,
+                     bias=False)
 
 
 class Bottleneck(nn.Module):
-    def __init__(self, midplanes, inplanes, planes, stride=1, is_downsample=False):
+
+    def __init__(self,
+                 midplanes,
+                 inplanes,
+                 planes,
+                 stride=1,
+                 is_downsample=False):
         super(Bottleneck, self).__init__()
         expansion = 4
 
@@ -96,6 +134,7 @@ class Bottleneck(nn.Module):
 
 
 class LambdaLayer(nn.Module):
+
     def __init__(self, lambd):
         super(LambdaLayer, self).__init__()
         self.lambd = lambd
@@ -105,6 +144,7 @@ class LambdaLayer(nn.Module):
 
 
 class ResNet50(nn.Module):
+
     def __init__(self, sparsity, num_classes=1000):
         super(ResNet50, self).__init__()
 
@@ -131,36 +171,33 @@ class ResNet50(nn.Module):
         layer_num += 1
         for i in range(len(stage_repeat)):
             if i == 0:
-                eval("self.layer%d" % (i + 1)).append(
+                eval('self.layer%d' % (i + 1)).append(
                     Bottleneck(
                         mid_channel[layer_num - 1],
                         overall_channel[layer_num - 1],
                         overall_channel[layer_num],
                         stride=1,
                         is_downsample=True,
-                    )
-                )
+                    ))
                 layer_num += 1
             else:
-                eval("self.layer%d" % (i + 1)).append(
+                eval('self.layer%d' % (i + 1)).append(
                     Bottleneck(
                         mid_channel[layer_num - 1],
                         overall_channel[layer_num - 1],
                         overall_channel[layer_num],
                         stride=2,
                         is_downsample=True,
-                    )
-                )
+                    ))
                 layer_num += 1
 
             for j in range(1, stage_repeat[i]):
-                eval("self.layer%d" % (i + 1)).append(
+                eval('self.layer%d' % (i + 1)).append(
                     Bottleneck(
                         mid_channel[layer_num - 1],
                         overall_channel[layer_num - 1],
                         overall_channel[layer_num],
-                    )
-                )
+                    ))
                 layer_num += 1
 
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))

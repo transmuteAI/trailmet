@@ -26,8 +26,6 @@ update_reg_interval: 5
 stabilize_reg_interval: 40000
 mag_ratio_limit: 1000
 reg_granularity_recover: 0.00001
-reg_granularity_prune: 0.0001
-reg_granularity_recover: 0.0001
 plot_interval: 5
 save_order_log: False
 save_mag_reg_log: False
