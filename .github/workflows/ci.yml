@@ -27,7 +27,7 @@ jobs:
         run: pytest
       - name: Install pre-commit hook
         run: |
-          pip install pre-commit
+          pip install pre-commit==3.3.3
           pre-commit install
       - name: Linting
         run: pre-commit run --all-files
