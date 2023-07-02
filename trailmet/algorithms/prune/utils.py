@@ -1,3 +1,24 @@
+# MIT License
+#
+# Copyright (c) 2023 Transmute AI Lab
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
 import math
 from typing import List
 import torch
@@ -8,50 +29,44 @@ import pandas as pd
 # how to change weights.data https://discuss.pytorch.org/t/how-to-delete-every-grad-after-training/63644/8
 
 __all__ = [
-    "update_bn_grad",
-    "summary_model",
-    "is_depthwise_conv2d",
-    "prune_conv2d",
-    "prune_bn2d",
-    "prune_fc",
-    "cal_threshold_by_bn2d_weights",
-    "mask2idxes",
-    "top_k_idxes",
-    "ceil",
-    "round_up_to_power_of_2",
+    'update_bn_grad',
+    'summary_model',
+    'is_depthwise_conv2d',
+    'prune_conv2d',
+    'prune_bn2d',
+    'prune_fc',
+    'cal_threshold_by_bn2d_weights',
+    'mask2idxes',
+    'top_k_idxes',
+    'ceil',
+    'round_up_to_power_of_2',
 ]
 
 
 def update_bn_grad(model, s=0.0001):
-    """
-    根据 BN 的 gamma 系数稀疏化训练 BN 层
-    在 loss.backward() 之后执行
+    """根据 BN 的 gamma 系数稀疏化训练 BN 层 在 loss.backward() 之后执行.
 
     Args:
         model: nn.Module
         s: 系数训练的权重
 
     Returns:
-
     """
     for m in model.modules():
         if isinstance(m, BatchNorm2d):
             m.weight.grad.data.add_(s * torch.sign(m.weight.data))
 
 
-def summary_model(
-    model: torch.nn.Module, prune_related_layer_types=(Conv2d, BatchNorm2d, Linear)
-):
-    """
-    打印 model 中和剪枝有关的层
-    """
+def summary_model(model: torch.nn.Module,
+                  prune_related_layer_types=(Conv2d, BatchNorm2d, Linear)):
+    """打印 model 中和剪枝有关的层."""
     info = []
     for name, module in model.named_modules():
         if type(module) in prune_related_layer_types:
-            info.append({"name": name, "module": module})
+            info.append({'name': name, 'module': module})
 
     df = pd.DataFrame(info)
-    df = df.reindex(columns=["name", "module"])
+    df = df.reindex(columns=['name', 'module'])
     print(df.to_markdown())
 
 
@@ -86,19 +101,21 @@ def prune_conv2d(module: Conv2d, in_keep_idxes=None, out_keep_idxes=None):
     else:
         assert (
             len(in_keep_idxes) <= module.weight.shape[1]
-        ), f"len(in_keep_idxes): {len(in_keep_idxes)}, module.weight.shape[1]: {module.weight.shape[1]}"
+        ), f'len(in_keep_idxes): {len(in_keep_idxes)}, module.weight.shape[1]: {module.weight.shape[1]}'
 
     assert (
         len(out_keep_idxes) <= module.weight.shape[0]
-    ), f"len(out_keep_idxes): {len(out_keep_idxes)}, module.weight.shape[0]: {module.weight.shape[0]}"
+    ), f'len(out_keep_idxes): {len(out_keep_idxes)}, module.weight.shape[0]: {module.weight.shape[0]}'
 
     module.out_channels = len(out_keep_idxes)
     module.in_channels = len(in_keep_idxes)
 
-    module.weight = torch.nn.Parameter(module.weight.data[out_keep_idxes, :, :, :])
+    module.weight = torch.nn.Parameter(
+        module.weight.data[out_keep_idxes, :, :, :])
 
     if not is_depthwise:
-        module.weight = torch.nn.Parameter(module.weight.data[:, in_keep_idxes, :, :])
+        module.weight = torch.nn.Parameter(
+            module.weight.data[:, in_keep_idxes, :, :])
 
     module.weight.grad = None
 
@@ -109,7 +126,9 @@ def prune_conv2d(module: Conv2d, in_keep_idxes=None, out_keep_idxes=None):
     return in_keep_idxes, out_keep_idxes
 
 
-def prune_fc(module: Linear, keep_idxes: List[int], bn_num_channels: int = None):
+def prune_fc(module: Linear,
+             keep_idxes: List[int],
+             bn_num_channels: int = None):
     """
 
     Args:
@@ -128,8 +147,7 @@ def prune_fc(module: Linear, keep_idxes: List[int], bn_num_channels: int = None)
         _keep_idxes = []
         for idx in keep_idxes:
             _keep_idxes.extend(
-                np.asarray(list(range(channel_step))) + idx * channel_step
-            )
+                np.asarray(list(range(channel_step))) + idx * channel_step)
 
         keep_idxes = _keep_idxes
 
@@ -139,7 +157,8 @@ def prune_fc(module: Linear, keep_idxes: List[int], bn_num_channels: int = None)
     return keep_idxes
 
 
-def cal_threshold_by_bn2d_weights(bn2d_list: List[BatchNorm2d], sparsity: float):
+def cal_threshold_by_bn2d_weights(bn2d_list: List[BatchNorm2d],
+                                  sparsity: float):
     """
     sparsity: 要剪枝的比例
     """
@@ -160,7 +179,7 @@ def cal_threshold_by_bn2d_weights(bn2d_list: List[BatchNorm2d], sparsity: float)
 def mask2idxes(mask):
     idxes = np.squeeze(np.argwhere(mask))
     if idxes.size == 1:
-        idxes = np.resize(idxes, (1,))
+        idxes = np.resize(idxes, (1, ))
     return idxes
 
 

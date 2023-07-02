@@ -1,5 +1,26 @@
 #!/usr/bin/env python
 
+# MIT License
+#
+# Copyright (c) 2023 Transmute AI Lab
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
 # importing the required packages
 import sys
 import torchvision
@@ -71,11 +92,11 @@ class CIFAR10Dataset(BaseDataset):
 
         for item in self.split_types:
             dataset_type = item
-            if item == "val" and not self.val_exists:
+            if item == 'val' and not self.val_exists:
                 self.dataset_dict[dataset_type] = None
             data = dataset(
                 root=self.root,
-                train=(item != "test"),
+                train=(item != 'test'),
                 transform=self.transform[item],
                 target_transform=self.target_transform[item],
                 download=self.download,
@@ -91,16 +112,16 @@ class CIFAR10Dataset(BaseDataset):
         Returns:
             dataset_dict (dict): Updated with info key that contains details related to the data splits
         """
-        self.dataset_dict["info"] = {}
-        self.dataset_dict["info"]["train_size"] = len(
-            self.dataset_dict["train_sampler"]
-        )
-        self.dataset_dict["info"]["val_size"] = len(self.dataset_dict["val_sampler"])
-        self.dataset_dict["info"]["test_size"] = len(self.dataset_dict["test"])
-        self.dataset_dict["info"]["note"] = (
-            "Note that we use the CIFAR10 instance of torchvision for train and validation, "
-            "due to which the length of these will be displayed as 50000 when len() is invoked."
-            "For accurate details, extract information from the info keyword in this dict "
+        self.dataset_dict['info'] = {}
+        self.dataset_dict['info']['train_size'] = len(
+            self.dataset_dict['train_sampler'])
+        self.dataset_dict['info']['val_size'] = len(
+            self.dataset_dict['val_sampler'])
+        self.dataset_dict['info']['test_size'] = len(self.dataset_dict['test'])
+        self.dataset_dict['info']['note'] = (
+            'Note that we use the CIFAR10 instance of torchvision for train and validation, '
+            'due to which the length of these will be displayed as 50000 when len() is invoked.'
+            'For accurate details, extract information from the info keyword in this dict '
         )
         return self.dataset_dict
 
@@ -166,18 +187,18 @@ class CIFAR100Dataset(BaseDataset):
             random_seed=random_seed,
         )
 
-        ## To do: chcek val_frac is float, else raise error
+        ## To do: check val_frac is float, else raise error
         ## To do: if shuffle is true, there should be 'val' in train test split
         dataset = torchvision.datasets.CIFAR100
         self.dataset_dict = {}
 
         for item in self.split_types:
             dataset_type = item
-            if item == "val" and not self.val_exists:
+            if item == 'val' and not self.val_exists:
                 self.dataset_dict[dataset_type] = None
             data = dataset(
                 root=self.root,
-                train=(item != "test"),
+                train=(item != 'test'),
                 transform=self.transform[item],
                 target_transform=self.target_transform[item],
                 download=self.download,
@@ -193,15 +214,15 @@ class CIFAR100Dataset(BaseDataset):
         Returns:
             dataset_dict (dict): Updated with info key that contains details related to the data splits
         """
-        self.dataset_dict["info"] = {}
-        self.dataset_dict["info"]["train_size"] = len(
-            self.dataset_dict["train_sampler"]
-        )
-        self.dataset_dict["info"]["val_size"] = len(self.dataset_dict["val_sampler"])
-        self.dataset_dict["info"]["test_size"] = len(self.dataset_dict["test"])
-        self.dataset_dict["info"]["note"] = (
-            "Note that we use the CIFAR100 instance of torchvision for train and validation, "
-            "due to which the length of these will be displayed as 50000 when len() is invoked."
-            "For accurate details, extract information from the info keyword in this dict "
+        self.dataset_dict['info'] = {}
+        self.dataset_dict['info']['train_size'] = len(
+            self.dataset_dict['train_sampler'])
+        self.dataset_dict['info']['val_size'] = len(
+            self.dataset_dict['val_sampler'])
+        self.dataset_dict['info']['test_size'] = len(self.dataset_dict['test'])
+        self.dataset_dict['info']['note'] = (
+            'Note that we use the CIFAR100 instance of torchvision for train and validation, '
+            'due to which the length of these will be displayed as 50000 when len() is invoked.'
+            'For accurate details, extract information from the info keyword in this dict '
         )
         return self.dataset_dict

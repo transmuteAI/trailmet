@@ -1,13 +1,13 @@
-batch_size: 256                                           #batch size 
+batch_size: 256                                           #batch size
 valid_size: 0.1                                           #size of the validation split
-num_train: 0 
+num_train: 0
 epochs: 1                                                 #epochs
-optimizer: torch.optim.Adam                               #optimizer to use                         
+optimizer: torch.optim.Adam                               #optimizer to use
 lr: 0.001                                                 #learning rate
 momentum: 0.9
 save_path: './save_path_resnet50_cifar100_fullbin'        #save path
 data_path: ''                                             #path to data
-label_smooth: 0.1    
+label_smooth: 0.1
 weight_decay: 0
 workers: 4
 device: 'cuda'

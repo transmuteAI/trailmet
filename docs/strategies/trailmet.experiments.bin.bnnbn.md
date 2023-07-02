@@ -16,16 +16,16 @@ Batch normalization (BN) is a key facilitator and considered essential for state
 
 <!-- ### ImageNet-1k -->
 
-|   Model   | Params(M) | Flops(G) | Top-1 (%) | Top-5 (%) |                                    Config                                     |                                    Download                                     |
-| :-------: | :-------: | :------: | :-------: | :-------: | :---------------------------------------------------------------------------: | :-----------------------------------------------------------------------------: |
-|   |    |    |  |    |  | |  |
-|     |    |     |  |   |  | 
+| Model | Params(M) | Flops(G) | Top-1 (%) | Top-5 (%) | Config | Download |
+| :---: | :-------: | :------: | :-------: | :-------: | :----: | :------: |
+|       |           |          |           |           |        |          |
+|       |           |          |           |           |        |          |
 
 ## Citation
 
 ```
 @misc{chen2021bnn,
-      title={"BNN - BN = ?": Training Binary Neural Networks without Batch Normalization}, 
+      title={"BNN - BN = ?": Training Binary Neural Networks without Batch Normalization},
       author={Tianlong Chen and Zhenyu Zhang and Xu Ouyang and Zechun Liu and Zhiqiang Shen and Zhangyang Wang},
       year={2021},
       eprint={2104.08215},

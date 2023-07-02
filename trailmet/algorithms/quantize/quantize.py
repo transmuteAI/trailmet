@@ -1,3 +1,24 @@
+# MIT License
+#
+# Copyright (c) 2023 Transmute AI Lab
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
 import torch
 import torch.nn as nn
 import torch.nn.init as init
@@ -5,17 +26,17 @@ from tqdm import tqdm_notebook
 from ..algorithms import BaseAlgorithm
 
 __all__ = [
-    "BaseQuantization",
-    "StraightThrough",
-    "RoundSTE",
-    "Conv2dFunctor",
-    "LinearFunctor",
-    "FoldBN",
+    'BaseQuantization',
+    'StraightThrough',
+    'RoundSTE',
+    'Conv2dFunctor',
+    'LinearFunctor',
+    'FoldBN',
 ]
 
 
 class BaseQuantization(BaseAlgorithm):
-    """base class for quantization algorithms"""
+    """Base class for quantization algorithms."""
 
     def __init__(self, **kwargs):
         super(BaseQuantization, self).__init__(**kwargs)
@@ -25,15 +46,12 @@ class BaseQuantization(BaseAlgorithm):
         pass
 
     def round_ste(x: torch.Tensor):
-        """
-        Implement Straight-Through Estimator for rounding operation.
-        """
+        """Implement Straight-Through Estimator for rounding operation."""
         return (x.round() - x).detach() + x
 
     def get_calib_samples(self, train_loader, num_samples):
-        """
-        Get calibration-set samples for finetuning weights and clipping parameters
-        """
+        """Get calibration-set samples for finetuning weights and clipping
+        parameters."""
         calib_data = []
         for batch in train_loader:
             calib_data.append(batch[0])
@@ -55,19 +73,20 @@ class BaseQuantization(BaseAlgorithm):
             w.mul_(bn_module.weight.data.view(w.size(0), 1, 1, 1).expand_as(w))
             b.mul_(bn_module.weight.data).add_(bn_module.bias.data)
 
-        bn_module.register_buffer(
-            "running_mean", torch.zeros(module.out_channels).cuda()
-        )
-        bn_module.register_buffer("running_var", torch.ones(module.out_channels).cuda())
-        bn_module.register_parameter("weight", None)
-        bn_module.register_parameter("bias", None)
+        bn_module.register_buffer('running_mean',
+                                  torch.zeros(module.out_channels).cuda())
+        bn_module.register_buffer('running_var',
+                                  torch.ones(module.out_channels).cuda())
+        bn_module.register_parameter('weight', None)
+        bn_module.register_parameter('bias', None)
         bn_module.affine = False
 
     def is_bn(self, m):
         return isinstance(m, nn.BatchNorm2d) or isinstance(m, nn.BatchNorm1d)
 
     def is_absorbing(self, m):
-        return (isinstance(m, nn.Conv2d) and m.groups == 1) or isinstance(m, nn.Linear)
+        return (isinstance(m, nn.Conv2d) and m.groups == 1) or isinstance(
+            m, nn.Linear)
 
     def search_absorbe_bn(self, model):
         prev = None
@@ -80,7 +99,8 @@ class BaseQuantization(BaseAlgorithm):
 
 
 class StraightThrough(nn.Module):
-    """used to place an identity function in place of a non-differentail operator for gradient calculation"""
+    """Used to place an identity function in place of a non-differentail
+    operator for gradient calculation."""
 
     def __int__(self):
         super().__init__()
@@ -91,6 +111,7 @@ class StraightThrough(nn.Module):
 
 
 class RoundSTE(torch.autograd.Function):
+
     @staticmethod
     def forward(ctx, input):
         output = torch.round(input)
@@ -102,23 +123,21 @@ class RoundSTE(torch.autograd.Function):
 
 
 class Conv2dFunctor:
+
     def __init__(self, conv2d):
         self.conv2d = conv2d
 
     def __call__(self, *input, weight, bias):
-        res = torch.nn.functional.conv2d(
-            *input,
-            weight,
-            bias,
-            self.conv2d.stride,
-            self.conv2d.padding,
-            self.conv2d.dilation,
-            self.conv2d.groups
-        )
+        res = torch.nn.functional.conv2d(*input, weight, bias,
+                                         self.conv2d.stride,
+                                         self.conv2d.padding,
+                                         self.conv2d.dilation,
+                                         self.conv2d.groups)
         return res
 
 
 class LinearFunctor:
+
     def __init__(self, linear):
         self.linear = linear
 
@@ -129,7 +148,8 @@ class LinearFunctor:
 
 # TODO : To migrate all BN-layer folding function calls to the ones defined inside BaseQuantization class
 class FoldBN:
-    """used to fold batch norm to prev linear or conv layer which helps reduce comutational overhead during quantization"""
+    """Used to fold batch norm to prev linear or conv layer which helps reduce
+    comutational overhead during quantization."""
 
     def __init__(self):
         pass
@@ -174,10 +194,8 @@ class FoldBN:
         return (isinstance(m, nn.Conv2d)) or isinstance(m, nn.Linear)
 
     def search_fold_and_remove_bn(self, model: nn.Module):
-        """
-        method to recursively search for batch norm layers, absorb them into
-        the previous linear or conv layers, and set it to an identity layer
-        """
+        """Method to recursively search for batch norm layers, absorb them into
+        the previous linear or conv layers, and set it to an identity layer."""
         model.eval()
         prev = None
         for n, m in model.named_children():

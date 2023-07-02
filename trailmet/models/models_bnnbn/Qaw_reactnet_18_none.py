@@ -1,12 +1,30 @@
-"""
-React-birealnet-18(modified from resnet)
+# MIT License
+#
+# Copyright (c) 2023 Transmute AI Lab
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+"""React-birealnet-18(modified from resnet)
 
 BN setting: remove all BatchNorm layers
 Conv setting: original Conv2d
 Binary setting: both activation and weight are binarized
-
 """
-
 
 import torch
 import torch.nn as nn
@@ -17,29 +35,40 @@ from .layers import *
 
 
 def conv3x3(in_planes, out_planes, stride=1):
-    """3x3 convolution with padding"""
-    return nn.Conv2d(
-        in_planes, out_planes, kernel_size=3, stride=stride, padding=1, bias=False
-    )
+    """3x3 convolution with padding."""
+    return nn.Conv2d(in_planes,
+                     out_planes,
+                     kernel_size=3,
+                     stride=stride,
+                     padding=1,
+                     bias=False)
 
 
 def conv1x1(in_planes, out_planes, stride=1):
-    """1x1 convolution"""
-    return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
+    """1x1 convolution."""
+    return nn.Conv2d(in_planes,
+                     out_planes,
+                     kernel_size=1,
+                     stride=stride,
+                     bias=False)
 
 
 def binaryconv3x3(in_planes, out_planes, stride=1):
-    """3x3 convolution with padding"""
-    return HardBinaryConv(
-        in_planes, out_planes, kernel_size=3, stride=stride, padding=1
-    )
+    """3x3 convolution with padding."""
+    return HardBinaryConv(in_planes,
+                          out_planes,
+                          kernel_size=3,
+                          stride=stride,
+                          padding=1)
 
 
 def binaryconv1x1(in_planes, out_planes, stride=1):
-    """1x1 convolution"""
-    return HardBinaryConv(
-        in_planes, out_planes, kernel_size=1, stride=stride, padding=0
-    )
+    """1x1 convolution."""
+    return HardBinaryConv(in_planes,
+                          out_planes,
+                          kernel_size=1,
+                          stride=stride,
+                          padding=0)
 
 
 class BasicBlock(nn.Module):
@@ -77,18 +106,25 @@ class BasicBlock(nn.Module):
 
 
 class BiRealNet(nn.Module):
+
     def __init__(self, block, layers, imagenet=True, num_classes=1000):
         super(BiRealNet, self).__init__()
         self.inplanes = 64
         if imagenet:
-            self.conv1 = nn.Conv2d(
-                3, 64, kernel_size=7, stride=2, padding=3, bias=False
-            )
+            self.conv1 = nn.Conv2d(3,
+                                   64,
+                                   kernel_size=7,
+                                   stride=2,
+                                   padding=3,
+                                   bias=False)
             self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         else:
-            self.conv1 = nn.Conv2d(
-                3, 64, kernel_size=3, stride=1, padding=1, bias=False
-            )
+            self.conv1 = nn.Conv2d(3,
+                                   64,
+                                   kernel_size=3,
+                                   stride=1,
+                                   padding=1,
+                                   bias=False)
             self.maxpool = nn.Identity()
 
         self.layer1 = self._make_layer(block, 64, layers[0])

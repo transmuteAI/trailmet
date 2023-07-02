@@ -1,3 +1,24 @@
+# MIT License
+#
+# Copyright (c) 2023 Transmute AI Lab
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
 import math
 from functools import reduce
 
@@ -6,25 +27,28 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .base_model import BaseModel
-
 """MobileNet in PyTorch.
-See the paper "MobileNets: Efficient Convolutional Neural Networks for Mobile Vision Applications"
-for more details.
-Code is taken from https://github.com/kuangliu/pytorch-cifar/blob/master/models/mobilenet.py
+
+See the paper "MobileNets: Efficient Convolutional Neural Networks for Mobile
+Vision Applications" for more details. Code is taken from
+https://github.com/kuangliu/pytorch-cifar/blob/master/models/mobilenet.py
 """
 
 
 class InvertedResidual(nn.Module):
-    """expand + depthwise + pointwise"""
+    """Expand + depthwise + pointwise."""
 
     def __init__(self, in_planes, out_planes, expansion, stride):
         super(InvertedResidual, self).__init__()
         self.stride = stride
         self.is_shortcut = False
         planes = expansion * in_planes
-        self.conv1 = nn.Conv2d(
-            in_planes, planes, kernel_size=1, stride=1, padding=0, bias=False
-        )
+        self.conv1 = nn.Conv2d(in_planes,
+                               planes,
+                               kernel_size=1,
+                               stride=1,
+                               padding=0,
+                               bias=False)
         self.bn1 = nn.BatchNorm2d(planes)
         #         self.conv1, self.bn1 = ModuleInjection.make_prunable(self.conv1, self.bn1)
         self.conv2 = nn.Conv2d(
@@ -37,21 +61,27 @@ class InvertedResidual(nn.Module):
             bias=False,
         )
         self.bn2 = nn.BatchNorm2d(planes)
-        self.conv3 = nn.Conv2d(
-            planes, out_planes, kernel_size=1, stride=1, padding=0, bias=False
-        )
+        self.conv3 = nn.Conv2d(planes,
+                               out_planes,
+                               kernel_size=1,
+                               stride=1,
+                               padding=0,
+                               bias=False)
         self.bn3 = nn.BatchNorm2d(out_planes)
         #         self.conv3, self.bn3 = ModuleInjection.make_prunable(self.conv3, self.bn3)
 
         self.shortcut = nn.Sequential()
         if stride == 1 and in_planes != out_planes:
             self.is_shortcut = True
-            conv_module = nn.Conv2d(
-                in_planes, out_planes, kernel_size=1, stride=1, padding=0, bias=False
-            )
+            conv_module = nn.Conv2d(in_planes,
+                                    out_planes,
+                                    kernel_size=1,
+                                    stride=1,
+                                    padding=0,
+                                    bias=False)
             bn_module = nn.BatchNorm2d(out_planes)
             #             conv_module, bn_module = ModuleInjection.make_prunable(conv_module, bn_module)
-            if hasattr(bn_module, "is_imp"):
+            if hasattr(bn_module, 'is_imp'):
                 bn_module.is_imp = True
             self.shortcut = nn.Sequential(conv_module, bn_module)
 
@@ -67,46 +97,34 @@ class InvertedResidual(nn.Module):
 
         output = self.conv1(inp)
         active_elements_count = output.shape[0] * reduce(
-            lambda x, y: x * y, output.shape[2:]
-        )
-        flops += (
-            self.conv1.in_channels * self.conv1.out_channels * active_elements_count
-        )
+            lambda x, y: x * y, output.shape[2:])
+        flops += (self.conv1.in_channels * self.conv1.out_channels *
+                  active_elements_count)
         flops += 4 * output.numel()  # relu + bn
         output = F.relu(output)
 
         output = self.conv2(output)
         active_elements_count = output.shape[0] * reduce(
-            lambda x, y: x * y, output.shape[2:]
-        )
-        flops += (
-            self.conv2.in_channels
-            * (self.conv2.out_channels // self.conv2.groups)
-            * 9
-            * active_elements_count
-        )
+            lambda x, y: x * y, output.shape[2:])
+        flops += (self.conv2.in_channels *
+                  (self.conv2.out_channels // self.conv2.groups) * 9 *
+                  active_elements_count)
         flops += 4 * output.numel()  # relu + bn
         output = F.relu(output)
 
         output = self.conv3(output)
         active_elements_count = output.shape[0] * reduce(
-            lambda x, y: x * y, output.shape[2:]
-        )
-        flops += (
-            self.conv3.in_channels * self.conv3.out_channels * active_elements_count
-        )
+            lambda x, y: x * y, output.shape[2:])
+        flops += (self.conv3.in_channels * self.conv3.out_channels *
+                  active_elements_count)
         flops += 3 * output.numel()  # bn + residual
 
         if self.is_shortcut:
             r_output = self.shortcut[0](inp)
             active_elements_count = r_output.shape[0] * reduce(
-                lambda x, y: x * y, r_output.shape[2:]
-            )
-            flops += (
-                self.shortcut[0].in_channels
-                * self.shortcut[0].out_channels
-                * active_elements_count
-            )
+                lambda x, y: x * y, r_output.shape[2:])
+            flops += (self.shortcut[0].in_channels *
+                      self.shortcut[0].out_channels * active_elements_count)
             flops += 2 * r_output.numel()
 
         return flops, output
@@ -129,18 +147,26 @@ class MobileNetv2(BaseModel):
         if cfg:
             self.cfg = cfg
         # NOTE: change conv1 stride 2 -> 1 for CIFAR10
-        self.conv1 = nn.Conv2d(3, 32, kernel_size=3, stride=2, padding=1, bias=False)
+        self.conv1 = nn.Conv2d(3,
+                               32,
+                               kernel_size=3,
+                               stride=2,
+                               padding=1,
+                               bias=False)
         self.bn1 = nn.BatchNorm2d(32)
         #         self.conv1, self.bn1 = ModuleInjection.make_prunable(self.conv1, self.bn1)
-        if hasattr(self.bn1, "is_imp"):
+        if hasattr(self.bn1, 'is_imp'):
             self.bn1.is_imp = True
         self.layers = self._make_layers(in_planes=32)
-        self.conv2 = nn.Conv2d(
-            self.cfg[-1][1], 1280, kernel_size=1, stride=2, padding=0, bias=False
-        )
+        self.conv2 = nn.Conv2d(self.cfg[-1][1],
+                               1280,
+                               kernel_size=1,
+                               stride=2,
+                               padding=0,
+                               bias=False)
         self.bn2 = nn.BatchNorm2d(1280)
         #         self.conv2, self.bn2 = ModuleInjection.make_prunable(self.conv2, self.bn2)
-        if hasattr(self.bn2, "is_imp"):
+        if hasattr(self.bn2, 'is_imp'):
             self.bn2.is_imp = True
         self.avgpool = nn.AdaptiveAvgPool2d(output_size=1)
         self.linear = nn.Linear(1280, num_classes)
@@ -151,8 +177,7 @@ class MobileNetv2(BaseModel):
             strides = [stride] + [1] * (num_blocks - 1)
             for stride in strides:
                 layers.append(
-                    InvertedResidual(in_planes, out_planes, expansion, stride)
-                )
+                    InvertedResidual(in_planes, out_planes, expansion, stride))
                 in_planes = out_planes
         return nn.Sequential(*layers)
 
@@ -172,11 +197,9 @@ class MobileNetv2(BaseModel):
         inp = torch.rand(1, 3, insize, insize).to(self.conv1.weight.device)
         output = self.conv1(inp)
         active_elements_count = output.shape[0] * reduce(
-            lambda x, y: x * y, output.shape[2:]
-        )
-        flops += (
-            self.conv1.in_channels * self.conv1.out_channels * 9 * active_elements_count
-        )
+            lambda x, y: x * y, output.shape[2:])
+        flops += (self.conv1.in_channels * self.conv1.out_channels * 9 *
+                  active_elements_count)
         flops += 4 * output.numel()  # bn + relu
         output = F.relu(output)
 
@@ -186,11 +209,9 @@ class MobileNetv2(BaseModel):
 
         output = self.conv2(output)
         active_elements_count = output.shape[0] * reduce(
-            lambda x, y: x * y, output.shape[2:]
-        )
-        flops += (
-            self.conv2.in_channels * self.conv2.out_channels * active_elements_count
-        )
+            lambda x, y: x * y, output.shape[2:])
+        flops += (self.conv2.in_channels * self.conv2.out_channels *
+                  active_elements_count)
         flops += 4 * output.numel()  # bn + relu
         output = F.relu(output)
 
@@ -221,7 +242,8 @@ class MobileNetv2(BaseModel):
 
 
 def get_mobilenet(model, num_classes, cfg=None):
-    """Returns the requested model, ready for training/pruning with the specified method.
+    """Returns the requested model, ready for training/pruning with the
+    specified method.
 
     :param model: str
     :param method: full or prune
@@ -230,7 +252,7 @@ def get_mobilenet(model, num_classes, cfg=None):
     """
     #     ModuleInjection.pruning_method = method
     #     ModuleInjection.prunable_modules = []
-    if model == "mobilenetv2":
+    if model == 'mobilenetv2':
         net = MobileNetv2(num_classes, cfg)
     #     net.prunable_modules = ModuleInjection.prunable_modules
     return net

@@ -5,4 +5,4 @@ We have implemented a uniform dataloader which can be used to work with differen
 - CIFAR10
 - CIFAR100
 - TinyImageNet
-- CheXpert 
+- CheXpert
