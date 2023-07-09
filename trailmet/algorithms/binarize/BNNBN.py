@@ -50,6 +50,16 @@ logger = logging.getLogger(__name__)
 
 
 class BNNBN:
+    """
+    References
+    ----------
+
+    Parameters
+    ----------
+        model (object): A pytorch model you want to use.
+        dataloaders (dict): Dictionary with dataloaders for train, val and test. Keys: 'train', 'val', 'test'.
+        kwargs (object): YAML safe loaded file with information like batch_size, optimizer, epochs, momentum, etc.
+    """
 
     def __init__(self, model, dataloaders, **kwargs):
         self.train_loader = dataloaders['train']
@@ -99,6 +109,7 @@ class BNNBN:
             wandb.config.update(self.kwargs)
 
     def compress_model(self):
+        """Function for compressing the model."""
         if not torch.cuda.is_available():
             sys.exit(1)
         start_t = time.time()
@@ -329,6 +340,7 @@ class BNNBN:
         optimizer,
         scheduler,
     ):
+        """Function for training KD."""
         batch_time = AverageMeter('Time', ':6.3f')
         data_time = AverageMeter('Data', ':6.3f')
         losses = AverageMeter('Loss', ':.4e')
@@ -426,6 +438,7 @@ class BNNBN:
 
     def train(self, epoch, train_loader, model_student, criterion, optimizer,
               scheduler):
+        """Training Function."""
         batch_time = AverageMeter('Time', ':6.3f')
         data_time = AverageMeter('Data', ':6.3f')
         losses = AverageMeter('Loss', ':.4e')
@@ -519,6 +532,7 @@ class BNNBN:
         return losses.avg, top1.avg, top5.avg
 
     def validate(self, epoch, val_loader, model, criterion):
+        """Validate Function."""
         batch_time = AverageMeter('Time', ':6.3f')
         losses = AverageMeter('Loss', ':.4e')
         top1 = AverageMeter('Acc@1', ':6.2f')

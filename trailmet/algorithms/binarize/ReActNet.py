@@ -51,6 +51,7 @@ def conv3x3(in_planes, out_planes, stride=1):
 
 
 class BinaryActivation(nn.Module):
+    """Class for BinaryActivation."""
 
     def __init__(self):
         super(BinaryActivation, self).__init__()
@@ -75,6 +76,7 @@ class BinaryActivation(nn.Module):
 
 
 class LearnableBias(nn.Module):
+    """Class for LearnableBias."""
 
     def __init__(self, out_chn):
         super(LearnableBias, self).__init__()
@@ -196,6 +198,17 @@ class BasicBlock2(nn.Module):
 
 
 class ReActNet(BaseBinarize):
+    """
+    References
+    ----------
+
+    Parameters
+    ----------
+        teacher (object): Teacher model you want to use.
+        model (object): A pytorch model you want to use.
+        dataloaders (dict): Dictionary with dataloaders for train, val and test. Keys: 'train', 'val', 'test'.
+        kwargs (object): YAML safe loaded file with information like batch_size, optimizer, epochs, momentum, etc.
+    """
 
     def __init__(self, teacher, model, dataloaders, **kwargs):
         super(ReActNet, self).__init__(**kwargs)

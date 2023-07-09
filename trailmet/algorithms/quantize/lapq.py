@@ -54,6 +54,13 @@ logger = logging.getLogger(__name__)
 
 
 class LAPQ(BaseQuantization):
+    """
+    Parameters
+    ----------
+    model (nn.Module): Model to be used
+    dataloaders (dict): Dictionary with dataloaders for train, test, val
+    kwargs (object): A yaml safe loaded file with information like W_BITS, A_BITS. CALIB_BATCHES, etc.
+    """
 
     def __init__(self, model: nn.Module, dataloaders, **kwargs):
         super(LAPQ, self).__init__(**kwargs)
@@ -341,6 +348,14 @@ class LAPQ(BaseQuantization):
 
 
 class QuantModel:
+    """
+    Parameters
+    ----------
+    model (nn.Module): Model to be used
+    args (object): A yaml safe loadec file with information like bit_weights, bit_act, etc.
+    quantizable_layers (list): A list of the quantizable layers.
+    optimizer_bridge ():
+    """
 
     def __init__(self, model, args, quantizable_layers, optimizer_bridge=None):
         self.model = model

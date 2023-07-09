@@ -67,10 +67,12 @@ class UniformAffineQuantizer(nn.Module):
     through' on the backward pass, ignoring the quantization that occurred.
     Based on
     https://arxiv.org/abs/1806.08342.
-    :param n_bits: number of bit for quantization
-    :param symmetric: if True, the zero_point should always be 0
-    :param channel_wise: if True, compute scale and zero_point in each channel
-    :param scale_method: determines the quantization scale and zero point
+    Parameters
+    ----------
+    n_bits: number of bit for quantization
+    symmetric: if True, the zero_point should always be 0
+    channel_wise: if True, compute scale and zero_point in each channel
+    scale_method: determines the quantization scale and zero point
     """
 
     def __init__(
@@ -205,11 +207,12 @@ class AdaRoundQuantizer(nn.Module):
 
     Based on Up or Down? Adaptive Rounding for Post-Training Quantization:
     https://arxiv.org/abs/2004.10568
-    : https: //arxiv.org/abs/2004.10568
-    :param uaq: UniformAffineQuantizer, used to initialize quantization
-        parameters in this quantizer
-    :param round_mode: controls the forward pass in this quantizer
-    :param weight_tensor: initialize alpha
+    https: //arxiv.org/abs/2004.10568
+    Parameters
+    ----------
+    uaq: UniformAffineQuantizer, used to initialize quantization parameters in this quantizer
+    round_mode: controls the forward pass in this quantizer
+    weight_tensor: initialize alpha
     """
 
     def __init__(
@@ -279,6 +282,12 @@ class AdaRoundQuantizer(nn.Module):
 
 
 class BitSplitQuantizer(object):
+    """
+    Parameters
+    ----------
+    W (np.ndarray): Weight vector
+    bitwidth (int): bitwidth to be used
+    """
 
     def __init__(self, W: np.ndarray, bitwidth):
         self.W = W
@@ -479,6 +488,12 @@ class BitSplitQuantizer(object):
 
 
 class ActQuantizer(nn.Module):
+    """
+    Parameters
+    ----------
+    islinear (bool):
+    bit_width (int): bit width to be used
+    """
 
     def __init__(self, islinear=False, bit_width=8):
         super(ActQuantizer, self).__init__()
@@ -550,6 +565,12 @@ class ActQuantizer(nn.Module):
 
 
 class QuantizationBase(object):
+    """
+    Parameters
+    ----------
+    module (object): Module to be used
+    num_bits (int): Number of bits to be used
+    """
 
     def __init__(self, module, num_bits):
         self.module = module
@@ -595,6 +616,16 @@ class QuantizationBase(object):
 
 
 class UniformQuantization(QuantizationBase):
+    """
+    Parameters
+    ----------
+    module (object): Module to be used
+    num_bits (int): Number of bits to be used
+    symmetric (bool): Whether the distribution is symmetric or not
+    uint (bool):
+    stochastic (bool): if True, stochastic rounding will be done
+    tails (bool):
+    """
 
     def __init__(self,
                  module,
@@ -680,6 +711,17 @@ class UniformQuantization(QuantizationBase):
 
 
 class ClippedUniformQuantization(UniformQuantization):
+    """
+    Parameters
+    ----------
+    module (object): Module to be used
+    num_bits (int): Number of bits to be used
+    symmetric (bool): Whether the distribution is symmetric or not
+    uint (bool):
+    stochastic (bool): if True, stochastic rounding will be done
+    tails (bool):
+    """
+
     alpha_param_name = 'alpha'
 
     def __init__(self,
@@ -706,6 +748,17 @@ class ClippedUniformQuantization(UniformQuantization):
 
 
 class FixedClipValueQuantization(ClippedUniformQuantization):
+    """
+    Parameters
+    ----------
+    module (object): Module to be used
+    num_bits (int): Number of bits to be used
+    symmetric (bool): Whether the distribution is symmetric or not
+    uint (bool):
+    stochastic (bool): if True, stochastic rounding will be done
+    tails (bool):
+    kwargs (object): A yaml safe loaded file with information like clip_value, device.
+    """
 
     def __init__(self,
                  module,
@@ -727,6 +780,16 @@ class FixedClipValueQuantization(ClippedUniformQuantization):
 
 
 class MaxAbsStaticQuantization(ClippedUniformQuantization):
+    """
+    Parameters
+    ----------
+    module (object): Module to be used
+    tensor (torch.Tensor): Tensor which wpuld be quantized
+    num_bits (int): Number of bits to be used
+    symmetric (bool): Whether the distribution is symmetric or not
+    uint (bool):
+    stochastic (bool): if True, stochastic rounding will be done
+    """
 
     def __init__(
         self,
@@ -747,6 +810,16 @@ class MaxAbsStaticQuantization(ClippedUniformQuantization):
 
 
 class LearnedStepSizeQuantization(ClippedUniformQuantization):
+    """
+    Parameters
+    ----------
+    module (object): Module to be used
+    tensor (torch.Tensor): Tensor which wpuld be quantized
+    num_bits (int): Number of bits to be used
+    symmetric (bool): Whether the distribution is symmetric or not
+    uint (bool):
+    stochastic (bool): if True, stochastic rounding will be done
+    """
 
     def __init__(self,
                  module,
@@ -802,6 +875,18 @@ class LearnedStepSizeQuantization(ClippedUniformQuantization):
 
 
 class LpNormQuantization(ClippedUniformQuantization):
+    """
+    Parameters
+    ----------
+    module (object): Module to be used
+    tensor (torch.Tensor): Tensor which wpuld be quantized
+    num_bits (int): Number of bits to be used
+    symmetric (bool): Whether the distribution is symmetric or not
+    uint (bool):
+    stochastic (bool): if True, stochastic rounding will be done
+    tails (bool):
+    kwargs (object): A yaml safe loaded file with information like lp
+    """
 
     def __init__(
         self,

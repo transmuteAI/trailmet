@@ -46,6 +46,18 @@ logger = logging.getLogger(__name__)
 
 
 class BirealNet(BaseBinarize):
+    """
+    `BirealNet <https://openaccess.thecvf.com/content_ECCV_2018/papers/zechun_liu_Bi-Real_Net_Enhancing_ECCV_2018_paper.pdf>`_ Implementation.
+
+    References
+    ----------
+
+    Parameters
+    ----------
+        model (object): A pytorch model you want to use.
+        dataloaders (dict): Dictionary with dataloaders for train, val and test. Keys: 'train', 'val', 'test'.
+        CFG (object): YAML safe loaded file with information like batch_size, optimizer, epochs, momentum, etc.
+    """
 
     def __init__(self, model, dataloaders, **CFG):
         self.model = model
@@ -93,6 +105,7 @@ class BirealNet(BaseBinarize):
 
     def train(self, epoch, train_loader, model, criterion, optimizer,
               scheduler):
+        """Train function."""
         batch_time = AverageMeter('Time', ':6.3f')
         data_time = AverageMeter('Data', ':6.3f')
         losses = AverageMeter('Loss', ':.4e')
@@ -177,6 +190,7 @@ class BirealNet(BaseBinarize):
         return losses.avg, top1.avg, top5.avg
 
     def validate(self, epoch, val_loader, model, criterion, CFG):
+        """Validate Function."""
         batch_time = AverageMeter('Time', ':6.3f')
         losses = AverageMeter('Loss', ':.4e')
         top1 = AverageMeter('Acc@1', ':6.2f')
@@ -252,6 +266,7 @@ class BirealNet(BaseBinarize):
         return losses.avg, top1.avg, top5.avg
 
     def test(self, epoch, test_loader, model, criterion, CFG):
+        """Test Function."""
         batch_time = AverageMeter('Time', ':6.3f')
         losses = AverageMeter('Loss', ':.4e')
         top1 = AverageMeter('Acc@1', ':6.2f')
@@ -326,6 +341,7 @@ class BirealNet(BaseBinarize):
         return losses.avg, top1.avg, top5.avg
 
     def binarize(self):
+        """Function used to binarize the model."""
         if not torch.cuda.is_available():
             sys.exit(1)
         start_t = time.time()

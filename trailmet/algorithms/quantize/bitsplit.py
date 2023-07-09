@@ -66,6 +66,12 @@ def conv_hook(module, inputdata, outputdata):
 
 
 class QuantModel(nn.Module):
+    """
+    Parameters
+    ----------
+        model (nn.Module): Model to be used.
+        arch (str): Architecture to be used.
+    """
 
     def __init__(self, model: nn.Module, arch='ResNet50'):
         super().__init__()
@@ -104,16 +110,20 @@ class BitSplit(BaseQuantization):
     based on - Towards accurate post-training network quantization via
     bit-split and stitching [https://dl.acm.org/doi/abs/10.5555/3524938.3525851]
 
-    :param W_BITS: bitwidth for weight quantization
-    :param A_BITS: bitwidth for activation quantization
-    :param CHANNEL_WISE: apply channel-wise quantization for weights
-    :param ACT_QUANT: apply activation quantization
-    :param HEAD_STEM_PRECISION: bitwidth for first and last layer
-    :param PREC_CONFIG: list of bitwidths of the body for mixed precision
-    :param CALIB_BATCHES: num of batches in calibration dataset
-    :param LOAD_ACT_SCALES: load precomputed weight scales
-    :param LOAD_WEIGHT_SCALES: load precomputed activation scales
-    :param SAVE_PATH: path for storing quantized weights and scales
+    Parameters
+    ----------
+    model (nn.Module): Model to be used
+    dataloaders (dict): Dictionary with dataloaders for train, test, val
+    W_BITS: bitwidth for weight quantization
+    A_BITS: bitwidth for activation quantization
+    CHANNEL_WISE: apply channel-wise quantization for weights
+    ACT_QUANT: apply activation quantization
+    HEAD_STEM_PRECISION: bitwidth for first and last layer
+    PREC_CONFIG: list of bitwidths of the body for mixed precision
+    CALIB_BATCHES: num of batches in calibration dataset
+    LOAD_ACT_SCALES: load precomputed weight scales
+    LOAD_WEIGHT_SCALES: load precomputed activation scales
+    SAVE_PATH: path for storing quantized weights and scales
     """
 
     def __init__(self, model: nn.Module, dataloaders, **kwargs):

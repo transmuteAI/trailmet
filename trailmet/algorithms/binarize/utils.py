@@ -49,6 +49,13 @@ imagenet_pca = {
 
 
 class Lighting(object):
+    """
+    Parameters
+    ----------
+        alphastd ():
+        eigval (np.array): Eigen Value
+        eigvec (np.array): Eigen Vector
+    """
 
     def __init__(self,
                  alphastd,
@@ -87,6 +94,11 @@ class DistributionLoss(loss._Loss):
     output must be a pair of (model_output, real_output), both NxC tensors. The
     rows of real_output must all add up to one (probability scores); however,
     model_output must be the pre-softmax output of the network.
+
+    Parameters
+    ----------
+        model_output (Tensor): Prediction from your model.
+        real_output (Tensor): Ground Truth.
     """
 
     def forward(self, model_output, real_output):

@@ -29,6 +29,14 @@ from .meta_pruner import MetaPruner
 
 
 class Pruner(MetaPruner):
+    """
+    Parameters
+    ----------
+        model (object): A pytorch model you want to use.
+        args (object): Argument object
+        logger (object): Logger you want to use.
+        runner ():
+    """
 
     def __init__(self, model, args, logger, runner):
         super(Pruner, self).__init__(model, args, logger, runner)

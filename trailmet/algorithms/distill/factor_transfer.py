@@ -62,6 +62,7 @@ class FactorTransferLoss(nn.Module):
 
 
 class Paraphraser(nn.Module):
+    """Paraphraser Class."""
 
     def __init__(self, in_planes, planes, stride=1):
         super(Paraphraser, self).__init__()
@@ -136,6 +137,7 @@ class Paraphraser(nn.Module):
 
 
 class Translator(nn.Module):
+    """Translator Class."""
 
     def __init__(self, in_planes, planes, stride=1):
         super(Translator, self).__init__()
@@ -170,7 +172,16 @@ class Translator(nn.Module):
 
 
 class FactorTransfer(Distillation):
-    """Class to compress model using distillation via factor transfer."""
+    """Class to compress model using distillation via factor transfer.
+
+    Parameters
+    ----------
+        teacher_model (object): Teacher model you want to use.
+        student_model (object): Student model you want to use.
+        dataloaders (dict): Dictionary with dataloaders for train, val and test. Keys: 'train', 'val', 'test'.
+        paraphraser (object): Paraphrase model
+        kwargs (object): YAML safe loaded file with information like distill_args(teacher_layer_names, student_layer_names, etc).
+    """
 
     def __init__(self,
                  teacher_model,

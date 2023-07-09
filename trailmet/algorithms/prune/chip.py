@@ -57,6 +57,13 @@ logger = logging.getLogger(__name__)
 
 
 class Chip(BasePruning):
+    """
+    Parameters
+    ----------
+        model (object): A pytorch model you want to use.
+        dataloaders (dict): Dictionary with dataloaders for train, val and test. Keys: 'train', 'val', 'test'.
+        CFG (object): YAML safe loaded file with information like batch_size, arch, epochs, momentum, etc.
+    """
 
     def __init__(self, model, dataloaders, **CFG):
         self.dataloaders = dataloaders

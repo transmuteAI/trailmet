@@ -143,6 +143,35 @@ class TCGA(Dataset):
 
 
 class TCGADataset(BaseDataset):
+    """
+    `TCGA <https://www.cancer.gov/ccg/research/structural-genomics/tcga/studied-cancers/lung-squamous-cell-carcinoma-study>`_ Dataset.
+
+    References
+    ----------
+
+
+    Parameters
+    ----------
+        name (string): dataset name 'TCGA', default=None.
+        root (string): Root directory where ``splits, images`` exists or will be saved if download flag is set to True (default is None).
+        train (bool, optional): If True, creates dataset from training set, otherwise
+            creates from test set, default=None.
+        transform (callable, optional): A function/transform that takes in an PIL image
+            and returns a transformed version. E.g, ``transforms.RandomCrop``. Default=None.
+        target_transform (callable, optional): A function/transform that takes in the
+            target and transforms it, default=None.
+        kfold (int): The fold which you want to use. Possible values are 0-9
+        download (bool, optional): If true, downloads the dataset from the internet and
+            puts it in root directory. If dataset is already downloaded, it is not
+            downloaded again, default=True.
+        split_types (list): the possible values of this parameter are "train", "test" and "val".
+            If the split_type contains "val", then shuffle has to be True, default value is None.
+        val_fraction (float): If float, should be between 0.0 and 1.0 and represent
+        the proportion of the dataset to include in the val split.
+        shuffle (bool): Whether or not to shuffle the data before splitting into val from train,
+            default is True. If shuffle is true, there should be 'val' in split_types.
+        random_seed (int): RandomState instance, default=None.
+    """
 
     def __init__(
         self,

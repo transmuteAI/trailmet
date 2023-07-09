@@ -31,6 +31,7 @@ __all__ = ['Distillation']
 
 
 class Distillation(BaseAlgorithm):
+    """Base Class for Distillation."""
 
     def __init__(self, **kwargs):
         super(Distillation, self).__init__(**kwargs)
@@ -172,6 +173,9 @@ class ForwardHookManager(object):
         >>> io_dict = forward_hook_manager.pop_io_dict()
         >>> layer2_input_tensor = io_dict['layer2']['input']
         >>> layer2_output_tensor = io_dict['layer2']['output']
+    Parameters
+    ----------
+        target_device (str): Target device
     """
 
     def __init__(self, target_device):

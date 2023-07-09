@@ -59,6 +59,14 @@ class ChannelRounding(Enum):
 
 
 class Conv2dWrapper:
+    """
+    Parameters
+    ----------
+        module (object): Module to be used.
+        name (str): Name of the layer.
+        prev_bn_name (str): Name of the previous BN layer.
+        next_bn_name (str): Name of the next BN layer.
+    """
 
     def __init__(self, module, name, prev_bn_name=None, next_bn_name=None):
         self.module: Conv2d = copy.deepcopy(module)
@@ -114,6 +122,13 @@ class Conv2dWrapper:
 
 
 class LinearWrapper:
+    """
+    Parameters
+    ----------
+        module (object): Module to be used.
+        name (str): Name of the layer.
+        prev_bn_name (str): Name of the previous BN layer.
+    """
 
     def __init__(self, module, name, prev_bn_name=None):
         self.module = copy.deepcopy(module)
@@ -153,6 +168,12 @@ class LinearWrapper:
 
 
 class BN2dWrapper:
+    """
+    Parameters
+    ----------
+        module (object): Module to be used.
+        name (str): Name of the layer.
+    """
 
     def __init__(self, module: BatchNorm2d, name):
         self.module = copy.deepcopy(module)
@@ -218,6 +239,13 @@ class BN2dWrapper:
 
 
 class SlimPruner:
+    """
+    Parameters
+    ----------
+        model (object): Model to be used.
+        schema (str):
+    """
+
     PRUNING_RESULT_KEY = '_slim_pruning_result'
 
     def __init__(self, model, schema: str = None):

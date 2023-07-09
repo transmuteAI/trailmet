@@ -44,7 +44,16 @@ seed_everything(43)
 
 
 class KDTransfer(Distillation):
-    """Class to compress model using distillation via kd transfer."""
+    """Class to compress model using distillation via KD transfer.
+
+    Parameters
+    ----------
+        teacher_model (object): Teacher model you want to use.
+        student_model (object): Student model you want to use.
+        dataloaders (dict): Dictionary with dataloaders for train, val and test. Keys: 'train', 'val', 'test'.
+        paraphraser (object): Paraphrase model
+        kwargs (object): YAML safe loaded file with information like distill_args(lambda, temperature, etc).
+    """
 
     def __init__(self, teacher_model, student_model, dataloaders, **kwargs):
         super(KDTransfer, self).__init__(**kwargs)

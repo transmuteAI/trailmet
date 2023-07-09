@@ -44,6 +44,7 @@ from trailmet.algorithms.distill.distill import Distillation, ForwardHookManager
 
 
 class AttentionTransferLoss(nn.Module):
+    """Class for loss used."""
 
     def __init__(self):
         super().__init__()
@@ -69,7 +70,15 @@ class AttentionTransferLoss(nn.Module):
 
 
 class AttentionTransfer(Distillation):
-    """Class to compress model using distillation via attention transfer."""
+    """Class to compress model using distillation via attention transfer.
+
+    Parameters
+    ----------
+        teacher_model (object): Teacher model you want to use.
+        student_model (object): Student model you want to use.
+        dataloaders (dict): Dictionary with dataloaders for train, val and test. Keys: 'train', 'val', 'test'.
+        kwargs (object): YAML safe loaded file with information like device, distill_args(teacher_layer_names, student_layer_names, etc).
+    """
 
     def __init__(self, teacher_model, student_model, dataloaders, **kwargs):
         super(AttentionTransfer, self).__init__(**kwargs)

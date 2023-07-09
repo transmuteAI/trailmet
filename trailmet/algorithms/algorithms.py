@@ -43,6 +43,9 @@ class BaseAlgorithm(object):
     implementation of base_train() method can directly be used for both the
     tasks. In case of modifications, overwrite this function based on the
     needs.
+    Parameters
+    ----------
+        kwargs (object): A yaml safe loaded file with information like cuda_id, log_dir, device, etc.
     """
 
     def __init__(self, **kwargs):

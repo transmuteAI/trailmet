@@ -69,16 +69,20 @@ class BRECQ(BaseQuantization):
     based on - BRECQ: PUSHING THE LIMIT OF POST-TRAINING QUANTIZATION
     BY BLOCK RECONSTRUCTION [https://arxiv.org/abs/2102.05426]
 
-    :param W_BITS: bitwidth for weight quantization
-    :param A_BITS: bitwidth for activation quantization
-    :param CHANNEL_WISE: apply channel_wise quantization for weights
-    :param ACT_QUANT: apply activation quantization
-    :param SET_8BIT_HEAD_STEM: Set the first and the last layer to 8-bit
-    :param NUM_SAMPLES: size of calibration dataset
-    :param WEIGHT: weight of rounding cost vs the reconstruction loss
-    :param ITERS_W: number of iteration for AdaRound
-    :param ITERS_A: number of iteration for LSQ
-    :param LR: learning rate for LSQ
+    Parameters
+    ----------
+    model (nn.Module): Model to be used
+    dataloaders (dict): Dictionary with dataloaders for train, test, val
+    W_BITS: bitwidth for weight quantization
+    A_BITS: bitwidth for activation quantization
+    CHANNEL_WISE: apply channel_wise quantization for weights
+    ACT_QUANT: apply activation quantization
+    SET_8BIT_HEAD_STEM: Set the first and the last layer to 8-bit
+    NUM_SAMPLES: size of calibration dataset
+    WEIGHT: weight of rounding cost vs the reconstruction loss
+    ITERS_W: number of iteration for AdaRound
+    ITERS_A: number of iteration for LSQ
+    LR: learning rate for LSQ
     """
 
     def __init__(self, model: nn.Module, dataloaders, **kwargs):
@@ -352,10 +356,12 @@ class QuantModel(nn.Module):
     """Recursively replace the normal conv2d and Linear layer to QuantModule,
     to enable calculating activation statistics and storing scaling factors.
 
-    :param module: nn.Module with nn.Conv2d or nn.Linear in its children
-    :param weight_quant_params: quantization parameters like n_bits for weight
+    Parameters
+    ----------
+    model (nn.Module): nn.Module with nn.Conv2d or nn.Linear in its children
+    weight_quant_params (dict): quantization parameters like n_bits for weight
         quantizer
-    :param act_quant_params: quantization parameters like n_bits for activation
+    act_quant_params(dict): quantization parameters like n_bits for activation
         quantizer
     """
 

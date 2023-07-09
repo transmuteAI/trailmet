@@ -30,6 +30,14 @@ import logging
 
 # +
 class Layer:
+    """
+    Parameters
+    ----------
+        name (str): Name of the layer
+        size (object): Argument object
+        layer_index (object): Logger you want to use.
+        runner ():
+    """
 
     def __init__(self, name, size, layer_index, res=False):
         self.name = name
@@ -83,6 +91,14 @@ class Layer:
 
 
 class MetaPruner:
+    """
+    Parameters
+    ----------
+        model (object): A pytorch model you want to use.
+        args (object): Argument object
+        logger (object): Logger you want to use.
+        passer ():
+    """
 
     def __init__(self, model, args, logger, passer):
         self.model = model

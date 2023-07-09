@@ -64,7 +64,14 @@ class StopForwardException(Exception):
 
 
 class DataSaverHook:
-    """Forward hook that stores the input and output of a layer."""
+    """Forward hook that stores the input and output of a layer.
+
+    Parameters
+    ----------
+    store_input (bool): If True, input of a layer will be saved, default=False
+    store_output (bool): If True, output of a layer will be saved, default=False
+    stop_forward (bool): If True, forward prop will be stopped, default=False.
+    """
 
     def __init__(self,
                  store_input=False,
@@ -89,13 +96,11 @@ class DataSaverHook:
 class GetLayerInpOut:
     """Get the input and output of a specified layer in a quantized model.
 
-    :param model: quantized model for which the input and output needs to be
-        extracted.
-    :param layer: the layer for which input and output needs to be extracted.
-    :param device: the device on which the computation needs to be performed.
-    :param asym: save quantized input and full precision output.
-        [default=False]
-    :param act_quant: use activation quantization. [default=False]
+    model: quantized model for which the input and output needs to be extracted.
+    layer: the layer for which input and output needs to be extracted.
+    device: the device on which the computation needs to be performed.
+    asym: save quantized input and full precision output. [default=False]
+    act_quant: use activation quantization. [default=False]
     """
 
     def __init__(
@@ -117,8 +122,10 @@ class GetLayerInpOut:
 
     def __call__(self, model_input):
         """
-        :param model_input: calibration data samples
-        :return: tuple of layer input and output
+        Parameters
+        ----------
+        model_input: calibration data samples
+        return: tuple of layer input and output
         """
         self.model.eval()
         self.model.set_quant_state(False, False)
@@ -164,16 +171,15 @@ def save_inp_oup_data(
     """Function to save input data and output data of a particular layer/block
     over calibration dataset.
 
-    :param model: quantized model for which the input and output needs to be
-        extracted.
-    :param layer: the layer for which input and output needs to be extracted.
-    :param cali_data: calibration dataset
-    :param asym: save quantized input and full precision output.
-        [default=False]
-    :param act_quant: use activation quantization. [default=False]
-    :param batch_size: mini-batch size for calibration. [default=32]
-    :param keep_gpu: put saved data on GPU for faster optimization.
-        [default=True]
+    Parameters
+    ----------
+    model: quantized model for which the input and output needs to be extracted.
+    layer: the layer for which input and output needs to be extracted.
+    cali_data: calibration dataset
+    asym: save quantized input and full precision output. [default=False]
+    act_quant: use activation quantization. [default=False]
+    batch_size: mini-batch size for calibration. [default=32]
+    keep_gpu: put saved data on GPU for faster optimization. [default=True]
     :return: input and output data
     """
     device = next(model.parameters()).device
@@ -200,7 +206,12 @@ def save_inp_oup_data(
 
 
 class GradSaverHook:
-    """Backward hook that stores the gradients of a layer."""
+    """Backward hook that stores the gradients of a layer.
+
+    Parameters
+    ----------
+    store_grad (bool): if True, gradient of the layer will be stored
+    """
 
     def __init__(self, store_grad=True):
         self.store_grad = store_grad
@@ -217,13 +228,13 @@ class GradSaverHook:
 class GetLayerGrad:
     """Get the gradient a specified layer in a quantized model.
 
-    :param model: quantized model for which the input and output needs to be
-        extracted.
-    :param layer: the layer for which input and output needs to be extracted.
-    :param device: the device on which the computation needs to be performed.
-    :param asym: if True, save quantized input and full precision output.
-        [default=False]
-    :param act_quant: use activation quantization. [default=False]
+    Parameters
+    ----------
+    model: quantized model for which the input and output needs to be extracted.
+    layer: the layer for which input and output needs to be extracted.
+    device: the device on which the computation needs to be performed.
+    asym: if True, save quantized input and full precision output. [default=False]
+    act_quant: use activation quantization. [default=False]
     """
 
     def __init__(
@@ -243,7 +254,9 @@ class GetLayerGrad:
         """Compute the gradients of layer output, note that we compute the
         gradient by calculating the KL loss between fp model and quant model.
 
-        :param model_input: calibration data samples
+        Parameters
+        ----------
+        model_input: calibration data samples
         :return: gradients for the layer
         """
         self.model.eval()
@@ -285,16 +298,15 @@ def save_grad_data(
     """Function to save gradient data of a particular layer/block over
     calibration dataset.
 
-    :param model: quantized model for which the input and output needs to be
-        extracted.
-    :param layer: the layer for which input and output needs to be extracted.
-    :param cali_data: calibration dataset
-    :param damping: damping the second-order gradient by adding some constant
-        in the FIM diagonal
-    :param act_quant: use activation quantization. [default=False]
-    :param batch_size: mini-batch size for calibration. [default=32]
-    :param keep_gpu: put saved data on GPU for faster optimization.
-        [default=True]
+    Parameters
+    ----------
+    model: quantized model for which the input and output needs to be extracted.
+    layer: the layer for which input and output needs to be extracted.
+    cali_data: calibration dataset
+    damping: damping the second-order gradient by adding some constant in the FIM diagonal
+    act_quant: use activation quantization. [default=False]
+    batch_size: mini-batch size for calibration. [default=32]
+    keep_gpu: put saved data on GPU for faster optimization. [default=True]
     :return: gradient data
     """
     device = next(model.parameters()).device
@@ -325,11 +337,12 @@ class LinearTempDecay:
     """Class to implement a linear temperature decay scheduler for a given
     maximum time step.
 
-    :param t_max: maximum number of time steps to decay temperature over.
-    :param rel_start_decay: relative point in time to start the decay from the
-        maximum time step. [default=.2]
-    :param start_b: initial temperature value. [default=10]
-    :param end_b: final temperature value. [default=2]
+    Parameters
+    ----------
+    t_max: maximum number of time steps to decay temperature over.
+    rel_start_decay: relative point in time to start the decay from the maximum time step. [default=.2]
+    start_b: initial temperature value. [default=10]
+    end_b: final temperature value. [default=2]
     """
 
     def __init__(
@@ -347,7 +360,9 @@ class LinearTempDecay:
     def __call__(self, t):
         """Cosine annealing scheduler for temperature b.
 
-        :param t: the current time step
+        Parameters
+        ----------
+        t: the current time step
         :return: scheduled temperature
         """
         if t < self.start_decay:
@@ -359,6 +374,19 @@ class LinearTempDecay:
 
 
 class LayerLossFunction:
+    """
+    Parameters
+    ----------
+    layer (object): layer to be quantized
+    Round_loss (str): type of regularization term used to optimize rounding policy (options: relaxation, none)
+    Weight (float): weight of rounding loss in total loss
+    Rec_loss (str): type of output reconstruction loss (options: mse, fisher_diag, fisher_full)
+    max_count (int): number of iterations
+    b_range (tuple): range of rounding relaxation factor (b) with linear temp decay scheduler
+    decay_start (float): starting point for temp decay of b
+    warmup (float): fraction of iterations used for warmup before applying rounding loss
+    p (float): power in lp-norm computation of reconstruction loss
+    """
 
     def __init__(
         self,
@@ -398,9 +426,12 @@ class LayerLossFunction:
         Compute the total loss for adaptive rounding:
         rec_loss is the quadratic output reconstruction loss, round_loss is
         a regularization term to optimize the rounding policy
-        :param pred: output from quantized model
-        :param tgt: output from FP model
-        :param grad: gradients to compute fisher information
+
+        Parameters
+        ----------
+        pred: output from quantized model
+        tgt: output from FP model
+        grad: gradients to compute fisher information
         :return: total loss function
         """
         self.count += 1
@@ -460,24 +491,23 @@ def layer_reconstruction(
 ):
     """Block reconstruction to optimize the output from each layer.
 
-    :param model: QuantModel
-    :param layer: QuantModule that needs to be optimized
-    :param cali_data: data for calibration, typically 1024 training images, as
-        described in AdaRound
-    :param batch_size: mini-batch size for reconstruction
-    :param iters: optimization iterations for reconstruction,
-    :param weight: the weight of rounding regularization term
-    :param opt_mode: optimization mode
-    :param asym: asymmetric optimization designed in AdaRound, use quant input
-        to reconstruct fp output
-    :param include_act_func: optimize the output after activation function
-    :param b_range: temperature range
-    :param warmup: proportion of iterations that no scheduling for temperature
-    :param act_quant: use activation quantization or not.
-    :param lr: learning rate for act delta learning
-    :param p: L_p norm minimization
-    :param multi_gpu: use multi-GPU or not, if enabled, we should sync the
-        gradients
+    Parameters
+    ----------
+    model: QuantModel
+    layer: QuantModule that needs to be optimized
+    cali_data: data for calibration, typically 1024 training images, as described in AdaRound
+    batch_size: mini-batch size for reconstruction
+    iters: optimization iterations for reconstruction,
+    weight: the weight of rounding regularization term
+    opt_mode: optimization mode
+    asym: asymmetric optimization designed in AdaRound, use quant input to reconstruct fp output
+    include_act_func: optimize the output after activation function
+    b_range: temperature range
+    warmup: proportion of iterations that no scheduling for temperature
+    act_quant: use activation quantization or not.
+    lr: learning rate for act delta learning
+    p: L_p norm minimization
+    multi_gpu: use multi-GPU or not, if enabled, we should sync the gradients
     """
 
     model.set_quant_state(False, False)
@@ -570,6 +600,19 @@ def layer_reconstruction(
 
 
 class BlockLossFunction:
+    """
+    Parameters
+    ----------
+    Module (object): module or block being quantized
+    Round_loss (str): type of regularization term used to optimize rounding policy (options: relaxation, none)
+    Weight (float): weight of rounding loss in total loss
+    Rec_loss (str): type of output reconstruction loss (options: mse, fisher_diag, fisher_full)
+    max_count (int): number of iterations
+    b_range (tuple): range of rounding relaxation factor (b) with linear temp decay scheduler
+    decay_start (float): starting point for temp decay of b
+    warmup (float): fraction of iterations used for warmup before applying rounding loss
+    p (float): power in lp-norm computation of reconstruction loss
+    """
 
     def __init__(
         self,
@@ -609,9 +652,12 @@ class BlockLossFunction:
         Compute the total loss for adaptive rounding:
         rec_loss is the quadratic output reconstruction loss, round_loss is
         a regularization term to optimize the rounding policy
-        :param pred: output from quantized model
-        :param tgt: output from FP model
-        :param grad: gradients to compute fisher information
+
+        Parameters
+        ----------
+        pred: output from quantized model
+        tgt: output from FP model
+        grad: gradients to compute fisher information
         :return: total loss function
         """
         self.count += 1
@@ -672,24 +718,23 @@ def block_reconstruction(
 ):
     """Block reconstruction to optimize the output from each block.
 
-    :param model: QuantModel
-    :param block: BaseQuantBlock that needs to be optimized
-    :param cali_data: data for calibration, typically 1024 training images, as
-        described in AdaRound
-    :param batch_size: mini-batch size for reconstruction
-    :param iters: optimization iterations for reconstruction,
-    :param weight: the weight of rounding regularization term
-    :param opt_mode: optimization mode
-    :param asym: asymmetric optimization designed in AdaRound, use quant input
-        to reconstruct fp output
-    :param include_act_func: optimize the output after activation function
-    :param b_range: temperature range
-    :param warmup: proportion of iterations that no scheduling for temperature
-    :param act_quant: use activation quantization or not.
-    :param lr: learning rate for act delta learning
-    :param p: L_p norm minimization
-    :param multi_gpu: use multi-GPU or not, if enabled, we should sync the
-        gradients
+    Parameters
+    ----------
+    model: QuantModel
+    block: BaseQuantBlock that needs to be optimized
+    cali_data: data for calibration, typically 1024 training images, as described in AdaRound
+    batch_size: mini-batch size for reconstruction
+    iters: optimization iterations for reconstruction,
+    weight: the weight of rounding regularization term
+    opt_mode: optimization mode
+    asym: asymmetric optimization designed in AdaRound, use quant input to reconstruct fp output
+    include_act_func: optimize the output after activation function
+    b_range: temperature range
+    warmup: proportion of iterations that no scheduling for temperature
+    act_quant: use activation quantization or not.
+    lr: learning rate for act delta learning
+    p: L_p norm minimization
+    multi_gpu: use multi-GPU or not, if enabled, we should sync the gradients
     """
     model.set_quant_state(False, False)
     block.set_quant_state(True, act_quant)

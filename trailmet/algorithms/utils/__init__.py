@@ -43,6 +43,13 @@ def get_project_path(ExpID):
 
 
 class LogPrinter(object):
+    """
+    Parameters
+    ----------
+        file (object): .
+        ExpID (str): Experiment ID for the logger.
+        print_to_screen (bool): Whether to print to screen or not.
+    """
 
     def __init__(self, file, ExpID, print_to_screen=False):
         self.file = file
@@ -107,6 +114,11 @@ class LogPrinter(object):
 
 
 class LogTracker(object):
+    """
+    Parameters
+    ----------
+        momentum (float): Momentum to be used, default=0.9.
+    """
 
     def __init__(self, momentum=0.9):
         self.loss = OrderedDict()
@@ -514,7 +526,12 @@ def merge_args(args, params_json):
 
 
 class PresetLRScheduler(object):
-    """Using a manually designed learning rate schedule rules."""
+    """Using a manually designed learning rate schedule rules.
+
+    Parameters
+    ----------
+        decay_schedule (dict): Decay schedule for the LR.
+    """
 
     def __init__(self, decay_schedule):
         # decay_schedule is a dictionary

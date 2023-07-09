@@ -62,6 +62,14 @@ class QuantModule(nn.Module):
     convolution.
 
     To activate quantization, please use set_quant_state function.
+
+    Parameters
+    ----------
+    org_module (nn.Module): Module to be used
+    weight_quant_params (dict): Weight parameters
+    act_quant_params (dict): Activation Parameters
+    disable_act_quant (bool): if True, activation layer will be disabled
+    se_module (nn.Module): SE Module to be used
     """
 
     def __init__(
@@ -138,6 +146,10 @@ class BaseQuantBlock(nn.Module):
     Due to the branch architecture, we have to perform activation function and
     quantization after the elemental-wise add operation, therefore, we put this
     part in this class.
+
+    Parameters
+    ----------
+    act_quant_params (dict): Activation parameters
     """
 
     def __init__(self, act_quant_params: dict = {}):
@@ -163,8 +175,14 @@ class BaseQuantBlock(nn.Module):
 
 
 class QuantBasicBlock(BaseQuantBlock):
-    """Implementation of Quantized BasicBlock used in ResNet-18 and
-    ResNet-34."""
+    """Implementation of Quantized BasicBlock used in ResNet-18 and ResNet-34.
+
+    Parameters
+    ----------
+    basic_block (object): BasicBlock which is to be used
+    weight_quant_params (dict): Weight parameters
+    act_quant_params (dict): Activation Parameters
+    """
 
     def __init__(
         self,
@@ -210,8 +228,16 @@ class QuantBasicBlock(BaseQuantBlock):
 
 
 class QuantBottleneck(BaseQuantBlock):
-    """Implementation of Quantized Bottleneck Block used in ResNet-50, -101 and
-    -152."""
+    """
+    Implementation of Quantized Bottleneck Block used in ResNet-50, -101 and
+    -152.
+
+    Parameters
+    ----------
+    bottleneck (object): Bottleneck to be used
+    weight_quant_params (dict): Weight parameters
+    act_quant_params (dict): Activation Parameters
+    """
 
     def __init__(
         self,
@@ -264,6 +290,12 @@ class QuantInvertedResidual(BaseQuantBlock):
     """Implementation of Quantized Inverted Residual Block used in MobileNetV2.
 
     Inverted Residual does not have activation function.
+
+    Parameters
+    ----------
+    inv_res (object): Inverted Residual block to be used
+    weight_quant_params (dict): Weight parameters
+    act_quant_params (dict): Activation Parameters
     """
 
     def __init__(
@@ -335,6 +367,12 @@ Supported quantization wrappers for pytorch modules :-
 
 
 class QBasicBlock(nn.Module):
+    """
+    Parameters
+    ----------
+    basic_block (object): BasicBlock which is to be used
+    """
+
     expansion = 1
 
     def __init__(self, basic_block: BasicBlock):
@@ -363,6 +401,12 @@ class QBasicBlock(nn.Module):
 
 
 class QBottleneck(nn.Module):
+    """
+    Parameters
+    ----------
+    bottleneck (object): Bottleneck to be used
+    """
+
     expansion = 4
 
     def __init__(self, bottleneck: Bottleneck):
@@ -396,6 +440,11 @@ class QBottleneck(nn.Module):
 
 
 class QInvertedResidual(nn.Module):
+    """
+    Parameters
+    ----------
+    inv_res (object): Inverted Residual block to be used
+    """
 
     def __init__(self, inv_res: InvertedResidual):
         super().__init__()
@@ -445,6 +494,13 @@ def is_positive(module):
 
 
 class ActivationModuleWrapper(nn.Module):
+    """
+    Parameters
+    ----------
+    name (str): Name of the wrapped module
+    wrapped_module (object): Module to be used
+    kwargs (object): A yaml safe loaded file with information like bits_out and qtype
+    """
 
     def __init__(self, name, wrapped_module, **kwargs):
         super(ActivationModuleWrapper, self).__init__()
@@ -512,6 +568,13 @@ class ActivationModuleWrapper(nn.Module):
 
 
 class ParameterModuleWrapper(nn.Module):
+    """
+    Parameters
+    ----------
+    name (str): Name of the wrapped module
+    wrapped_module (object): Module to be used
+    kwargs (object): A yaml safe loaded file with information like bits_out, qtype, forward functor, bit_weight, etc.
+    """
 
     def __init__(self, name, wrapped_module, **kwargs):
         super(ParameterModuleWrapper, self).__init__()

@@ -175,7 +175,14 @@ class ModuleInjection:
 
 
 class ChipNet(BasePruning):
-    """Class to compress models using chipnet method."""
+    """Class to compress models using chipnet method.
+
+    Parameters
+    ----------
+        model (object): A pytorch model you want to use.
+        dataloaders (dict): Dictionary with dataloaders for train, val and test. Keys: 'train', 'val', 'test'.
+        kwargs (object): YAML safe loaded file with information like chipnet_args(budget_type, channel_ratio, etc.)
+    """
 
     def __init__(self, model, dataloaders, **kwargs):
         super(ChipNet, self).__init__(**kwargs)

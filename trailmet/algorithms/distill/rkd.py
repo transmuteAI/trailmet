@@ -41,7 +41,16 @@ logger = logging.getLogger(__name__)
 
 
 class RKDTransfer(Distillation):
-    """Class to compress model using distillation via RKD transfer."""
+    """Class to compress model using distillation via RKD transfer.
+
+    Parameters
+    ----------
+        teacher_model (object): Teacher model you want to use.
+        student_model (object): Student model you want to use.
+        dataloaders (dict): Dictionary with dataloaders for train, val and test. Keys: 'train', 'val', 'test'.
+        paraphraser (object): Paraphrase model
+        kwargs (object): YAML safe loaded file with information like device, distill_args(beta, temperature, etc).
+    """
 
     def __init__(self, teacher_model, student_model, dataloaders, **kwargs):
         super(RKDTransfer, self).__init__(**kwargs)

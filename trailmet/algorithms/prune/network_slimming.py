@@ -55,6 +55,12 @@ class Network_Slimming(BasePruning):
     pretraining and fine-tuning, the implementation of base_train() method can
     directly be used for both the tasks. In case of modifications, overwrite
     this function based on the needs.
+
+    Parameters
+    ----------
+        model (object): A pytorch model you want to use.
+        dataloaders (dict): Dictionary with dataloaders for train, val and test. Keys: 'train', 'val', 'test'.
+        kwargs (object): YAML safe loaded file with information like num_classes, ft_only, dataset, etc.
     """
 
     def __init__(self, model, dataloaders, **kwargs):

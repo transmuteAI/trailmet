@@ -34,6 +34,11 @@ from trailmet.utils import save_checkpoint
 
 
 class LitModel(nn.Module):
+    """
+    Parameters
+    ----------
+        args (object): A yaml safe loaded file with information like arch, num_classes, etc.
+    """
 
     def __init__(self, args):
         super(LitModel, self).__init__()
@@ -55,6 +60,14 @@ class LitModel(nn.Module):
 
 # +
 class Pruner(MetaPruner):
+    """
+    Parameters
+    ----------
+        model (object): A pytorch model you want to use.
+        args (object): Argument object
+        logger (object): Logger you want to use.
+        passer ():
+    """
 
     def __init__(self, model, args, logger, passer):
         super(Pruner, self).__init__(model, args, logger, passer)

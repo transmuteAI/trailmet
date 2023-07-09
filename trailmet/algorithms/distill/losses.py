@@ -28,6 +28,7 @@ __all__ = ['KDTransferLoss', 'RkdDistance', 'RKdAngle']
 
 
 class KDTransferLoss(nn.Module):
+    """Class for KD Transfer Loss."""
 
     def __init__(self, temperature, reduction):
         super().__init__()
@@ -43,6 +44,7 @@ class KDTransferLoss(nn.Module):
 
 
 class RkdDistance(nn.Module):
+    """Class for RKD Distance."""
 
     def forward(self, student, teacher):
         with torch.no_grad():
@@ -59,6 +61,7 @@ class RkdDistance(nn.Module):
 
 
 class RKdAngle(nn.Module):
+    """Class for RKD Angle."""
 
     def forward(self, student, teacher):
         # N x C
