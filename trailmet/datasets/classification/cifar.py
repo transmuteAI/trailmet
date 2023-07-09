@@ -92,11 +92,11 @@ class CIFAR10Dataset(BaseDataset):
 
         for item in self.split_types:
             dataset_type = item
-            if item == "val" and not self.val_exists:
+            if item == 'val' and not self.val_exists:
                 self.dataset_dict[dataset_type] = None
             data = dataset(
                 root=self.root,
-                train=(item != "test"),
+                train=(item != 'test'),
                 transform=self.transform[item],
                 target_transform=self.target_transform[item],
                 download=self.download,
@@ -112,16 +112,16 @@ class CIFAR10Dataset(BaseDataset):
         Returns:
             dataset_dict (dict): Updated with info key that contains details related to the data splits
         """
-        self.dataset_dict["info"] = {}
-        self.dataset_dict["info"]["train_size"] = len(
-            self.dataset_dict["train_sampler"]
-        )
-        self.dataset_dict["info"]["val_size"] = len(self.dataset_dict["val_sampler"])
-        self.dataset_dict["info"]["test_size"] = len(self.dataset_dict["test"])
-        self.dataset_dict["info"]["note"] = (
-            "Note that we use the CIFAR10 instance of torchvision for train and validation, "
-            "due to which the length of these will be displayed as 50000 when len() is invoked."
-            "For accurate details, extract information from the info keyword in this dict "
+        self.dataset_dict['info'] = {}
+        self.dataset_dict['info']['train_size'] = len(
+            self.dataset_dict['train_sampler'])
+        self.dataset_dict['info']['val_size'] = len(
+            self.dataset_dict['val_sampler'])
+        self.dataset_dict['info']['test_size'] = len(self.dataset_dict['test'])
+        self.dataset_dict['info']['note'] = (
+            'Note that we use the CIFAR10 instance of torchvision for train and validation, '
+            'due to which the length of these will be displayed as 50000 when len() is invoked.'
+            'For accurate details, extract information from the info keyword in this dict '
         )
         return self.dataset_dict
 
@@ -194,11 +194,11 @@ class CIFAR100Dataset(BaseDataset):
 
         for item in self.split_types:
             dataset_type = item
-            if item == "val" and not self.val_exists:
+            if item == 'val' and not self.val_exists:
                 self.dataset_dict[dataset_type] = None
             data = dataset(
                 root=self.root,
-                train=(item != "test"),
+                train=(item != 'test'),
                 transform=self.transform[item],
                 target_transform=self.target_transform[item],
                 download=self.download,
@@ -214,15 +214,15 @@ class CIFAR100Dataset(BaseDataset):
         Returns:
             dataset_dict (dict): Updated with info key that contains details related to the data splits
         """
-        self.dataset_dict["info"] = {}
-        self.dataset_dict["info"]["train_size"] = len(
-            self.dataset_dict["train_sampler"]
-        )
-        self.dataset_dict["info"]["val_size"] = len(self.dataset_dict["val_sampler"])
-        self.dataset_dict["info"]["test_size"] = len(self.dataset_dict["test"])
-        self.dataset_dict["info"]["note"] = (
-            "Note that we use the CIFAR100 instance of torchvision for train and validation, "
-            "due to which the length of these will be displayed as 50000 when len() is invoked."
-            "For accurate details, extract information from the info keyword in this dict "
+        self.dataset_dict['info'] = {}
+        self.dataset_dict['info']['train_size'] = len(
+            self.dataset_dict['train_sampler'])
+        self.dataset_dict['info']['val_size'] = len(
+            self.dataset_dict['val_sampler'])
+        self.dataset_dict['info']['test_size'] = len(self.dataset_dict['test'])
+        self.dataset_dict['info']['note'] = (
+            'Note that we use the CIFAR100 instance of torchvision for train and validation, '
+            'due to which the length of these will be displayed as 50000 when len() is invoked.'
+            'For accurate details, extract information from the info keyword in this dict '
         )
         return self.dataset_dict

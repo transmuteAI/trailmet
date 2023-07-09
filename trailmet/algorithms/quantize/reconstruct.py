@@ -35,25 +35,25 @@ from trailmet.algorithms.quantize.methods import AdaRoundQuantizer
 from trailmet.utils import lp_loss
 
 __all__ = [
-    "StopForwardException",
-    "DataSaverHook",
-    "GetLayerInpOut",
-    "save_inp_oup_data",
-    "GradSaverHook",
-    "GetLayerGrad",
-    "save_grad_data",
-    "LinearTempDecay",
-    "LayerLossFunction",
-    "layer_reconstruction",
-    "BlockLossFunction",
-    "block_reconstruction",
+    'StopForwardException',
+    'DataSaverHook',
+    'GetLayerInpOut',
+    'save_inp_oup_data',
+    'GradSaverHook',
+    'GetLayerGrad',
+    'save_grad_data',
+    'LinearTempDecay',
+    'LayerLossFunction',
+    'layer_reconstruction',
+    'BlockLossFunction',
+    'block_reconstruction',
 ]
 
 optimizer_map = {
-    "sgd": torch.optim.SGD,
-    "adam": torch.optim.Adam,
-    "adagrad": torch.optim.Adagrad,
-    "adadelta": torch.optim.Adadelta,
+    'sgd': torch.optim.SGD,
+    'adam': torch.optim.Adam,
+    'adagrad': torch.optim.Adagrad,
+    'adadelta': torch.optim.Adadelta,
 }
 
 
@@ -73,7 +73,10 @@ class DataSaverHook:
     stop_forward (bool): If True, forward prop will be stopped, default=False.
     """
 
-    def __init__(self, store_input=False, store_output=False, stop_forward=False):
+    def __init__(self,
+                 store_input=False,
+                 store_output=False,
+                 stop_forward=False):
         self.store_input = store_input
         self.store_output = store_output
         self.stop_forward = stop_forward
@@ -113,9 +116,9 @@ class GetLayerInpOut:
         self.asym = asym
         self.device = device
         self.act_quant = act_quant
-        self.data_saver = DataSaverHook(
-            store_input=True, store_output=True, stop_forward=True
-        )
+        self.data_saver = DataSaverHook(store_input=True,
+                                        store_output=True,
+                                        stop_forward=True)
 
     def __call__(self, model_input):
         """
@@ -136,7 +139,8 @@ class GetLayerInpOut:
 
             if self.asym:
                 self.data_saver.store_output = False
-                self.model.set_quant_state(weight_quant=True, act_quant=self.act_quant)
+                self.model.set_quant_state(weight_quant=True,
+                                           act_quant=self.act_quant)
                 try:
                     _ = self.model(model_input.to(self.device))
                 except StopForwardException:
@@ -179,14 +183,17 @@ def save_inp_oup_data(
     :return: input and output data
     """
     device = next(model.parameters()).device
-    get_inp_out = GetLayerInpOut(
-        model, layer, device=device, asym=asym, act_quant=act_quant
-    )
+    get_inp_out = GetLayerInpOut(model,
+                                 layer,
+                                 device=device,
+                                 asym=asym,
+                                 act_quant=act_quant)
     cached_batches = []
     torch.cuda.empty_cache()
 
     for i in range(int(cali_data.size(0) / batch_size)):
-        cur_inp, cur_out = get_inp_out(cali_data[i * batch_size : (i + 1) * batch_size])
+        cur_inp, cur_out = get_inp_out(cali_data[i * batch_size:(i + 1) *
+                                                 batch_size])
         cached_batches.append((cur_inp.cpu(), cur_out.cpu()))
 
     cached_inps = torch.cat([x[0] for x in cached_batches])
@@ -219,8 +226,7 @@ class GradSaverHook:
 
 
 class GetLayerGrad:
-    """
-    Get the gradient a specified layer in a quantized model.
+    """Get the gradient a specified layer in a quantized model.
 
     Parameters
     ----------
@@ -267,7 +273,7 @@ class GetLayerGrad:
                 loss = F.kl_div(
                     F.log_softmax(out_q, dim=1),
                     F.softmax(out_fp, dim=1),
-                    reduction="batchmean",
+                    reduction='batchmean',
                 )
                 loss.backward()
             except StopForwardException:
@@ -309,7 +315,7 @@ def save_grad_data(
     torch.cuda.empty_cache()
 
     for i in range(int(cali_data.size(0) / batch_size)):
-        cur_grad = get_grad(cali_data[i * batch_size : (i + 1) * batch_size])
+        cur_grad = get_grad(cali_data[i * batch_size:(i + 1) * batch_size])
         cached_batches.append(cur_grad.cpu())
 
     cached_grads = torch.cat([x for x in cached_batches])
@@ -353,6 +359,7 @@ class LinearTempDecay:
 
     def __call__(self, t):
         """Cosine annealing scheduler for temperature b.
+
         Parameters
         ----------
         t: the current time step
@@ -362,7 +369,8 @@ class LinearTempDecay:
             return self.start_b
         else:
             rel_t = (t - self.start_decay) / (self.t_max - self.start_decay)
-            return self.end_b + (self.start_b - self.end_b) * max(0.0, (1 - rel_t))
+            return self.end_b + (self.start_b - self.end_b) * max(
+                0.0, (1 - rel_t))
 
 
 class LayerLossFunction:
@@ -383,9 +391,9 @@ class LayerLossFunction:
     def __init__(
         self,
         layer: QuantModule,
-        round_loss: str = "relaxation",
+        round_loss: str = 'relaxation',
         weight: float = 1.0,
-        rec_loss: str = "mse",
+        rec_loss: str = 'mse',
         max_count: int = 2000,
         b_range: tuple = (10, 2),
         decay_start: float = 0.0,
@@ -402,8 +410,8 @@ class LayerLossFunction:
         # self.pbar = tqdm(total=max_count)
         self.pbar = tqdm(
             total=max_count,
-            desc="Reconstructing Layer: Loss (X.X) b (X)",
-            bar_format="{l_bar}{r_bar}",
+            desc='Reconstructing Layer: Loss (X.X) b (X)',
+            bar_format='{l_bar}{r_bar}',
             dynamic_ncols=True,
         )
         self.temp_decay = LinearTempDecay(
@@ -427,29 +435,28 @@ class LayerLossFunction:
         :return: total loss function
         """
         self.count += 1
-        if self.rec_loss == "mse":
+        if self.rec_loss == 'mse':
             rec_loss = lp_loss(pred, tgt, p=self.p)
-        elif self.rec_loss == "fisher_diag":
+        elif self.rec_loss == 'fisher_diag':
             rec_loss = ((pred - tgt).pow(2) * grad.pow(2)).sum(1).mean()
-        elif self.rec_loss == "fisher_full":
+        elif self.rec_loss == 'fisher_full':
             a = (pred - tgt).abs()
             grad = grad.abs()
             batch_dotprod = torch.sum(a * grad, (1, 2, 3)).view(-1, 1, 1, 1)
             rec_loss = (batch_dotprod * a * grad).mean() / 100
         else:
             raise ValueError(
-                "Not supported reconstruction loss function: {}".format(self.rec_loss)
-            )
+                'Not supported reconstruction loss function: {}'.format(
+                    self.rec_loss))
 
         b = self.temp_decay(self.count)
-        if self.count < self.loss_start or self.round_loss == "none":
+        if self.count < self.loss_start or self.round_loss == 'none':
             b = round_loss = 0
-        elif self.round_loss == "relaxation":
+        elif self.round_loss == 'relaxation':
             round_loss = 0
             round_vals = self.layer.weight_quantizer.get_soft_targets()
-            round_loss += (
-                self.weight * (1 - ((round_vals - 0.5).abs() * 2).pow(b)).sum()
-            )
+            round_loss += (self.weight *
+                           (1 - ((round_vals - 0.5).abs() * 2).pow(b)).sum())
         else:
             raise NotImplementedError
 
@@ -457,10 +464,8 @@ class LayerLossFunction:
 
         if self.count % 100 == 0:
             self.pbar.set_description(
-                "Reconstructing Layer: Loss ({:.3f}) b ({:.1f})".format(
-                    float(total_loss), b
-                )
-            )
+                'Reconstructing Layer: Loss ({:.3f}) b ({:.1f})'.format(
+                    float(total_loss), b))
         #     self.pbar.set_postfix(loss=float(total_loss), b=b)
         self.pbar.update(1)
         return total_loss
@@ -473,7 +478,7 @@ def layer_reconstruction(
     batch_size: int = 32,
     iters: int = 20000,
     weight: float = 0.001,
-    opt_mode: str = "mse",
+    opt_mode: str = 'mse',
     asym: bool = False,
     include_act_func: bool = True,
     b_range: tuple = (20, 2),
@@ -482,7 +487,7 @@ def layer_reconstruction(
     lr: float = 4e-5,
     p: float = 2.0,
     multi_gpu: bool = False,
-    optim="adam",
+    optim='adam',
 ):
     """Block reconstruction to optimize the output from each layer.
 
@@ -507,7 +512,7 @@ def layer_reconstruction(
 
     model.set_quant_state(False, False)
     layer.set_quant_state(True, act_quant)
-    round_mode = "learned_hard_sigmoid"
+    round_mode = 'learned_hard_sigmoid'
 
     if not include_act_func:
         org_act_func = layer.activation_function
@@ -530,11 +535,11 @@ def layer_reconstruction(
         # Use UniformAffineQuantizer to learn delta
         opt_params = [layer.act_quantizer.delta]
         optimizer = optimizer_map[optim](opt_params, lr=lr)
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=iters, eta_min=0.0
-        )
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer,
+                                                               T_max=iters,
+                                                               eta_min=0.0)
 
-    loss_mode = "none" if act_quant else "relaxation"
+    loss_mode = 'none' if act_quant else 'relaxation'
     rec_loss = opt_mode
 
     loss_func = LayerLossFunction(
@@ -550,21 +555,22 @@ def layer_reconstruction(
     )
 
     # Save data before optimizing the rounding
-    cached_inps, cached_outs = save_inp_oup_data(
-        model, layer, cali_data, asym, act_quant, batch_size
-    )
-    if opt_mode != "mse":
-        cached_grads = save_grad_data(
-            model, layer, cali_data, act_quant, batch_size=batch_size
-        )
+    cached_inps, cached_outs = save_inp_oup_data(model, layer, cali_data, asym,
+                                                 act_quant, batch_size)
+    if opt_mode != 'mse':
+        cached_grads = save_grad_data(model,
+                                      layer,
+                                      cali_data,
+                                      act_quant,
+                                      batch_size=batch_size)
     else:
         cached_grads = None
-    device = "cuda"
+    device = 'cuda'
     for i in range(iters):
         idx = torch.randperm(cached_inps.size(0))[:batch_size]
         cur_inp = cached_inps[idx]
         cur_out = cached_outs[idx]
-        cur_grad = cached_grads[idx] if opt_mode != "mse" else None
+        cur_grad = cached_grads[idx] if opt_mode != 'mse' else None
 
         optimizer.zero_grad()
         out_quant = layer(cur_inp)
@@ -611,9 +617,9 @@ class BlockLossFunction:
     def __init__(
         self,
         block: BaseQuantBlock,
-        round_loss: str = "relaxation",
+        round_loss: str = 'relaxation',
         weight: float = 1.0,
-        rec_loss: str = "mse",
+        rec_loss: str = 'mse',
         max_count: int = 2000,
         b_range: tuple = (10, 2),
         decay_start: float = 0.0,
@@ -630,8 +636,8 @@ class BlockLossFunction:
         # self.pbar = tqdm(total=max_count)
         self.pbar = tqdm(
             total=max_count,
-            desc="Reconstructing Block: Loss (X.X) b (X)",
-            bar_format="{l_bar}{r_bar}",
+            desc='Reconstructing Block: Loss (X.X) b (X)',
+            bar_format='{l_bar}{r_bar}',
             dynamic_ncols=True,
         )
         self.temp_decay = LinearTempDecay(
@@ -655,41 +661,38 @@ class BlockLossFunction:
         :return: total loss function
         """
         self.count += 1
-        if self.rec_loss == "mse":
+        if self.rec_loss == 'mse':
             rec_loss = lp_loss(pred, tgt, p=self.p)
-        elif self.rec_loss == "fisher_diag":
+        elif self.rec_loss == 'fisher_diag':
             rec_loss = ((pred - tgt).pow(2) * grad.pow(2)).sum(1).mean()
-        elif self.rec_loss == "fisher_full":
+        elif self.rec_loss == 'fisher_full':
             a = (pred - tgt).abs()
             grad = grad.abs()
             batch_dotprod = torch.sum(a * grad, (1, 2, 3)).view(-1, 1, 1, 1)
             rec_loss = (batch_dotprod * a * grad).mean() / 100
         else:
             raise ValueError(
-                "Not supported reconstruction loss function: {}".format(self.rec_loss)
-            )
+                'Not supported reconstruction loss function: {}'.format(
+                    self.rec_loss))
 
         b = self.temp_decay(self.count)
-        if self.count < self.loss_start or self.round_loss == "none":
+        if self.count < self.loss_start or self.round_loss == 'none':
             b = round_loss = 0
-        elif self.round_loss == "relaxation":
+        elif self.round_loss == 'relaxation':
             round_loss = 0
             for name, module in self.block.named_modules():
                 if isinstance(module, QuantModule):
                     round_vals = module.weight_quantizer.get_soft_targets()
-                    round_loss += (
-                        self.weight * (1 - ((round_vals - 0.5).abs() * 2).pow(b)).sum()
-                    )
+                    round_loss += (self.weight * (1 - (
+                        (round_vals - 0.5).abs() * 2).pow(b)).sum())
         else:
             raise NotImplementedError
 
         total_loss = rec_loss + round_loss
         if self.count % 100 == 0:
             self.pbar.set_description(
-                "Reconstructing Block: Loss ({:.3f}) b ({:.1f})".format(
-                    float(total_loss), b
-                )
-            )
+                'Reconstructing Block: Loss ({:.3f}) b ({:.1f})'.format(
+                    float(total_loss), b))
         #     self.pbar.set_postfix(loss=float(total_loss), b=b)
         self.pbar.update(1)
         return total_loss
@@ -702,7 +705,7 @@ def block_reconstruction(
     batch_size: int = 32,
     iters: int = 20000,
     weight: float = 0.01,
-    opt_mode: str = "mse",
+    opt_mode: str = 'mse',
     asym: bool = False,
     include_act_func: bool = True,
     b_range: tuple = (20, 2),
@@ -711,10 +714,9 @@ def block_reconstruction(
     lr: float = 4e-5,
     p: float = 2.0,
     multi_gpu: bool = False,
-    optim="adam",
+    optim='adam',
 ):
-    """
-    Block reconstruction to optimize the output from each block.
+    """Block reconstruction to optimize the output from each block.
 
     Parameters
     ----------
@@ -736,7 +738,7 @@ def block_reconstruction(
     """
     model.set_quant_state(False, False)
     block.set_quant_state(True, act_quant)
-    round_mode = "learned_hard_sigmoid"
+    round_mode = 'learned_hard_sigmoid'
 
     if not include_act_func:
         org_act_func = block.activation_function
@@ -762,7 +764,7 @@ def block_reconstruction(
         scheduler = None
     else:
         # Use UniformAffineQuantizer to learn delta
-        if hasattr(block.act_quantizer, "delta"):
+        if hasattr(block.act_quantizer, 'delta'):
             opt_params = [block.act_quantizer.delta]
         else:
             opt_params = []
@@ -771,11 +773,11 @@ def block_reconstruction(
                 if module.act_quantizer.delta is not None:
                     opt_params += [module.act_quantizer.delta]
         optimizer = optimizer_map[optim](opt_params, lr=lr)
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=iters, eta_min=0.0
-        )
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer,
+                                                               T_max=iters,
+                                                               eta_min=0.0)
 
-    loss_mode = "none" if act_quant else "relaxation"
+    loss_mode = 'none' if act_quant else 'relaxation'
     rec_loss = opt_mode
 
     loss_func = BlockLossFunction(
@@ -791,21 +793,22 @@ def block_reconstruction(
     )
 
     # Save data before optimizing the rounding
-    cached_inps, cached_outs = save_inp_oup_data(
-        model, block, cali_data, asym, act_quant, batch_size
-    )
-    if opt_mode != "mse":
-        cached_grads = save_grad_data(
-            model, block, cali_data, act_quant, batch_size=batch_size
-        )
+    cached_inps, cached_outs = save_inp_oup_data(model, block, cali_data, asym,
+                                                 act_quant, batch_size)
+    if opt_mode != 'mse':
+        cached_grads = save_grad_data(model,
+                                      block,
+                                      cali_data,
+                                      act_quant,
+                                      batch_size=batch_size)
     else:
         cached_grads = None
-    device = "cuda"
+    device = 'cuda'
     for i in range(iters):
         idx = torch.randperm(cached_inps.size(0))[:batch_size]
         cur_inp = cached_inps[idx].to(device)
         cur_out = cached_outs[idx].to(device)
-        cur_grad = cached_grads[idx].to(device) if opt_mode != "mse" else None
+        cur_grad = cached_grads[idx].to(device) if opt_mode != 'mse' else None
 
         optimizer.zero_grad()
         out_quant = block(cur_inp)

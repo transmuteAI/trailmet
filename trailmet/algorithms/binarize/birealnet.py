@@ -63,60 +63,60 @@ class BirealNet(BaseBinarize):
         self.model = model
         self.dataloaders = dataloaders
         self.CFG = CFG
-        self.batch_size = self.CFG["batch_size"]
-        self.optimizer = self.CFG["optimizer"]
-        self.epochs = self.CFG["epochs"]
-        self.lr = self.CFG["lr"]
-        self.momentum = self.CFG["momentum"]
-        self.save_path = self.CFG["save_path"]
-        self.data_path = self.CFG["data_path"]
-        self.weight_decay = self.CFG["weight_decay"]
-        self.label_smooth = self.CFG["label_smooth"]
-        self.num_workers = self.CFG["workers"]
-        self.dataset = self.CFG["dataset"]
-        self.num_class = self.CFG["num_classes"]
-        self.device = self.CFG["device"]
+        self.batch_size = self.CFG['batch_size']
+        self.optimizer = self.CFG['optimizer']
+        self.epochs = self.CFG['epochs']
+        self.lr = self.CFG['lr']
+        self.momentum = self.CFG['momentum']
+        self.save_path = self.CFG['save_path']
+        self.data_path = self.CFG['data_path']
+        self.weight_decay = self.CFG['weight_decay']
+        self.label_smooth = self.CFG['label_smooth']
+        self.num_workers = self.CFG['workers']
+        self.dataset = self.CFG['dataset']
+        self.num_class = self.CFG['num_classes']
+        self.device = self.CFG['device']
 
-        self.wandb_monitor = self.CFG.get("wandb", "False")
-        self.dataset_name = dataloaders["train"].dataset.__class__.__name__
+        self.wandb_monitor = self.CFG.get('wandb', 'False')
+        self.dataset_name = dataloaders['train'].dataset.__class__.__name__
 
-        self.name = "_".join(
-            [
-                self.dataset_name,
-                f"{self.epochs}",
-                f"{self.lr}",
-                datetime.now().strftime("%b-%d_%H:%M:%S"),
-            ]
-        )
+        self.name = '_'.join([
+            self.dataset_name,
+            f'{self.epochs}',
+            f'{self.lr}',
+            datetime.now().strftime('%b-%d_%H:%M:%S'),
+        ])
 
-        os.makedirs(f"{os.getcwd()}/logs/BiRealNet", exist_ok=True)
-        self.logger_file = f"{os.getcwd()}/logs/BiRealNet/{self.name}.log"
+        os.makedirs(f'{os.getcwd()}/logs/BiRealNet', exist_ok=True)
+        self.logger_file = f'{os.getcwd()}/logs/BiRealNet/{self.name}.log'
 
         logging.basicConfig(
             filename=self.logger_file,
-            format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
-            datefmt="%m/%d/%Y %H:%M:%S",
+            format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
+            datefmt='%m/%d/%Y %H:%M:%S',
             level=logging.INFO,
         )
 
-        logger.info(f"Experiment Arguments: {self.CFG}")
+        logger.info(f'Experiment Arguments: {self.CFG}')
 
         if self.wandb_monitor:
-            wandb.init(project="Trailmet BiRealNet", name=self.name)
+            wandb.init(project='Trailmet BiRealNet', name=self.name)
             wandb.config.update(self.CFG)
 
-    def train(self, epoch, train_loader, model, criterion, optimizer, scheduler):
-        """Train function"""
-        batch_time = AverageMeter("Time", ":6.3f")
-        data_time = AverageMeter("Data", ":6.3f")
-        losses = AverageMeter("Loss", ":.4e")
-        top1 = AverageMeter("Acc@1", ":6.2f")
-        top5 = AverageMeter("Acc@5", ":6.2f")
+    def train(self, epoch, train_loader, model, criterion, optimizer,
+              scheduler):
+        """Train function."""
+        batch_time = AverageMeter('Time', ':6.3f')
+        data_time = AverageMeter('Data', ':6.3f')
+        losses = AverageMeter('Loss', ':.4e')
+        top1 = AverageMeter('Acc@1', ':6.2f')
+        top5 = AverageMeter('Acc@5', ':6.2f')
 
         epoch_iterator = tqdm(
             train_loader,
-            desc="Training BiRealNet Epoch [X] (X / X Steps) (batch time=X.Xs) (data time=X.Xs) (loss=X.X) (top1=X.X) (top5=X.X)",
-            bar_format="{l_bar}{r_bar}",
+            desc=
+            'Training BiRealNet Epoch [X] (X / X Steps) (batch time=X.Xs) (data time=X.Xs) (loss=X.X) (top1=X.X) (top5=X.X)',
+            bar_format='{l_bar}{r_bar}',
             dynamic_ncols=True,
             disable=False,
         )
@@ -126,8 +126,8 @@ class BirealNet(BaseBinarize):
         scheduler.step()
 
         for param_group in optimizer.param_groups:
-            cur_lr = param_group["lr"]
-        print("learning_rate:", cur_lr)
+            cur_lr = param_group['lr']
+        print('learning_rate:', cur_lr)
 
         for i, (images, target) in enumerate(epoch_iterator):
             data_time.update(time.time() - end)
@@ -155,7 +155,7 @@ class BirealNet(BaseBinarize):
             end = time.time()
 
             epoch_iterator.set_description(
-                "Training BiRealNet Epoch [%d] (%d / %d Steps) (batch time=%2.5fs) (data time=%2.5fs) (loss=%2.5f) (top1=%2.5f) (top5=%2.5f)"
+                'Training BiRealNet Epoch [%d] (%d / %d Steps) (batch time=%2.5fs) (data time=%2.5fs) (loss=%2.5f) (top1=%2.5f) (top5=%2.5f)'
                 % (
                     epoch,
                     (i + 1),
@@ -165,11 +165,10 @@ class BirealNet(BaseBinarize):
                     losses.val,
                     top1.val,
                     top5.val,
-                )
-            )
+                ))
 
             logger.info(
-                "Training BiRealNet Epoch [%d] (%d / %d Steps) (batch time=%2.5fs) (data time=%2.5fs) (loss=%2.5f) (top1=%2.5f) (top5=%2.5f)"
+                'Training BiRealNet Epoch [%d] (%d / %d Steps) (batch time=%2.5fs) (data time=%2.5fs) (loss=%2.5f) (top1=%2.5f) (top5=%2.5f)'
                 % (
                     epoch,
                     (i + 1),
@@ -179,31 +178,29 @@ class BirealNet(BaseBinarize):
                     losses.val,
                     top1.val,
                     top5.val,
-                )
-            )
+                ))
 
             if self.wandb_monitor:
-                wandb.log(
-                    {
-                        "train_loss": losses.val,
-                        "train_top1_acc": top1.val,
-                        "train_top5_acc": top5.val,
-                    }
-                )
+                wandb.log({
+                    'train_loss': losses.val,
+                    'train_top1_acc': top1.val,
+                    'train_top5_acc': top5.val,
+                })
 
         return losses.avg, top1.avg, top5.avg
 
     def validate(self, epoch, val_loader, model, criterion, CFG):
-        """Validate Function"""
-        batch_time = AverageMeter("Time", ":6.3f")
-        losses = AverageMeter("Loss", ":.4e")
-        top1 = AverageMeter("Acc@1", ":6.2f")
-        top5 = AverageMeter("Acc@5", ":6.2f")
+        """Validate Function."""
+        batch_time = AverageMeter('Time', ':6.3f')
+        losses = AverageMeter('Loss', ':.4e')
+        top1 = AverageMeter('Acc@1', ':6.2f')
+        top5 = AverageMeter('Acc@5', ':6.2f')
 
         epoch_iterator = tqdm(
             val_loader,
-            desc="Validating BiRealNet Epoch [X] (X / X Steps) (batch time=X.Xs) (loss=X.X) (top1=X.X) (top5=X.X)",
-            bar_format="{l_bar}{r_bar}",
+            desc=
+            'Validating BiRealNet Epoch [X] (X / X Steps) (batch time=X.Xs) (loss=X.X) (top1=X.X) (top5=X.X)',
+            bar_format='{l_bar}{r_bar}',
             dynamic_ncols=True,
             disable=False,
         )
@@ -232,7 +229,7 @@ class BirealNet(BaseBinarize):
                 end = time.time()
 
                 epoch_iterator.set_description(
-                    "Validating BiRealNet Epoch [%d] (%d / %d Steps) (batch time=%2.5fs) (loss=%2.5f) (top1=%2.5f) (top5=%2.5f)"
+                    'Validating BiRealNet Epoch [%d] (%d / %d Steps) (batch time=%2.5fs) (loss=%2.5f) (top1=%2.5f) (top5=%2.5f)'
                     % (
                         epoch,
                         (i + 1),
@@ -241,11 +238,10 @@ class BirealNet(BaseBinarize):
                         losses.val,
                         top1.val,
                         top5.val,
-                    )
-                )
+                    ))
 
                 logger.info(
-                    "Validating BiRealNet Epoch [%d] (%d / %d Steps) (batch time=%2.5fs) (loss=%2.5f) (top1=%2.5f) (top5=%2.5f)"
+                    'Validating BiRealNet Epoch [%d] (%d / %d Steps) (batch time=%2.5fs) (loss=%2.5f) (top1=%2.5f) (top5=%2.5f)'
                     % (
                         epoch,
                         (i + 1),
@@ -254,37 +250,33 @@ class BirealNet(BaseBinarize):
                         losses.val,
                         top1.val,
                         top5.val,
-                    )
-                )
+                    ))
 
                 if self.wandb_monitor:
-                    wandb.log(
-                        {
-                            "val_loss": losses.val,
-                            "val_top1_acc": top1.val,
-                            "val_top5_acc": top5.val,
-                        }
-                    )
+                    wandb.log({
+                        'val_loss': losses.val,
+                        'val_top1_acc': top1.val,
+                        'val_top5_acc': top5.val,
+                    })
 
             print(
-                " * Val acc@1 {top1.avg:.3f} Val acc@5 {top5.avg:.3f}".format(
-                    top1=top1, top5=top5
-                )
-            )
+                ' * Val acc@1 {top1.avg:.3f} Val acc@5 {top5.avg:.3f}'.format(
+                    top1=top1, top5=top5))
 
         return losses.avg, top1.avg, top5.avg
 
     def test(self, epoch, test_loader, model, criterion, CFG):
-        """Test Function"""
-        batch_time = AverageMeter("Time", ":6.3f")
-        losses = AverageMeter("Loss", ":.4e")
-        top1 = AverageMeter("Acc@1", ":6.2f")
-        top5 = AverageMeter("Acc@5", ":6.2f")
+        """Test Function."""
+        batch_time = AverageMeter('Time', ':6.3f')
+        losses = AverageMeter('Loss', ':.4e')
+        top1 = AverageMeter('Acc@1', ':6.2f')
+        top5 = AverageMeter('Acc@5', ':6.2f')
 
         epoch_iterator = tqdm(
             test_loader,
-            desc="Testing BiRealNet Epoch [X] (X / X Steps) (batch time=X.Xs) (loss=X.X) (top1=X.X) (top5=X.X)",
-            bar_format="{l_bar}{r_bar}",
+            desc=
+            'Testing BiRealNet Epoch [X] (X / X Steps) (batch time=X.Xs) (loss=X.X) (top1=X.X) (top5=X.X)',
+            bar_format='{l_bar}{r_bar}',
             dynamic_ncols=True,
             disable=False,
         )
@@ -313,7 +305,7 @@ class BirealNet(BaseBinarize):
                 end = time.time()
 
                 epoch_iterator.set_description(
-                    "Testing BiRealNet Epoch [%d] (%d / %d Steps) (batch time=%2.5fs) (loss=%2.5f) (top1=%2.5f) (top5=%2.5f)"
+                    'Testing BiRealNet Epoch [%d] (%d / %d Steps) (batch time=%2.5fs) (loss=%2.5f) (top1=%2.5f) (top5=%2.5f)'
                     % (
                         epoch,
                         (i + 1),
@@ -322,11 +314,10 @@ class BirealNet(BaseBinarize):
                         losses.val,
                         top1.val,
                         top5.val,
-                    )
-                )
+                    ))
 
                 logger.info(
-                    "Testing BiRealNet Epoch [%d] (%d / %d Steps) (batch time=%2.5fs) (loss=%2.5f) (top1=%2.5f) (top5=%2.5f)"
+                    'Testing BiRealNet Epoch [%d] (%d / %d Steps) (batch time=%2.5fs) (loss=%2.5f) (top1=%2.5f) (top5=%2.5f)'
                     % (
                         epoch,
                         (i + 1),
@@ -335,28 +326,22 @@ class BirealNet(BaseBinarize):
                         losses.val,
                         top1.val,
                         top5.val,
-                    )
-                )
+                    ))
 
                 if self.wandb_monitor:
-                    wandb.log(
-                        {
-                            "test_loss": losses.val,
-                            "test_top1_acc": top1.val,
-                            "test_top5_acc": top5.val,
-                        }
-                    )
+                    wandb.log({
+                        'test_loss': losses.val,
+                        'test_top1_acc': top1.val,
+                        'test_top5_acc': top5.val,
+                    })
 
-            print(
-                " * Test acc@1 {top1.avg:.3f} Test acc@5 {top5.avg:.3f}".format(
-                    top1=top1, top5=top5
-                )
-            )
+            print(' * Test acc@1 {top1.avg:.3f} Test acc@5 {top5.avg:.3f}'.
+                  format(top1=top1, top5=top5))
 
         return losses.avg, top1.avg, top5.avg
 
     def binarize(self):
-        """Function used to binarize the model"""
+        """Function used to binarize the model."""
         if not torch.cuda.is_available():
             sys.exit(1)
         start_t = time.time()
@@ -369,61 +354,61 @@ class BirealNet(BaseBinarize):
         model = model.to(device=self.device)
         criterion = nn.CrossEntropyLoss()
         criterion = criterion.to(device=self.device)
-        criterion_smooth = CrossEntropyLabelSmooth(self.num_class, self.label_smooth)
+        criterion_smooth = CrossEntropyLabelSmooth(self.num_class,
+                                                   self.label_smooth)
         criterion_smooth = criterion_smooth.to(device=self.device)
 
         ## Preparing Optimizers
         all_parameters = model.parameters()
         weight_parameters = []
         for pname, p in model.named_parameters():
-            if (
-                p.ndimension() == 4
-                or pname == "classifier.0.weight"
-                or pname == "classifier.0.bias"
-            ):
+            if (p.ndimension() == 4 or pname == 'classifier.0.weight'
+                    or pname == 'classifier.0.bias'):
                 weight_parameters.append(p)
         weight_parameters_id = list(map(id, weight_parameters))
         other_parameters = list(
-            filter(lambda p: id(p) not in weight_parameters_id, all_parameters)
-        )
+            filter(lambda p: id(p) not in weight_parameters_id,
+                   all_parameters))
 
         optimizer = torch.optim.Adam(
             [
-                {"params": other_parameters},
-                {"params": weight_parameters, "weight_decay": self.weight_decay},
+                {
+                    'params': other_parameters
+                },
+                {
+                    'params': weight_parameters,
+                    'weight_decay': self.weight_decay
+                },
             ],
             lr=self.lr,
         )
         ##################
 
         scheduler = torch.optim.lr_scheduler.LambdaLR(
-            optimizer, lambda step: (1.0 - step / self.epochs), last_epoch=-1
-        )
+            optimizer, lambda step: (1.0 - step / self.epochs), last_epoch=-1)
 
         start_epoch = 0
         best_top1_acc = 0
 
         os.makedirs(self.save_path, exist_ok=True)
-        checkpoint_tar = os.path.join(
-            self.save_path, f"{self.dataset}-checkpoint.pth.tar"
-        )
+        checkpoint_tar = os.path.join(self.save_path,
+                                      f'{self.dataset}-checkpoint.pth.tar')
         if os.path.exists(checkpoint_tar):
-            logging.info("loading checkpoint {} ..........".format(checkpoint_tar))
-            checkpoint = torch.load(checkpoint_tar)
-            start_epoch = checkpoint["epoch"]
-            best_top1_acc = checkpoint["best_top1_acc"]
-            model.load_state_dict(checkpoint["state_dict"], strict=False)
             logging.info(
-                "loaded checkpoint {} epoch = {}".format(
-                    checkpoint_tar, checkpoint["epoch"]
-                )
-            )
+                'loading checkpoint {} ..........'.format(checkpoint_tar))
+            checkpoint = torch.load(checkpoint_tar)
+            start_epoch = checkpoint['epoch']
+            best_top1_acc = checkpoint['best_top1_acc']
+            model.load_state_dict(checkpoint['state_dict'], strict=False)
+            logging.info('loaded checkpoint {} epoch = {}'.format(
+                checkpoint_tar, checkpoint['epoch']))
 
         # adjust the learning rate according to the checkpoint
         for epoch in range(start_epoch):
             scheduler.step()
 
-        logging.info("epoch, train accuracy, train loss, val accuracy, val loss")
+        logging.info(
+            'epoch, train accuracy, train loss, val accuracy, val loss')
         epoch = start_epoch
         epochs_list = []
         train_top1_acc_list = []
@@ -433,15 +418,15 @@ class BirealNet(BaseBinarize):
         while epoch < self.epochs:
             train_obj, train_top1_acc, train_top5_acc = self.train(
                 epoch,
-                self.dataloaders["train"],
+                self.dataloaders['train'],
                 self.model,
                 criterion_smooth,
                 optimizer,
                 scheduler,
             )
             valid_obj, valid_top1_acc, valid_top5_acc = self.validate(
-                epoch, self.dataloaders["val"], self.model, criterion, self.CFG
-            )
+                epoch, self.dataloaders['val'], self.model, criterion,
+                self.CFG)
 
             train_top1_acc_list.append(train_top1_acc)
             train_top5_acc_list.append(train_top5_acc)
@@ -455,11 +440,11 @@ class BirealNet(BaseBinarize):
 
             save_checkpoint(
                 {
-                    "epoch": epoch,
-                    "state_dict": model.state_dict(),
-                    "best_top1_acc": best_top1_acc,
-                    "optimizer": optimizer.state_dict(),
-                    "scheduler": scheduler.state_dict(),
+                    'epoch': epoch,
+                    'state_dict': model.state_dict(),
+                    'best_top1_acc': best_top1_acc,
+                    'optimizer': optimizer.state_dict(),
+                    'scheduler': scheduler.state_dict(),
                 },
                 is_best,
                 self.save_path,
@@ -467,31 +452,28 @@ class BirealNet(BaseBinarize):
 
             epoch += 1
 
-        best = torch.load(f"{self.save_path}/model_best.pth.tar")
-        self.model.load_state_dict(best["state_dict"])
-        self.test(
-            (epoch - 1), self.dataloaders["test"], self.model, criterion, self.CFG
-        )
+        best = torch.load(f'{self.save_path}/model_best.pth.tar')
+        self.model.load_state_dict(best['state_dict'])
+        self.test((epoch - 1), self.dataloaders['test'], self.model, criterion,
+                  self.CFG)
         training_time = (time.time() - start_t) / 36000
-        print("total training time = {} hours".format(training_time))
+        print('total training time = {} hours'.format(training_time))
 
-        df_data = np.array(
-            [
-                epochs_list,
-                train_top1_acc_list,
-                train_top5_acc_list,
-                val_top1_acc_list,
-                val_top5_acc_list,
-            ]
-        ).T
+        df_data = np.array([
+            epochs_list,
+            train_top1_acc_list,
+            train_top5_acc_list,
+            val_top1_acc_list,
+            val_top5_acc_list,
+        ]).T
         df = pd.DataFrame(
             df_data,
             columns=[
-                "Epochs",
-                "Train Top1",
-                "Train Top5",
-                "Validation Top1",
-                "Validation Top5",
+                'Epochs',
+                'Train Top1',
+                'Train Top5',
+                'Validation Top1',
+                'Validation Top5',
             ],
         )
-        df.to_csv(f"{os.getcwd()}/logs/BiRealNet/{self.name}.csv", index=False)
+        df.to_csv(f'{os.getcwd()}/logs/BiRealNet/{self.name}.csv', index=False)

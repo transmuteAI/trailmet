@@ -47,8 +47,8 @@ class Pruner(MetaPruner):
         self._prune_and_build_new_model()
 
         if self.args.reinit:
-            if self.args.reinit == "orth":
-                self.logger.info("==> Reinit model: orthogonal initialization")
+            if self.args.reinit == 'orth':
+                self.logger.info('==> Reinit model: orthogonal initialization')
                 for module in self.model.modules():
                     if isinstance(module, (nn.Conv2d, nn.Linear)):
                         nn.init.orthogonal_(module.weight.data)

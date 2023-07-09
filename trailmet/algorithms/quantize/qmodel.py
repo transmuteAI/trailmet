@@ -34,16 +34,16 @@ from trailmet.algorithms.quantize.methods import UniformAffineQuantizer
 from trailmet.algorithms.quantize.methods import ActQuantizer
 
 __all__ = [
-    "QuantBasicBlock",
-    "QuantBottleneck",
-    "QuantInvertedResidual",
-    "QuantModule",
-    "BaseQuantBlock",
-    "QBasicBlock",
-    "QBottleneck",
-    "QInvertedResidual",
-    "ActivationModuleWrapper",
-    "ParameterModuleWrapper",
+    'QuantBasicBlock',
+    'QuantBottleneck',
+    'QuantInvertedResidual',
+    'QuantModule',
+    'BaseQuantBlock',
+    'QBasicBlock',
+    'QBottleneck',
+    'QInvertedResidual',
+    'ActivationModuleWrapper',
+    'ParameterModuleWrapper',
 ]
 # ============================================
 # ***** Quantization Modules for BRECQ *******
@@ -133,7 +133,9 @@ class QuantModule(nn.Module):
             out = self.act_quantizer(out)
         return out
 
-    def set_quant_state(self, weight_quant: bool = False, act_quant: bool = False):
+    def set_quant_state(self,
+                        weight_quant: bool = False,
+                        act_quant: bool = False):
         self.use_weight_quant = weight_quant
         self.use_act_quant = act_quant
 
@@ -161,7 +163,9 @@ class BaseQuantBlock(nn.Module):
 
         self.ignore_reconstruction = False
 
-    def set_quant_state(self, weight_quant: bool = False, act_quant: bool = False):
+    def set_quant_state(self,
+                        weight_quant: bool = False,
+                        act_quant: bool = False):
         # setting weight quantization here does not affect actual forward pass
         self.use_weight_quant = weight_quant
         self.use_act_quant = act_quant
@@ -171,9 +175,7 @@ class BaseQuantBlock(nn.Module):
 
 
 class QuantBasicBlock(BaseQuantBlock):
-    """
-    Implementation of Quantized BasicBlock used in ResNet-18 and
-    ResNet-34.
+    """Implementation of Quantized BasicBlock used in ResNet-18 and ResNet-34.
 
     Parameters
     ----------
@@ -189,9 +191,8 @@ class QuantBasicBlock(BaseQuantBlock):
         act_quant_params: dict = {},
     ):
         super().__init__(act_quant_params)
-        self.conv1 = QuantModule(
-            basic_block.conv1, weight_quant_params, act_quant_params
-        )
+        self.conv1 = QuantModule(basic_block.conv1, weight_quant_params,
+                                 act_quant_params)
         self.conv1.activation_function = basic_block.active
         self.conv2 = QuantModule(
             basic_block.conv2,
@@ -233,7 +234,7 @@ class QuantBottleneck(BaseQuantBlock):
 
     Parameters
     ----------
-    bottlenect (object): Bottlneck to be used
+    bottleneck (object): Bottleneck to be used
     weight_quant_params (dict): Weight parameters
     act_quant_params (dict): Activation Parameters
     """
@@ -245,13 +246,11 @@ class QuantBottleneck(BaseQuantBlock):
         act_quant_params: dict = {},
     ):
         super().__init__(act_quant_params)
-        self.conv1 = QuantModule(
-            bottleneck.conv1, weight_quant_params, act_quant_params
-        )
+        self.conv1 = QuantModule(bottleneck.conv1, weight_quant_params,
+                                 act_quant_params)
         self.conv1.activation_function = bottleneck.active
-        self.conv2 = QuantModule(
-            bottleneck.conv2, weight_quant_params, act_quant_params
-        )
+        self.conv2 = QuantModule(bottleneck.conv2, weight_quant_params,
+                                 act_quant_params)
         self.conv2.activation_function = bottleneck.active
         self.conv3 = QuantModule(
             bottleneck.conv3,
@@ -310,16 +309,19 @@ class QuantInvertedResidual(BaseQuantBlock):
         self.inp = inv_res.inp
         self.oup = inv_res.oup
         self.exp = inv_res.exp
-        self.conv1 = QuantModule(inv_res.conv1, weight_quant_params, act_quant_params)
+        self.conv1 = QuantModule(inv_res.conv1, weight_quant_params,
+                                 act_quant_params)
         self.conv1.activation_function = nn.ReLU6(inplace=True)
-        self.conv2 = QuantModule(inv_res.conv2, weight_quant_params, act_quant_params)
+        self.conv2 = QuantModule(inv_res.conv2, weight_quant_params,
+                                 act_quant_params)
         self.conv2.activation_function = nn.ReLU6(inplace=True)
-        self.conv3 = QuantModule(inv_res.conv3, weight_quant_params, act_quant_params)
+        self.conv3 = QuantModule(inv_res.conv3, weight_quant_params,
+                                 act_quant_params)
         self.shortcut = nn.Sequential()
         if self.stride == 1 and self.inp != self.oup:
             self.shortcut = nn.Sequential(
-                QuantModule(inv_res.shortcut[0], weight_quant_params, act_quant_params)
-            )
+                QuantModule(inv_res.shortcut[0], weight_quant_params,
+                            act_quant_params))
         # self.use_res_connect = inv_res.use_res_connect
         # self.expand_ratio = inv_res.exp
         # if self.expand_ratio == 1:
@@ -402,7 +404,7 @@ class QBottleneck(nn.Module):
     """
     Parameters
     ----------
-    bottlenect (object): Bottlneck to be used
+    bottleneck (object): Bottleneck to be used
     """
 
     expansion = 4
@@ -482,8 +484,8 @@ Supported quantization wrappers for pytorch modules :-
 """
 
 quantization_mapping = {
-    "max_static": MaxAbsStaticQuantization,
-    "lp_norm": LpNormQuantization,
+    'max_static': MaxAbsStaticQuantization,
+    'lp_norm': LpNormQuantization,
 }
 
 
@@ -504,8 +506,8 @@ class ActivationModuleWrapper(nn.Module):
         super(ActivationModuleWrapper, self).__init__()
         self.name = name
         self.wrapped_module = wrapped_module
-        self.bits_out = kwargs["bits_out"]
-        self.qtype = kwargs["qtype"]
+        self.bits_out = kwargs['bits_out']
+        self.qtype = kwargs['qtype']
         self.post_relu = True
         self.enabled = True
         self.active = True
@@ -513,14 +515,15 @@ class ActivationModuleWrapper(nn.Module):
             self.out_quantization = self.out_quantization_default = None
 
             def __init_out_quantization__(tensor):
-                self.out_quantization_default = quantization_mapping[self.qtype](
-                    self,
-                    tensor,
-                    self.bits_out,
-                    symmetric=(not is_positive(wrapped_module)),
-                    uint=True,
-                    kwargs=kwargs,
-                )
+                self.out_quantization_default = quantization_mapping[
+                    self.qtype](
+                        self,
+                        tensor,
+                        self.bits_out,
+                        symmetric=(not is_positive(wrapped_module)),
+                        uint=True,
+                        kwargs=kwargs,
+                    )
                 self.out_quantization = self.out_quantization_default
 
             self.out_quantization_init_fn = __init_out_quantization__
@@ -533,16 +536,14 @@ class ActivationModuleWrapper(nn.Module):
             out = self.wrapped_module(*input)
             # Quantize output
             if self.__enabled__():
-                self.verify_initialized(
-                    self.out_quantization, out, self.out_quantization_init_fn
-                )
+                self.verify_initialized(self.out_quantization, out,
+                                        self.out_quantization_init_fn)
                 out = self.out_quantization(out)
         else:
             # Quantize output
             if self.__enabled__():
-                self.verify_initialized(
-                    self.out_quantization, *input, self.out_quantization_init_fn
-                )
+                self.verify_initialized(self.out_quantization, *input,
+                                        self.out_quantization_init_fn)
                 out = self.out_quantization(*input)
             else:
                 out = self.wrapped_module(*input)
@@ -579,12 +580,12 @@ class ParameterModuleWrapper(nn.Module):
         super(ParameterModuleWrapper, self).__init__()
         self.name = name
         self.wrapped_module = wrapped_module
-        self.forward_functor = kwargs["forward_functor"]
-        self.bit_weights = kwargs["bit_weights"]
-        self.bits_out = kwargs["bits_out"]
-        self.qtype = kwargs["qtype"]
-        self.bcorr_w = kwargs["bcorr_w"]
-        self.bn = kwargs["bn"] if "bn" in kwargs else None
+        self.forward_functor = kwargs['forward_functor']
+        self.bit_weights = kwargs['bit_weights']
+        self.bits_out = kwargs['bits_out']
+        self.qtype = kwargs['qtype']
+        self.bcorr_w = kwargs['bcorr_w']
+        self.bn = kwargs['bn'] if 'bn' in kwargs else None
         self.enabled = True
         self.active = True
         self.centroids_hist = {}
@@ -592,24 +593,26 @@ class ParameterModuleWrapper(nn.Module):
         self.log_weights_mse = False
         self.log_clustering = False
         self.dynamic_weight_quantization = True
-        setattr(self, "weight", wrapped_module.weight)
-        delattr(wrapped_module, "weight")
-        if hasattr(wrapped_module, "bias"):
-            setattr(self, "bias", wrapped_module.bias)
-            delattr(wrapped_module, "bias")
+        setattr(self, 'weight', wrapped_module.weight)
+        delattr(wrapped_module, 'weight')
+        if hasattr(wrapped_module, 'bias'):
+            setattr(self, 'bias', wrapped_module.bias)
+            delattr(wrapped_module, 'bias')
         if self.bit_weights is not None:
-            self.weight_quantization_default = quantization_mapping[self.qtype](
-                self,
-                self.weight,
-                self.bit_weights,
-                symmetric=True,
-                uint=True,
-                kwargs=kwargs,
-            )
+            self.weight_quantization_default = quantization_mapping[
+                self.qtype](
+                    self,
+                    self.weight,
+                    self.bit_weights,
+                    symmetric=True,
+                    uint=True,
+                    kwargs=kwargs,
+                )
             self.weight_quantization = self.weight_quantization_default
             if not self.dynamic_weight_quantization:
                 self.weight_q = self.weight_quantization(self.weight)
-                self.weight_mse = torch.mean((self.weight_q - self.weight) ** 2).item()
+                self.weight_mse = torch.mean(
+                    (self.weight_q - self.weight)**2).item()
 
     def __enabled__(self):
         return self.enabled and self.active and self.bit_weights is not None
@@ -618,11 +621,8 @@ class ParameterModuleWrapper(nn.Module):
         bias_q = xq.view(xq.shape[0], -1).mean(-1)
         bias_orig = x.view(x.shape[0], -1).mean(-1)
         bcorr = bias_q - bias_orig
-        return (
-            xq - bcorr.view(bcorr.numel(), 1, 1, 1)
-            if len(x.shape) == 4
-            else xq - bcorr.view(bcorr.numel(), 1)
-        )
+        return (xq - bcorr.view(bcorr.numel(), 1, 1, 1)
+                if len(x.shape) == 4 else xq - bcorr.view(bcorr.numel(), 1))
 
     def forward(self, *input):
         w = self.weight
@@ -635,14 +635,17 @@ class ParameterModuleWrapper(nn.Module):
             else:
                 w = self.weight_q
         out = self.forward_functor(
-            *input, weight=w, bias=(self.bias if hasattr(self, "bias") else None)
-        )
+            *input,
+            weight=w,
+            bias=(self.bias if hasattr(self, 'bias') else None))
         return out
 
     def get_quantization(self):
         return self.weight_quantization
 
     def set_quantization(self, qtype, kwargs):
-        self.weight_quantization = qtype(
-            self, self.bit_weights, symmetric=True, uint=True, kwargs=kwargs
-        )
+        self.weight_quantization = qtype(self,
+                                         self.bit_weights,
+                                         symmetric=True,
+                                         uint=True,
+                                         kwargs=kwargs)

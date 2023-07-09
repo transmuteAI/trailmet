@@ -47,18 +47,18 @@ class DatasetFactory(object):
         Return:
             dataset(tuple): dataset
         """
-        assert "name" in kwargs, "should provide dataset name"
-        name = kwargs["name"]
-        assert "root" in kwargs, "should provide dataset root"
-        if "CIFAR10" == name:
+        assert 'name' in kwargs, 'should provide dataset name'
+        name = kwargs['name']
+        assert 'root' in kwargs, 'should provide dataset root'
+        if 'CIFAR10' == name:
             obj_dfactory = CIFAR10Dataset(**kwargs)
-        elif "CIFAR100" == name:
+        elif 'CIFAR100' == name:
             obj_dfactory = CIFAR100Dataset(**kwargs)
-        elif "ImageNet" == name:
+        elif 'ImageNet' == name:
             obj_dfactory = ImageNetDataset(**kwargs)
-        elif "CHEST" == name:
+        elif 'CHEST' == name:
             obj_dfactory = ChestDataset(**kwargs)
-        elif "TCGA" == name:
+        elif 'TCGA' == name:
             obj_dfactory = TCGADataset(**kwargs)
         else:
             raise Exception(f"unknown dataset{kwargs['name']}")
