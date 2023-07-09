@@ -24,10 +24,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 from trailmet.utils.functions import pdist
 
-__all__ = ['KDTransferLoss', 'RkdDistance', 'RKdAngle']
+__all__ = ["KDTransferLoss", "RkdDistance", "RKdAngle"]
 
 
 class KDTransferLoss(nn.Module):
+    """Class for KD Transfer Loss"""
 
     def __init__(self, temperature, reduction):
         super().__init__()
@@ -43,6 +44,7 @@ class KDTransferLoss(nn.Module):
 
 
 class RkdDistance(nn.Module):
+    """Class for RKD Distance"""
 
     def forward(self, student, teacher):
         with torch.no_grad():
@@ -54,11 +56,12 @@ class RkdDistance(nn.Module):
         mean_d = d[d > 0].mean()
         d = d / mean_d
 
-        loss = F.smooth_l1_loss(d, t_d, reduction='elementwise_mean')
+        loss = F.smooth_l1_loss(d, t_d, reduction="elementwise_mean")
         return loss
 
 
 class RKdAngle(nn.Module):
+    """Class for RKD Angle"""
 
     def forward(self, student, teacher):
         # N x C
@@ -73,5 +76,5 @@ class RKdAngle(nn.Module):
         norm_sd = F.normalize(sd, p=2, dim=2)
         s_angle = torch.bmm(norm_sd, norm_sd.transpose(1, 2)).view(-1)
 
-        loss = F.smooth_l1_loss(s_angle, t_angle, reduction='elementwise_mean')
+        loss = F.smooth_l1_loss(s_angle, t_angle, reduction="elementwise_mean")
         return loss

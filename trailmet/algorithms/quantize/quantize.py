@@ -26,12 +26,12 @@ from tqdm import tqdm_notebook
 from ..algorithms import BaseAlgorithm
 
 __all__ = [
-    'BaseQuantization',
-    'StraightThrough',
-    'RoundSTE',
-    'Conv2dFunctor',
-    'LinearFunctor',
-    'FoldBN',
+    "BaseQuantization",
+    "StraightThrough",
+    "RoundSTE",
+    "Conv2dFunctor",
+    "LinearFunctor",
+    "FoldBN",
 ]
 
 
@@ -73,20 +73,19 @@ class BaseQuantization(BaseAlgorithm):
             w.mul_(bn_module.weight.data.view(w.size(0), 1, 1, 1).expand_as(w))
             b.mul_(bn_module.weight.data).add_(bn_module.bias.data)
 
-        bn_module.register_buffer('running_mean',
-                                  torch.zeros(module.out_channels).cuda())
-        bn_module.register_buffer('running_var',
-                                  torch.ones(module.out_channels).cuda())
-        bn_module.register_parameter('weight', None)
-        bn_module.register_parameter('bias', None)
+        bn_module.register_buffer(
+            "running_mean", torch.zeros(module.out_channels).cuda()
+        )
+        bn_module.register_buffer("running_var", torch.ones(module.out_channels).cuda())
+        bn_module.register_parameter("weight", None)
+        bn_module.register_parameter("bias", None)
         bn_module.affine = False
 
     def is_bn(self, m):
         return isinstance(m, nn.BatchNorm2d) or isinstance(m, nn.BatchNorm1d)
 
     def is_absorbing(self, m):
-        return (isinstance(m, nn.Conv2d) and m.groups == 1) or isinstance(
-            m, nn.Linear)
+        return (isinstance(m, nn.Conv2d) and m.groups == 1) or isinstance(m, nn.Linear)
 
     def search_absorbe_bn(self, model):
         prev = None
@@ -111,7 +110,6 @@ class StraightThrough(nn.Module):
 
 
 class RoundSTE(torch.autograd.Function):
-
     @staticmethod
     def forward(ctx, input):
         output = torch.round(input)
@@ -123,21 +121,23 @@ class RoundSTE(torch.autograd.Function):
 
 
 class Conv2dFunctor:
-
     def __init__(self, conv2d):
         self.conv2d = conv2d
 
     def __call__(self, *input, weight, bias):
-        res = torch.nn.functional.conv2d(*input, weight, bias,
-                                         self.conv2d.stride,
-                                         self.conv2d.padding,
-                                         self.conv2d.dilation,
-                                         self.conv2d.groups)
+        res = torch.nn.functional.conv2d(
+            *input,
+            weight,
+            bias,
+            self.conv2d.stride,
+            self.conv2d.padding,
+            self.conv2d.dilation,
+            self.conv2d.groups
+        )
         return res
 
 
 class LinearFunctor:
-
     def __init__(self, linear):
         self.linear = linear
 

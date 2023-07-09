@@ -77,18 +77,18 @@ class ImageNetDataset(BaseDataset):
         dataset = torchvision.datasets.ImageNet
         self.dataset_dict = {}
         for item in self.split_types:
-            dataset_type = item + '_dataset'
-            if item == 'test':
+            dataset_type = item + "_dataset"
+            if item == "test":
                 data = dataset(
                     root=self.root,
-                    split='val',
+                    split="val",
                     transform=self.transform[item],
                     target_transform=self.target_transform[item],
                 )
             else:
                 data = dataset(
                     root=self.root,
-                    split='train',
+                    split="train",
                     transform=self.transform[item],
                     target_transform=self.target_transform[item],
                 )

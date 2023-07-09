@@ -79,25 +79,24 @@ class BaseDataset:
 
         # performing QC of the input parameters
         try:
-            self.val_fraction = float(
-                self.val_fraction)  # check for float type
+            self.val_fraction = float(self.val_fraction)  # check for float type
         except ValueError:
-            raise ValueError('val_fraction needs to be of float type')
+            raise ValueError("val_fraction needs to be of float type")
 
         assert (self.val_fraction >= 0.0) and (
-            self.val_fraction
-            < 1.0), 'val_fraction should be in range [0.0, 1.0]'
+            self.val_fraction < 1.0
+        ), "val_fraction should be in range [0.0, 1.0]"
 
         # check if split_types contain nothing beyond train, val and test
         assert (
-            len(set(self.split_types) - set(['train', 'val', 'test'])) == 0
-        ), 'Only train, val and test permitted as inputs in split_types'
+            len(set(self.split_types) - set(["train", "val", "test"])) == 0
+        ), "Only train, val and test permitted as inputs in split_types"
 
         if self.shuffle:
             # ensure that val exists in split_types
             assert (
-                'val' in self.split_types
-            ), 'Required param val missing in the defined split types (split_type)'
+                "val" in self.split_types
+            ), "Required param val missing in the defined split types (split_type)"
 
     def stack_dataset(self):
         """
@@ -111,12 +110,12 @@ class BaseDataset:
         """
 
         # defining the samplers
-        self.dataset_dict['train_sampler'] = None
-        self.dataset_dict['val_sampler'] = None
-        self.dataset_dict['test_sampler'] = None
+        self.dataset_dict["train_sampler"] = None
+        self.dataset_dict["val_sampler"] = None
+        self.dataset_dict["test_sampler"] = None
 
-        if self.name in ['CIFAR10', 'CIFAR100', 'CHEST']:
-            num_train = len(self.dataset_dict['train'])
+        if self.name in ["CIFAR10", "CIFAR100", "CHEST"]:
+            num_train = len(self.dataset_dict["train"])
             indices = list(range(num_train))
             split = int(np.floor(self.val_fraction * num_train))
 
@@ -127,15 +126,15 @@ class BaseDataset:
             self.train_idx, self.valid_idx = indices[split:], indices[:split]
             train_sampler = SubsetRandomSampler(self.train_idx)
             valid_sampler = SubsetRandomSampler(self.valid_idx)
-            self.dataset_dict['train_sampler'] = train_sampler
-            self.dataset_dict['val_sampler'] = valid_sampler
-        elif self.name == 'TCGA':
+            self.dataset_dict["train_sampler"] = train_sampler
+            self.dataset_dict["val_sampler"] = valid_sampler
+        elif self.name == "TCGA":
             self.train_idx, self.valid_idx = range(
-                len(self.dataset_dict['train'])), range(
-                    len(self.dataset_dict['val']))
+                len(self.dataset_dict["train"])
+            ), range(len(self.dataset_dict["val"]))
             train_sampler = SubsetRandomSampler(self.train_idx)
             valid_sampler = SubsetRandomSampler(self.valid_idx)
-            self.dataset_dict['train_sampler'] = train_sampler
-            self.dataset_dict['val_sampler'] = valid_sampler
+            self.dataset_dict["train_sampler"] = train_sampler
+            self.dataset_dict["val_sampler"] = valid_sampler
 
         return self.dataset_dict

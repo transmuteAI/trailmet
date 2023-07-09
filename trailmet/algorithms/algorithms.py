@@ -43,18 +43,21 @@ class BaseAlgorithm(object):
     implementation of base_train() method can directly be used for both the
     tasks. In case of modifications, overwrite this function based on the
     needs.
+    Parameters
+    ----------
+        kwargs (object): A yaml safe loaded file with information like cuda_id, log_dir, device, etc.
     """
 
     def __init__(self, **kwargs):
         self.pretraining_epochs = 200
-        self.cuda_id = kwargs.get('cuda_id', 0)
-        self.device = torch.device(f'cuda:{str(self.cuda_id)}')
-        self.log_name = kwargs.get('log_dir', 'abc')
-        if os.path.exists('logs') is False:
-            os.mkdir('logs')
+        self.cuda_id = kwargs.get("cuda_id", 0)
+        self.device = torch.device(f"cuda:{str(self.cuda_id)}")
+        self.log_name = kwargs.get("log_dir", "abc")
+        if os.path.exists("logs") is False:
+            os.mkdir("logs")
 
-        if os.path.exists('checkpoints') is False:
-            os.mkdir('checkpoints')
+        if os.path.exists("checkpoints") is False:
+            os.mkdir("checkpoints")
 
     def compress_model(self) -> None:
         """Template function to be overwritten for each model compression
@@ -70,14 +73,14 @@ class BaseAlgorithm(object):
         overwrite wherever this parent class is inherited.
         """
         best_acc = 0  # setting to lowest possible value
-        num_epochs = kwargs.get('EPOCHS', self.pretraining_epochs)
-        test_only = kwargs.get('TEST_ONLY', False)
+        num_epochs = kwargs.get("EPOCHS", self.pretraining_epochs)
+        test_only = kwargs.get("TEST_ONLY", False)
 
         ### preparing optimizer ###
-        optimizer_name = kwargs.get('OPTIMIZER', 'SGD')
-        lr = kwargs.get('LR', 0.05)
-        scheduler_type = kwargs.get('SCHEDULER_TYPE', 1)
-        weight_decay = kwargs.get('WEIGHT_DECAY', 0.001)
+        optimizer_name = kwargs.get("OPTIMIZER", "SGD")
+        lr = kwargs.get("LR", 0.05)
+        scheduler_type = kwargs.get("SCHEDULER_TYPE", 1)
+        weight_decay = kwargs.get("WEIGHT_DECAY", 0.001)
 
         optimizer = self.get_optimizer(optimizer_name, model, lr, weight_decay)
         ###########################
@@ -89,53 +92,47 @@ class BaseAlgorithm(object):
 
         if test_only is False:
             for epoch in range(num_epochs):
-                adjust_learning_rate(optimizer, epoch, num_epochs,
-                                     scheduler_type, lr)
-                t_loss = self.train_one_epoch(model, dataloaders['train'],
-                                              criterion, optimizer)
-                acc, v_loss = self.test(model, dataloaders['val'], criterion)
+                adjust_learning_rate(optimizer, epoch, num_epochs, scheduler_type, lr)
+                t_loss = self.train_one_epoch(
+                    model, dataloaders["train"], criterion, optimizer
+                )
+                acc, v_loss = self.test(model, dataloaders["val"], criterion)
                 if acc > best_acc:
-                    print('**Saving model**')
+                    print("**Saving model**")
                     best_acc = acc
                     torch.save(
                         {
-                            'epoch': epoch + 1,
-                            'state_dict': model.state_dict(),
-                            'acc': best_acc,
+                            "epoch": epoch + 1,
+                            "state_dict": model.state_dict(),
+                            "acc": best_acc,
                         },
-                        f'checkpoints/{self.log_name}.pth',
+                        f"checkpoints/{self.log_name}.pth",
                     )
                 train_losses.append(t_loss)
                 valid_losses.append(v_loss)
                 valid_accuracy.append(acc)
-                df_data = np.array(
-                    [train_losses, valid_losses, valid_accuracy]).T
+                df_data = np.array([train_losses, valid_losses, valid_accuracy]).T
                 df = pd.DataFrame(
-                    df_data,
-                    columns=['train_losses', 'valid_losses', 'valid_accuracy'])
-                df.to_csv(f'logs/{self.log_name}.csv')
+                    df_data, columns=["train_losses", "valid_losses", "valid_accuracy"]
+                )
+                df.to_csv(f"logs/{self.log_name}.csv")
 
-        state = torch.load(f'checkpoints/{self.log_name}.pth')
-        model.load_state_dict(state['state_dict'], strict=True)
-        acc, v_loss = self.test(model, dataloaders['test'], criterion)
+        state = torch.load(f"checkpoints/{self.log_name}.pth")
+        model.load_state_dict(state["state_dict"], strict=True)
+        acc, v_loss = self.test(model, dataloaders["test"], criterion)
         print(f"Test Accuracy: {acc} | Valid Accuracy: {state['acc']}")
 
     def get_optimizer(self, optimizer_name: str, model, lr, weight_decay):
         """Returns the optimizer with the given name."""
-        if optimizer_name == 'SGD':
-            optimizer = optim.SGD(model.parameters(),
-                                  lr=lr,
-                                  weight_decay=weight_decay)
+        if optimizer_name == "SGD":
+            optimizer = optim.SGD(model.parameters(), lr=lr, weight_decay=weight_decay)
         else:
-            raise ValueError('Unknown optimizer: %s' % optimizer_name)
+            raise ValueError("Unknown optimizer: %s" % optimizer_name)
         return optimizer
 
-    def train_one_epoch(self,
-                        model,
-                        dataloader,
-                        loss_fn,
-                        optimizer,
-                        extra_functionality=None):
+    def train_one_epoch(
+        self, model, dataloader, loss_fn, optimizer, extra_functionality=None
+    ):
         """Standard training loop which can be used for various purposes with
         an extra functionality function to add to its working at the end of the
         loop."""
@@ -159,7 +156,7 @@ class BaseAlgorithm(object):
                 extra_functionality()
         return running_loss / counter
 
-    def accuracy(self, output, target, topk=(1, )):
+    def accuracy(self, output, target, topk=(1,)):
         """Computes the accuracy over the k top predictions for the specified
         values of k."""
         with torch.no_grad():
@@ -172,8 +169,7 @@ class BaseAlgorithm(object):
 
             res = []
             for k in topk:
-                correct_k = correct[:k].reshape(-1).float().sum(0,
-                                                                keepdim=True)
+                correct_k = correct[:k].reshape(-1).float().sum(0, keepdim=True)
                 res.append(correct_k.mul_(100.0 / batch_size))
             return res
 
@@ -207,8 +203,9 @@ class BaseAlgorithm(object):
                         acc5=running_acc5 / counter,
                     )
                 else:
-                    tk1.set_postfix(acc1=running_acc1 / counter,
-                                    acc5=running_acc5 / counter)
+                    tk1.set_postfix(
+                        acc1=running_acc1 / counter, acc5=running_acc5 / counter
+                    )
         if loss_fn is not None:
             return running_acc1 / counter, running_loss / counter
         return running_acc1 / counter, running_acc5 / counter

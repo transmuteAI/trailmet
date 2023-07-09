@@ -63,68 +63,76 @@ class Growth_Regularisation(BasePruning):
     pretraining and fine-tuning, the implementation of base_train() method can
     directly be used for both the tasks. In case of modifications, overwrite
     this function based on the needs.
+
+     Parameters
+    ----------
+        model (object): A pytorch model you want to use.
+        dataloaders (dict): Dictionary with dataloaders for train, val and test. Keys: 'train', 'val', 'test'.
+        kwargs (object): YAML safe loaded file with information like dataset, num_classes, epoch, weight_decay, etc.
     """
 
     def __init__(self, model, dataloaders, **kwargs):
-        self.device = 'cuda'
-        self.train_loader = dataloaders['train']
-        self.val_loader = dataloaders['val']
-        self.test_loader = dataloaders['test']
+        self.device = "cuda"
+        self.train_loader = dataloaders["train"]
+        self.val_loader = dataloaders["val"]
+        self.test_loader = dataloaders["test"]
         self.dataloaders = dataloaders
         self.model = model
         self.kwargs = kwargs
-        self.dataset = self.kwargs.get('DATASET', 'c100')
-        self.num_classes = self.kwargs.get('num_classes', 100)
-        self.label_smooth = self.kwargs.get('label_smooth', 0.1)
-        self.pretrained = self.kwargs.get('pretrained', '')
-        self.resume = self.kwargs.get('resume', 'False')
-        self.epochs = self.kwargs.get('epoch', '120')
-        self.weight_decay = self.kwargs.get('weight_decay', 0)
-        self.learning_rate = self.kwargs.get('learning_rate', 0.001)
-        self.stage_pr = self.kwargs.get('stage_pr', None)
-        self.skip_layers = self.kwargs.get('skip_layers', None)
-        self.base_pr_model = self.kwargs.get('base_pr_model', None)
-        self.base_model_path = self.kwargs.get('base_model_path', None)
-        self.momentum = self.kwargs.get('momentum', 0.9)
-        self.save = self.kwargs.get('save', './checkpoint')
-        self.method = self.kwargs.get('method', 'GReg-1')
+        self.dataset = self.kwargs.get("DATASET", "c100")
+        self.num_classes = self.kwargs.get("num_classes", 100)
+        self.label_smooth = self.kwargs.get("label_smooth", 0.1)
+        self.pretrained = self.kwargs.get("pretrained", "")
+        self.resume = self.kwargs.get("resume", "False")
+        self.epochs = self.kwargs.get("epoch", "120")
+        self.weight_decay = self.kwargs.get("weight_decay", 0)
+        self.learning_rate = self.kwargs.get("learning_rate", 0.001)
+        self.stage_pr = self.kwargs.get("stage_pr", None)
+        self.skip_layers = self.kwargs.get("skip_layers", None)
+        self.base_pr_model = self.kwargs.get("base_pr_model", None)
+        self.base_model_path = self.kwargs.get("base_model_path", None)
+        self.momentum = self.kwargs.get("momentum", 0.9)
+        self.save = self.kwargs.get("save", "./checkpoint")
+        self.method = self.kwargs.get("method", "GReg-1")
 
-        self.wandb_monitor = self.kwargs.get('wandb', 'False')
-        self.dataset_name = dataloaders['train'].dataset.__class__.__name__
+        self.wandb_monitor = self.kwargs.get("wandb", "False")
+        self.dataset_name = dataloaders["train"].dataset.__class__.__name__
 
-        self.name = '_'.join([
-            self.dataset_name,
-            f'{self.epochs}',
-            f'{self.learning_rate}',
-            datetime.now().strftime('%b-%d_%H:%M:%S'),
-        ])
+        self.name = "_".join(
+            [
+                self.dataset_name,
+                f"{self.epochs}",
+                f"{self.learning_rate}",
+                datetime.now().strftime("%b-%d_%H:%M:%S"),
+            ]
+        )
 
-        os.makedirs(f'{os.getcwd()}/logs/Growth_Regularisation', exist_ok=True)
+        os.makedirs(f"{os.getcwd()}/logs/Growth_Regularisation", exist_ok=True)
         os.makedirs(self.save, exist_ok=True)
-        self.logger_file = f'{os.getcwd()}/logs/Growth_Regularisation/{self.name}.log'
+        self.logger_file = f"{os.getcwd()}/logs/Growth_Regularisation/{self.name}.log"
 
         logging.basicConfig(
             filename=self.logger_file,
-            format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
-            datefmt='%m/%d/%Y %H:%M:%S',
+            format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+            datefmt="%m/%d/%Y %H:%M:%S",
             level=logging.INFO,
         )
 
-        logger.info(f'Experiment Arguments: {self.kwargs}')
+        logger.info(f"Experiment Arguments: {self.kwargs}")
 
         if self.wandb_monitor:
-            wandb.init(project='Trailmet Growth_Regularisation',
-                       name=self.name)
+            wandb.init(project="Trailmet Growth_Regularisation", name=self.name)
             wandb.config.update(self.kwargs)
 
         if self.stage_pr:
             self.stage_pr = self.stage_pr  # example: [0, 0.4, 0.5, 0]
-            self.skip_layers = strlist_to_list(self.skip_layers,
-                                               str)  # example: [2.3.1, 3.1]
+            self.skip_layers = strlist_to_list(
+                self.skip_layers, str
+            )  # example: [2.3.1, 3.1]
         else:
             assert (
                 self.base_pr_model
-            ), 'If stage_pr is not provided, base_pr_model must be provided'
+            ), "If stage_pr is not provided, base_pr_model must be provided"
 
     def compress_model(self) -> None:
         """Template function to be overwritten for each model compression
@@ -133,9 +141,7 @@ class Growth_Regularisation(BasePruning):
         self.epochs = 1
 
         self.model.maxpool = torch.nn.Identity()
-        self.model = self.base_train(self.model,
-                                     self.dataloaders,
-                                     fine_tune=False)
+        self.model = self.base_train(self.model, self.dataloaders, fine_tune=False)
 
         self.prune_and_finetune(self.kwargs, self.dataloaders)
 
@@ -145,16 +151,16 @@ class Growth_Regularisation(BasePruning):
         # if self.base_model_path != None:
         if 0:
             X = torch.load(self.base_model_path)
-            X1 = X['state_dict']
+            X1 = X["state_dict"]
             L = list(X1.keys())
             for key in L:
-                new_key = key.replace('model.', '')
+                new_key = key.replace("model.", "")
                 X1[new_key] = X1.pop(key)
             self.model.load_state_dict(X1)
-            print("==> Load pretrained model successfully: '%s'" %
-                  self.base_model_path)
-            logger.info("==> Load pretrained model successfully: '%s'" %
-                        self.base_model_path)
+            print("==> Load pretrained model successfully: '%s'" % self.base_model_path)
+            logger.info(
+                "==> Load pretrained model successfully: '%s'" % self.base_model_path
+            )
 
         criterion = nn.CrossEntropyLoss()
 
@@ -164,45 +170,44 @@ class Growth_Regularisation(BasePruning):
             momentum=self.momentum,
             weight_decay=self.weight_decay,
         )
-        prune_state, pruner = '', None
-        if prune_state != 'finetune':
+        prune_state, pruner = "", None
+        if prune_state != "finetune":
 
             class passer:
                 pass  # to pass arguments
 
-            passer.train_loader = dataloader['train']
-            passer.test_loader = dataloader['val']
+            passer.train_loader = dataloader["train"]
+            passer.test_loader = dataloader["val"]
             passer.save = save_checkpoint
             passer.criterion = criterion
             passer.train_sampler = None
             passer.pruner = pruner
             passer.args = self.kwargs
             passer.is_single_branch = is_single_branch
-            pruner = pruner_dict[self.method](self.model, self.kwargs, logger,
-                                              passer)
-            if self.method == 'L1':
+            pruner = pruner_dict[self.method](self.model, self.kwargs, logger, passer)
+            if self.method == "L1":
                 model = pruner.prune()
-                print('==> Saving model without key <==')
+                print("==> Saving model without key <==")
                 print(model)
                 save_checkpoint(
                     {
-                        'arch': args.arch,
-                        'model': model,
-                        'state_dict': model.state_dict(),
+                        "arch": args.arch,
+                        "model": model,
+                        "state_dict": model.state_dict(),
                     },
                     False,
                     self.save,
                 )
             else:
                 pruning_key, model = pruner.prune()  # get the pruned model
-                print('==> Saving model with key <==')
+                print("==> Saving model with key <==")
                 print(model)
                 save_checkpoint(
                     {
-                        'arch': args.arch,
-                        'model': model,
-                        'state_dict': model.state_dict(),
-                        'pruning_key': pruning_key,
+                        "arch": args.arch,
+                        "model": model,
+                        "state_dict": model.state_dict(),
+                        "pruning_key": pruning_key,
                     },
                     False,
                     self.save,
@@ -235,12 +240,13 @@ class Growth_Regularisation(BasePruning):
         val_top5_acc_list = []
 
         for epoch in range(self.epochs):
-            adjust_learning_rate(optimizer, epoch, self.epochs, scheduler_type,
-                                 self.learning_rate)
+            adjust_learning_rate(
+                optimizer, epoch, self.epochs, scheduler_type, self.learning_rate
+            )
 
             t_loss = self.train_one_epoch(
                 model,
-                dataloaders['train'],
+                dataloaders["train"],
                 criterion,
                 optimizer,
                 epoch,
@@ -248,7 +254,7 @@ class Growth_Regularisation(BasePruning):
 
             valid_loss, valid_top1_acc, valid_top5_acc = self.test(
                 model,
-                dataloaders['val'],
+                dataloaders["val"],
                 criterion,
                 epoch,
             )
@@ -259,57 +265,59 @@ class Growth_Regularisation(BasePruning):
                 is_best = True
 
                 if self.pr is not None:
-                    print('==> Saving model with key <==')
-                    logger.info('==> Saving model with key <==')
+                    print("==> Saving model with key <==")
+                    logger.info("==> Saving model with key <==")
                     save_checkpoint(
                         {
-                            'epoch': epoch,
-                            'state_dict': model.state_dict(),
-                            'best_top1_acc': best_top1_acc,
-                            'pruning_key': self.pr,
-                            'optimizer': optimizer.state_dict(),
+                            "epoch": epoch,
+                            "state_dict": model.state_dict(),
+                            "best_top1_acc": best_top1_acc,
+                            "pruning_key": self.pr,
+                            "optimizer": optimizer.state_dict(),
                         },
                         is_best,
                         self.save,
                     )
 
                 else:
-                    print('==> Saving model without key <==')
-                    logger.info('==> Saving model without key <==')
+                    print("==> Saving model without key <==")
+                    logger.info("==> Saving model without key <==")
                     save_checkpoint(
                         {
-                            'epoch': epoch,
-                            'state_dict': model.state_dict(),
-                            'best_top1_acc': best_top1_acc,
-                            'pruning_key': self.pr,
-                            'optimizer': optimizer.state_dict(),
+                            "epoch": epoch,
+                            "state_dict": model.state_dict(),
+                            "best_top1_acc": best_top1_acc,
+                            "pruning_key": self.pr,
+                            "optimizer": optimizer.state_dict(),
                         },
                         is_best,
                         self.save,
                     )
 
                 if self.wandb_monitor:
-                    wandb.log({'best_top1_acc': best_top1_acc})
+                    wandb.log({"best_top1_acc": best_top1_acc})
 
                 epochs_list.append(epoch)
                 val_top1_acc_list.append(valid_top1_acc.cpu().numpy())
                 val_top5_acc_list.append(valid_top5_acc.cpu().numpy())
 
-                df_data = np.array([
-                    epochs_list,
-                    val_top1_acc_list,
-                    val_top5_acc_list,
-                ]).T
+                df_data = np.array(
+                    [
+                        epochs_list,
+                        val_top1_acc_list,
+                        val_top5_acc_list,
+                    ]
+                ).T
                 df = pd.DataFrame(
                     df_data,
                     columns=[
-                        'Epochs',
-                        'Validation Top1',
-                        'Validation Top5',
+                        "Epochs",
+                        "Validation Top1",
+                        "Validation Top5",
                     ],
                 )
                 df.to_csv(
-                    f'{os.getcwd()}/logs/Growth_Regularisation/{self.name}.csv',
+                    f"{os.getcwd()}/logs/Growth_Regularisation/{self.name}.csv",
                     index=False,
                 )
 
@@ -329,17 +337,16 @@ class Growth_Regularisation(BasePruning):
         loop."""
         model.train()
 
-        batch_time = AverageMeter('Time', ':6.3f')
-        data_time = AverageMeter('Data', ':6.3f')
-        losses = AverageMeter('Loss', ':.4e')
+        batch_time = AverageMeter("Time", ":6.3f")
+        data_time = AverageMeter("Data", ":6.3f")
+        losses = AverageMeter("Loss", ":.4e")
 
         end = time.time()
 
         epoch_iterator = tqdm(
             dataloader,
-            desc=
-            'Training Epoch [X] (X / X Steps) (batch time=X.Xs) (data time=X.Xs) (loss=X.X)',
-            bar_format='{l_bar}{r_bar}',
+            desc="Training Epoch [X] (X / X Steps) (batch time=X.Xs) (data time=X.Xs) (loss=X.X)",
+            bar_format="{l_bar}{r_bar}",
             dynamic_ncols=True,
             disable=False,
         )
@@ -362,7 +369,7 @@ class Growth_Regularisation(BasePruning):
             end = time.time()
 
             epoch_iterator.set_description(
-                'Training Epoch [%d] (%d / %d Steps) (batch time=%2.5fs) (data time=%2.5fs) (loss=%2.5f)'
+                "Training Epoch [%d] (%d / %d Steps) (batch time=%2.5fs) (data time=%2.5fs) (loss=%2.5f)"
                 % (
                     epoch,
                     (i + 1),
@@ -370,10 +377,11 @@ class Growth_Regularisation(BasePruning):
                     batch_time.val,
                     data_time.val,
                     losses.val,
-                ))
+                )
+            )
 
             logger.info(
-                'Training Epoch [%d] (%d / %d Steps) (batch time=%2.5fs) (data time=%2.5fs) (loss=%2.5f)'
+                "Training Epoch [%d] (%d / %d Steps) (batch time=%2.5fs) (data time=%2.5fs) (loss=%2.5f)"
                 % (
                     epoch,
                     (i + 1),
@@ -381,12 +389,15 @@ class Growth_Regularisation(BasePruning):
                     batch_time.val,
                     data_time.val,
                     losses.val,
-                ))
+                )
+            )
 
             if self.wandb_monitor:
-                wandb.log({
-                    f'train_loss': losses.val,
-                })
+                wandb.log(
+                    {
+                        f"train_loss": losses.val,
+                    }
+                )
 
             if extra_functionality is not None:
                 extra_functionality()
@@ -399,16 +410,15 @@ class Growth_Regularisation(BasePruning):
         model.eval()
         model.to(self.device)
 
-        batch_time = AverageMeter('Time', ':6.3f')
-        losses = AverageMeter('Loss', ':.4e')
-        top1 = AverageMeter('Acc@1', ':6.2f')
-        top5 = AverageMeter('Acc@5', ':6.2f')
+        batch_time = AverageMeter("Time", ":6.3f")
+        losses = AverageMeter("Loss", ":.4e")
+        top1 = AverageMeter("Acc@1", ":6.2f")
+        top5 = AverageMeter("Acc@5", ":6.2f")
 
         epoch_iterator = tqdm(
             dataloader,
-            desc=
-            'Validating Epoch [X] (X / X Steps) (batch time=X.Xs) (loss=X.X) (top1=X.X) (top5=X.X)',
-            bar_format='{l_bar}{r_bar}',
+            desc="Validating Epoch [X] (X / X Steps) (batch time=X.Xs) (loss=X.X) (top1=X.X) (top5=X.X)",
+            bar_format="{l_bar}{r_bar}",
             dynamic_ncols=True,
             disable=False,
         )
@@ -434,7 +444,7 @@ class Growth_Regularisation(BasePruning):
                 end = time.time()
 
                 epoch_iterator.set_description(
-                    'Validating Epoch [%d] (%d / %d Steps) (batch time=%2.5fs) (loss=%2.5f) (top1=%2.5f) (top5=%2.5f)'
+                    "Validating Epoch [%d] (%d / %d Steps) (batch time=%2.5fs) (loss=%2.5f) (top1=%2.5f) (top5=%2.5f)"
                     % (
                         epoch,
                         (i + 1),
@@ -443,10 +453,11 @@ class Growth_Regularisation(BasePruning):
                         losses.val,
                         top1.val,
                         top5.val,
-                    ))
+                    )
+                )
 
                 logger.info(
-                    'Validating Epoch [%d] (%d / %d Steps) (batch time=%2.5fs) (loss=%2.5f) (top1=%2.5f) (top5=%2.5f)'
+                    "Validating Epoch [%d] (%d / %d Steps) (batch time=%2.5fs) (loss=%2.5f) (top1=%2.5f) (top5=%2.5f)"
                     % (
                         epoch,
                         (i + 1),
@@ -455,16 +466,22 @@ class Growth_Regularisation(BasePruning):
                         losses.val,
                         top1.val,
                         top5.val,
-                    ))
+                    )
+                )
 
                 if self.wandb_monitor:
-                    wandb.log({
-                        f'val_loss': losses.val,
-                        f'val_top1_acc': top1.val,
-                        f'val_top5_acc': top5.val,
-                    })
+                    wandb.log(
+                        {
+                            f"val_loss": losses.val,
+                            f"val_top1_acc": top1.val,
+                            f"val_top5_acc": top5.val,
+                        }
+                    )
 
-            print(' * acc@1 {top1.avg:.3f} acc@5 {top5.avg:.3f}'.format(
-                top1=top1, top5=top5))
+            print(
+                " * acc@1 {top1.avg:.3f} acc@5 {top5.avg:.3f}".format(
+                    top1=top1, top5=top5
+                )
+            )
 
         return losses.avg, top1.avg, top5.avg
