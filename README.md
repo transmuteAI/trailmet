@@ -1,6 +1,6 @@
 <p align="center">
     <br>
-        <img src="docs/source/imgs/trailmet.png" width="500"/>
+        <img src="https://raw.githubusercontent.com/transmuteAI/trailmet/dev/docs/source/imgs/trailmet.png" width="500"/>
     </br>
     <br>
         <strong> Transmute AI Model Efficiency Toolkit </strong>
