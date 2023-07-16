@@ -129,7 +129,10 @@ class TCGA(Dataset):
             image_path = os.path.join(self.data_path, self.labels_dict[path],
                                       path + '.png')
             img = Image.open(image_path).convert('RGB')
-            img = self.transform(img)
+            if self.target_transform == None:
+                img = self.transform(img)
+            else:
+                img = self.target_transform(img)
             class_name = self.labels_dict[path]
             return img, torch.tensor([self.class_dict[class_name]]).item()
         else:
@@ -137,7 +140,10 @@ class TCGA(Dataset):
             image_path = os.path.join(self.data_path, self.labels_dict[path],
                                       path + '.png')
             img = Image.open(image_path).convert('RGB')
-            img = self.transform(img)
+            if self.target_transform == None:
+                img = self.transform(img)
+            else:
+                img = self.target_transform(img)
             class_name = self.labels_dict[path]
             return img, torch.tensor([self.class_dict[class_name]]).item()
 
