@@ -1,12 +1,18 @@
 <p align="center">
     <br>
-        <img src="https://raw.githubusercontent.com/transmuteAI/trailmet/dev/docs/source/imgs/trailmet.png" width="500"/>
+        <img src="docs/source/imgs/trailmet.png" width="500"/>
     </br>
     <br>
         <strong> Transmute AI Model Efficiency Toolkit </strong>
     </br>
 </p>
 <p align="center">
+    <a href="https://pypi.org/project/trailmet/">
+    <img src="https://pepy.tech/badge/trailmet" />
+    </a>
+    <a href="https://pypi.org/project/trailmet/">
+    <img src="https://badge.fury.io/py/trailmet.svg" />
+    </a>
     <a href="https://github.com/transmuteAI/trailmet/blob/dev/LICENSE">
         <img alt="GitHub" src="https://img.shields.io/github/license/transmuteAI/trailmet?color=blue">
     </a>
@@ -48,7 +54,7 @@ cd trailmet
 conda create -n trailmet
 conda activate trailmet
 conda install pytorch=1.13 torchvision=0.14 pytorch-cuda=11.7 -c pytorch -c nvidia
-pip install -r requirements.txt
+pip install trailmet
 ```
 
 # Algorithms Implemented
