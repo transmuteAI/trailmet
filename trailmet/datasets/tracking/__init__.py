@@ -1,5 +1,6 @@
 from .got10kdata import GOT10kDataset
 
+
 class TrackingDatasetFactory(object):
     """This class forms the generic wrapper for the different dataset classes.
 
@@ -18,10 +19,10 @@ class TrackingDatasetFactory(object):
         Return:
             dataset(tuple): dataset
         """
-        assert 'name' in kwargs, 'should provide dataset name'
-        name = kwargs['name']
-        assert 'root' in kwargs, 'should provide dataset root'
-        if 'got10k' == name:
+        assert "name" in kwargs, "should provide dataset name"
+        name = kwargs["name"]
+        assert "root" in kwargs, "should provide dataset root"
+        if "got10k" == name:
             obj_dfactory = GOT10kDataset(**kwargs)
         else:
             raise Exception(f"unknown dataset{kwargs['name']}")
