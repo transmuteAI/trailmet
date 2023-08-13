@@ -1,3 +1,24 @@
+# MIT License
+#
+# Copyright (c) 2023 Transmute AI Lab
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
 # https://github.com/got-10k/siamfc
 from __future__ import absolute_import, division, print_function
 
@@ -15,22 +36,24 @@ from got10k.datasets import GOT10k
 
 
 class RandomStretch(object):
-    def __init__(self, max_stretch=0.05, interpolation="bilinear"):
-        assert interpolation in ["bilinear", "bicubic"]
+
+    def __init__(self, max_stretch=0.05, interpolation='bilinear'):
+        assert interpolation in ['bilinear', 'bicubic']
         self.max_stretch = max_stretch
         self.interpolation = interpolation
 
     def __call__(self, img):
         scale = 1.0 + np.random.uniform(-self.max_stretch, self.max_stretch)
         size = np.round(np.array(img.size, float) * scale).astype(int)
-        if self.interpolation == "bilinear":
+        if self.interpolation == 'bilinear':
             method = Image.BILINEAR
-        elif self.interpolation == "bicubic":
+        elif self.interpolation == 'bicubic':
             method = Image.BICUBIC
         return img.resize(tuple(size), method)
 
 
 class Pairwise(Dataset):
+
     def __init__(self, seq_dataset, **kargs):
         super(Pairwise, self).__init__()
         self.cfg = self.parse_args(**kargs)
@@ -38,38 +61,34 @@ class Pairwise(Dataset):
         self.seq_dataset = seq_dataset
         self.indices = np.random.permutation(len(seq_dataset))
         # augmentation for exemplar and instance images
-        self.transform_z = Compose(
-            [
-                RandomStretch(max_stretch=0.05),
-                CenterCrop(self.cfg.instance_sz - 8),
-                RandomCrop(self.cfg.instance_sz - 2 * 8),
-                CenterCrop(self.cfg.exemplar_sz),
-                ToTensor(),
-            ]
-        )
-        self.transform_x = Compose(
-            [
-                RandomStretch(max_stretch=0.05),
-                CenterCrop(self.cfg.instance_sz - 8),
-                RandomCrop(self.cfg.instance_sz - 2 * 8),
-                ToTensor(),
-            ]
-        )
+        self.transform_z = Compose([
+            RandomStretch(max_stretch=0.05),
+            CenterCrop(self.cfg.instance_sz - 8),
+            RandomCrop(self.cfg.instance_sz - 2 * 8),
+            CenterCrop(self.cfg.exemplar_sz),
+            ToTensor(),
+        ])
+        self.transform_x = Compose([
+            RandomStretch(max_stretch=0.05),
+            CenterCrop(self.cfg.instance_sz - 8),
+            RandomCrop(self.cfg.instance_sz - 2 * 8),
+            ToTensor(),
+        ])
 
     def parse_args(self, **kargs):
         # default parameters
         cfg = {
-            "pairs_per_seq": 10,
-            "max_dist": 100,
-            "exemplar_sz": 127,
-            "instance_sz": 255,
-            "context": 0.5,
+            'pairs_per_seq': 10,
+            'max_dist': 100,
+            'exemplar_sz': 127,
+            'instance_sz': 255,
+            'context': 0.5,
         }
 
         for key, val in kargs.items():
             if key in cfg:
                 cfg.update({key: val})
-        return namedtuple("GenericDict", cfg.keys())(**cfg)
+        return namedtuple('GenericDict', cfg.keys())(**cfg)
 
     def __getitem__(self, index):
         index = self.indices[index % len(self.seq_dataset)]
@@ -128,12 +147,10 @@ class Pairwise(Dataset):
 
         # convert box to corners (0-indexed)
         size = round(x_sz)
-        corners = np.concatenate(
-            (
-                np.round(center - (size - 1) / 2),
-                np.round(center - (size - 1) / 2) + size,
-            )
-        )
+        corners = np.concatenate((
+            np.round(center - (size - 1) / 2),
+            np.round(center - (size - 1) / 2) + size,
+        ))
         corners = np.round(corners).astype(int)
 
         # pad image if necessary
@@ -157,6 +174,7 @@ class Pairwise(Dataset):
 
 
 class GOT10kDataset:
+
     def __init__(
         self,
         name=None,
@@ -184,11 +202,12 @@ class GOT10kDataset:
         Returns:
             dataset_dict (dict): Updated with info key that contains details related to the data splits
         """
-        self.dataset_dict["info"] = {}
-        self.dataset_dict["info"]["train_size"] = len(self.dataset_dict["train"])
-        self.dataset_dict["info"]["val_size"] = len(self.dataset_dict["val"])
-        self.dataset_dict["info"]["test_size"] = len(self.dataset_dict["test"])
-        self.dataset_dict["info"]["note"] = ""
+        self.dataset_dict['info'] = {}
+        self.dataset_dict['info']['train_size'] = len(
+            self.dataset_dict['train'])
+        self.dataset_dict['info']['val_size'] = len(self.dataset_dict['val'])
+        self.dataset_dict['info']['test_size'] = len(self.dataset_dict['test'])
+        self.dataset_dict['info']['note'] = ''
         return self.dataset_dict
 
     def stack_dataset(self):
@@ -203,17 +222,17 @@ class GOT10kDataset:
         """
 
         # defining the samplers
-        self.dataset_dict["train_sampler"] = None
-        self.dataset_dict["val_sampler"] = None
-        self.dataset_dict["test_sampler"] = None
+        self.dataset_dict['train_sampler'] = None
+        self.dataset_dict['val_sampler'] = None
+        self.dataset_dict['test_sampler'] = None
 
-        if self.name == "got10k":
+        if self.name == 'got10k':
             self.train_idx, self.valid_idx = range(
-                len(self.dataset_dict["train"])
-            ), range(len(self.dataset_dict["val"]))
+                len(self.dataset_dict['train'])), range(
+                    len(self.dataset_dict['val']))
             train_sampler = SubsetRandomSampler(self.train_idx)
             valid_sampler = SubsetRandomSampler(self.valid_idx)
-            self.dataset_dict["train_sampler"] = train_sampler
-            self.dataset_dict["val_sampler"] = valid_sampler
+            self.dataset_dict['train_sampler'] = train_sampler
+            self.dataset_dict['val_sampler'] = valid_sampler
 
         return self.dataset_dict
