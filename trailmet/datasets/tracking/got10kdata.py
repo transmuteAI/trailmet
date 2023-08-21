@@ -190,7 +190,8 @@ class GOT10kDataset:
         for item in split_types:
             dataset_type = item
             data = GOT10k(root, subset=dataset_type)
-            data = Pairwise(data)
+            if item != 'test':
+                data = Pairwise(data)
             self.dataset_dict[dataset_type] = data
 
     def build_dict_info(self):
