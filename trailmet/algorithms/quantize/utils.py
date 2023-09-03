@@ -21,7 +21,49 @@
 # SOFTWARE.
 
 import os
+import torch
 from plotly import graph_objects
+
+__all__ = [
+    'get_qscheme',
+    'get_dtype',
+    'replace_activation_with_identity',
+    'StopForwardException',
+    'DataSaverHook',
+    'GradSaverHook',
+    'LinearTempDecay'
+    'Node',
+    'GraphPlotter'
+]
+
+def get_qscheme(per_channel=False, symmetric=False):
+    if per_channel and symmetric:
+        return torch.per_channel_symmetric
+    elif per_channel and not symmetric:
+        return torch.per_channel_affine
+    elif not per_channel and symmetric:
+        return torch.per_tensor_symmetric
+    else:
+        return torch.per_tensor_affine
+    
+def get_dtype(quant_min: int, quant_max: int):
+    # bit capacity for qint and quint is reduced by 1 for 'x86' backend
+    if quant_min>=0 and quant_max<=127:
+        return torch.quint8
+    elif quant_min>=-64 and quant_max<=63:
+        return torch.qint8
+    else:
+        return torch.qint32
+
+def replace_activation_with_identity(module: torch.nn.Module, activations: list) -> None:
+    reassign = {}
+    for name, child_module in module.named_children():
+        replace_activation_with_identity(child_module, activations)
+        for activation in activations:
+            if isinstance(child_module, activation):
+                reassign[name] = torch.nn.Identity()
+    for key, value in reassign.items():
+        module._modules[key] = value
 
 class StopForwardException(Exception):
     """
