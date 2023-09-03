@@ -24,16 +24,26 @@ import copy
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.ao.nn.intrinsic as nni
 from tqdm import tqdm
 from typing import Union
 from trailmet.models.resnet import BasicBlock, Bottleneck
 from trailmet.models.mobilenet import InvertedResidual
 from trailmet.algorithms.quantize.utils import StopForwardException, DataSaverHook, GradSaverHook
-from trailmet.algorithms.quantize.utils import LinearTempDecay, Node, GraphPlotter
+from trailmet.algorithms.quantize.utils import LinearTempDecay, Node, GraphPlotter, replace_activation_with_identity
 from trailmet.algorithms.quantize.modules import StraightThrough, QuantModule, BaseQuantBlock
 from trailmet.algorithms.quantize.modules import QuantBasicBlock, QuantBottleneck, QuantInvertedResidual
 from trailmet.algorithms.algorithms import BaseAlgorithm
+from torch.ao.quantization.stubs import QuantStub, DeQuantStub
+from torch.ao.quantization.fuse_modules import fuse_modules
 
+__all__ = [
+    'BaseQuantModel',
+    'BaseQuantization',
+    'BaseQuantLoss',
+    'GetLayerInpOut',
+    'GetLayerGrad'
+]
 
 supported = {
     BasicBlock: QuantBasicBlock,
@@ -44,33 +54,59 @@ supported = {
 class BaseQuantModel(nn.Module):
     """base model wrapping class for quantization algorithms"""
     def __init__(self, model: nn.Module, weight_quant_params: dict = {},
-            act_quant_params: dict = {}, fold_bn = True):
+            act_quant_params: dict = {}, inplace = False, fuse_model=True):
         super().__init__()
-        self.model = copy.deepcopy(model)
+        if not inplace:
+            self.model = copy.deepcopy(model)
+        else:
+            self.model = model
         self.weight_quant_params = weight_quant_params
         self.act_quant_params = act_quant_params
-        if fold_bn:
-            self.model.eval()
-            self.search_fold_remove_bn(self.model)
+        self.model.eval()
+        if not fuse_model:
+            self.search_fold_conv_bn(self.model)    # Do Not Use
+        else:
+            replace_activation_with_identity(self.model, [nn.ReLU, nn.ReLU6])
+            self.add_fused_conv_bn_act(self.model)
+        setattr(self.model, 'quant', QuantStub())
+        setattr(self.model, 'dequant', DeQuantStub())
         self.quant_module_refactor(self.model)
         self.quant_modules = [m for m in self.model.modules() if isinstance(m, QuantModule)]
 
+    def forward(self, x):
+        x = self.model.quant(x)     #TODO check functionality
+        x = self.model._forward_impl(x)
+        x = self.model.dequant(x)
+        return x
 
-    def search_fold_remove_bn(self, module: nn.Module):
-        """
-        Recursively search for BatchNorm layers, fold them into the previous 
-        Conv2d or Linear layers and set them as a StraightThrough layer.
-        """
-        prev_module = None
-        for name, child_module in module.named_children():
-            if self._is_bn(child_module) and self._is_absorbing(prev_module):
-                self._fold_bn_into_conv(prev_module, child_module)
-                setattr(module, name, StraightThrough())
-            elif self._is_absorbing(child_module):
-                prev_module = child_module
-            else:
-                prev_module = self.search_fold_remove_bn(child_module)
-        return prev_module
+    def add_fused_conv_bn_act(self, model: nn.Module):
+        # same functionality as torchvision.models.quantization.resnet.QuantizableResNet.fuse_model
+        setattr(model, "relu1", nn.ReLU(inplace=True))
+        model.relu1.eval()
+        fuse_modules(model, ["conv1", "bn1", "relu1"], inplace=True)
+        for module in model.modules():
+            if type(module) is BasicBlock:
+                setattr(module, "relu1", nn.ReLU(inplace=True))
+                module.relu1.eval()
+                fuse_modules(
+                    module,
+                    [["conv1", "bn1", "relu1"], ["conv2", "bn2"]],
+                    inplace=True
+                )
+                if module.downsample is not None:
+                    fuse_modules(module.downsample, ["0", "1"], inplace=True)
+            if type(module) is Bottleneck:
+                setattr(module, "relu1", nn.ReLU(inplace=True))
+                setattr(module, "relu2", nn.ReLU(inplace=True))
+                module.relu1.eval()
+                module.relu2.eval()
+                fuse_modules(
+                    module,
+                    [["conv1", "bn1", "relu1"], ["conv2", "bn2", "relu2"], ["conv3", "bn3"]],
+                    inplace=True
+                )
+                if module.downsample is not None:
+                    fuse_modules(module.downsample, ["0", "1"], inplace=True)
 
     def quant_module_refactor(self, module: nn.Module):
         """
@@ -78,23 +114,23 @@ class BaseQuantModel(nn.Module):
         supported network blocks to their respective wrappers, to enable weight 
         and activations quantization.
         """
-        prev_quant_module: QuantModule = None
+        # prev_quant_module: QuantModule = None
         for name, child_module in module.named_children():
             if type(child_module) in supported:
                 setattr(module, name, supported[type(child_module)](
                     child_module, self.weight_quant_params, self.act_quant_params
                 ))
-            elif isinstance(child_module, (nn.Conv2d, nn.Linear)):
+            elif isinstance(child_module, (nn.Conv2d, nni.ConvReLU2d, nn.Linear, nni.LinearReLU)):
                 setattr(module, name, QuantModule(
                     child_module, self.weight_quant_params, self.act_quant_params
                 ))
-                prev_quant_module = getattr(module, name)
-            elif isinstance(child_module, (nn.ReLU, nn.ReLU6)):
-                if prev_quant_module is not None:
-                    prev_quant_module.activation_function = child_module
-                else:
-                    continue
-            elif isinstance(child_module, StraightThrough):
+            #    prev_quant_module = getattr(module, name)
+            # elif isinstance(child_module, (nn.ReLU, nn.ReLU6)):
+            #     if prev_quant_module is not None:
+            #         prev_quant_module.activation_function = child_module
+            #     else:
+            #         continue
+            elif isinstance(child_module, (StraightThrough, nn.Identity, nn.ReLU)):
                 continue
             else:
                 self.quant_module_refactor(child_module)
@@ -107,7 +143,7 @@ class BaseQuantModel(nn.Module):
         """
         for module in self.model.modules():
             if isinstance(module, (QuantModule, BaseQuantBlock)):
-                module.set_quant_state(weight_quant, act_quant)
+                module.set_quantization_state(weight_quant, act_quant)
 
     def quantize_model_till(self, layer, act_quant: bool = False):
         """
@@ -117,7 +153,7 @@ class BaseQuantModel(nn.Module):
         self.set_quant_state(False, False)
         for name, module in self.model.named_modules():
             if isinstance(module, (QuantModule, BaseQuantBlock)):
-                module.set_quant_state(True, act_quant)
+                module.set_quantization_state(True, act_quant)
             if module == layer:
                 break 
 
@@ -127,13 +163,26 @@ class BaseQuantModel(nn.Module):
         :param act_bit: bitwidth for activations
         """
         assert len(weight_bits)==len(self.quant_modules)
-        for idx, module in  enumerate(self.quant_modules):
+        for idx, module in enumerate(self.quant_modules):
             module.weight_quantizer.bitwidth_refactor(weight_bits[idx])
             if module is not self.quant_modules[-1]:
                 module.act_quantizer.bitwidth_refactor(act_bit)
 
-    def forward(self, input):
-        return self.model(input)
+    def search_fold_conv_bn(self, module: nn.Module):
+        """
+        Recursively search for BatchNorm layers, fold them into the previous 
+        Conv2d or Linear layers and set them as a StraightThrough layer.
+        """
+        prev_module = None
+        for name, child_module in module.named_children():
+            if self._is_bn(child_module) and self._is_absorbing(prev_module):
+                self._fold_bn_into_conv(prev_module, child_module)
+                setattr(module, name, StraightThrough())
+            elif self._is_absorbing(child_module):
+                prev_module = child_module
+            else:
+                prev_module = self.search_fold_conv_bn(child_module)
+        return prev_module
     
     def _is_bn(self, module):
         return isinstance(module, (nn.BatchNorm1d, nn.BatchNorm2d))
@@ -141,9 +190,10 @@ class BaseQuantModel(nn.Module):
     def _is_absorbing(self, module):
         return isinstance(module, (nn.Conv2d, nn.Linear))
     
-    def _fold_bn_into_conv(self, conv_module, bn_module):
+    def _fold_bn_into_conv(self, conv_module: nn.Conv2d, bn_module: nn.BatchNorm2d):
+        # same as torch.nn.utils.fusion.fuse_conv_bn_eval
         w, b = self._get_folded_params(conv_module, bn_module)
-        if conv_module.bias is None:
+        if conv_module.bias is None: 
             conv_module.bias = nn.Parameter(b)
         else:
             conv_module.bias.data = b
@@ -151,7 +201,7 @@ class BaseQuantModel(nn.Module):
         bn_module.running_mean = bn_module.bias.data
         bn_module.running_var = bn_module.weight.data ** 2
 
-    def _get_folded_params(self, conv_module, bn_module):
+    def _get_folded_params(self, conv_module: nn.Conv2d, bn_module: nn.BatchNorm2d):
         w = conv_module.weight.data
         y_mean = bn_module.running_mean
         y_var = bn_module.running_var
