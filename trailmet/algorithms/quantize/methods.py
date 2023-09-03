@@ -311,7 +311,7 @@ class UniformSymmetricQuantizer(BaseQuantizer):
         self.inited = True
 
     def set_params_from_alpha(self, alpha):
-        self.scale = torch.max((2 * alpha) / float(self.q_max - self.q_min), self.eps)
+        self.scale = max((2 * alpha) / float(self.q_max - self.q_min), self.eps)
         self.zero_point = (self.q_max + self.q_min)//2
         self.__register_buffer__('alpha', torch.tensor(alpha))
 

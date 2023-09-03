@@ -33,15 +33,16 @@ from trailmet.algorithms.quantize.methods import UniformSymmetricQuantizer, LpNo
 
 
 class QuantModel(BaseQuantModel):
-    def __init__(self, model: nn.Module, weight_quant_params: dict, act_quant_params: dict, fold_bn=True):
-        super().__init__(model, weight_quant_params, act_quant_params, fold_bn) 
+    def __init__(self, model: nn.Module, weight_quant_params: dict, act_quant_params: dict, 
+            inplace=False, fuse_model=True):
+        super().__init__(model, weight_quant_params, act_quant_params, inplace, fuse_model) 
         self.weight_quantizers = []
         self.act_quantizers = []
         for module in self.model.modules():
             if isinstance(module, QuantModule):
                 self.weight_quantizers.append(module.weight_quantizer)
-                if not module.disable_act_quant:
-                    self.act_quantizers.append(module.act_quantizer)
+                # if not module.disable_act_quant:
+                self.act_quantizers.append(module.act_quantizer)
             elif isinstance(module, BaseQuantBlock):
                 self.act_quantizers.append(module.act_quantizer)
 
