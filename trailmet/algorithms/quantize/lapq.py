@@ -29,6 +29,7 @@ from itertools import count
 from trailmet.utils import seed_everything
 from trailmet.algorithms.quantize.quantize import BaseQuantModel, BaseQuantization
 from trailmet.algorithms.quantize.modules import QuantModule, BaseQuantBlock
+from trailmet.algorithms.quantize.methods import UniformSymmetricQuantizer, LpNormQuantizer
 
 
 class QuantModel(BaseQuantModel):
@@ -90,13 +91,13 @@ class LAPQ(BaseQuantization):
         weight_quant_params = {
             'n_bits': self.w_bits,
             'bcorr': True,
-            'method': 'max_abs',
+            'method': UniformSymmetricQuantizer,
             'p_val': 2.0,
         }
         act_quant_params = {
             'n_bits': self.a_bits,
             'bcorr': True,
-            'method': 'max_abs',
+            'method': UniformSymmetricQuantizer,
             'p_val': 2.0,
         }
 
@@ -108,8 +109,8 @@ class LAPQ(BaseQuantization):
                 self.w_bits, self.a_bits, acc1, acc5))
             del qnn
 
-        weight_quant_params['method'] = 'lp_norm'
-        act_quant_params['method'] = 'lp_norm'
+        weight_quant_params['method'] = LpNormQuantizer
+        act_quant_params['method'] = LpNormQuantizer
         p_vals = np.linspace(2,4,10)
         losses = []
         pbar = tqdm(p_vals, total=len(p_vals))
