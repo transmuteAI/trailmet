@@ -168,7 +168,8 @@ class LAPQ(BaseQuantization):
         print('==> Full quantization (W{}A{}) accuracy: {}'.format(
             self.w_bits, self.a_bits, 
             self.test(self.qnn, self.test_loader, device=self.device)))
-        return self.qnn
+        quantized_model = self.qnn.convert_model_to_quantized(inplace = False)
+        return quantized_model
 
 
     def evaluate_calibration(self, alphas: np.ndarray, qmodel: QuantModel, device):
