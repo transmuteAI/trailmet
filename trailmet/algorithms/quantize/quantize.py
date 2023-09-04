@@ -25,17 +25,24 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.ao.nn.intrinsic as nni
+import torch.ao.nn.quantized as nnq
+import torch.ao.nn.intrinsic.quantized as nniq
 from tqdm import tqdm
-from typing import Union
+from typing import Union, Callable, Dict
 from trailmet.models.resnet import BasicBlock, Bottleneck
 from trailmet.models.mobilenet import InvertedResidual
-from trailmet.algorithms.quantize.utils import StopForwardException, DataSaverHook, GradSaverHook
-from trailmet.algorithms.quantize.utils import LinearTempDecay, Node, GraphPlotter, replace_activation_with_identity
-from trailmet.algorithms.quantize.modules import StraightThrough, QuantModule, BaseQuantBlock
-from trailmet.algorithms.quantize.modules import QuantBasicBlock, QuantBottleneck, QuantInvertedResidual
+from trailmet.algorithms.quantize.utils import StopForwardException, DataSaverHook, \
+    GradSaverHook, LinearTempDecay, Node, GraphPlotter, replace_activation_with_identity, \
+    get_qscheme, get_dtype, quantized_forward
+from trailmet.algorithms.quantize.modules import StraightThrough, QuantModule, \
+    BaseQuantBlock, QuantBasicBlock, QuantBottleneck, QuantInvertedResidual
 from trailmet.algorithms.algorithms import BaseAlgorithm
+from torch.nn.utils.parametrize import type_before_parametrizations as _type
+from torch.ao.nn.intrinsic.modules.fused import _FusedModule
+from torch.ao.quantization import QConfig, FixedQParamsObserver
 from torch.ao.quantization.stubs import QuantStub, DeQuantStub
 from torch.ao.quantization.fuse_modules import fuse_modules
+
 
 __all__ = [
     'BaseQuantModel',
@@ -45,11 +52,26 @@ __all__ = [
     'GetLayerGrad'
 ]
 
-supported = {
-    BasicBlock: QuantBasicBlock,
-    Bottleneck: QuantBottleneck,
-    InvertedResidual: QuantInvertedResidual,
+FLOAT_TO_FAKE_QUANT_MAPPING: Dict[Callable, Callable] = {
+    nn.Conv2d : QuantModule,
+    nn.Linear : QuantModule,
+    nni.ConvReLU2d : QuantModule,
+    BasicBlock : QuantBasicBlock,
+    Bottleneck : QuantBottleneck,
+    InvertedResidual : QuantInvertedResidual
 }
+
+FLOAT_TO_TRUE_QUANT_MAPPING: Dict[Callable, Callable] = {
+    QuantStub : nnq.Quantize,
+    DeQuantStub : nnq.DeQuantize,
+    nn.Conv2d : nnq.Conv2d,
+    nn.Linear : nnq.Linear,
+    # Intrinsic modules:
+    nni.ConvReLU2d : nniq.ConvReLU2d,
+    # Wrapper Modules:
+    nnq.FloatFunctional : nnq.QFunctional
+}
+
 
 class BaseQuantModel(nn.Module):
     """base model wrapping class for quantization algorithms"""
@@ -62,22 +84,26 @@ class BaseQuantModel(nn.Module):
             self.model = model
         self.weight_quant_params = weight_quant_params
         self.act_quant_params = act_quant_params
+        self.quant_modules = None
+        setattr(self.model, 'inp_quant', StraightThrough())
+        setattr(self.model, 'out_dequant', StraightThrough())
         self.model.eval()
+        self.convert_model_to_fake_quantized(fuse_model)
+
+    def forward(self, x):
+        return self.model.forward(x)
+
+    def convert_model_to_fake_quantized(self, fuse_model=True):
         if not fuse_model:
             self.search_fold_conv_bn(self.model)    # Do Not Use
         else:
             replace_activation_with_identity(self.model, [nn.ReLU, nn.ReLU6])
             self.add_fused_conv_bn_act(self.model)
-        setattr(self.model, 'quant', QuantStub())
-        setattr(self.model, 'dequant', DeQuantStub())
-        self.quant_module_refactor(self.model)
+        self.input_quantizer = self.act_quant_params.get('method')(**self.act_quant_params)
+        setattr(self.model, 'inp_quant', self.input_quantizer)
+        self._quant_module_refactor(self.model)
+        self.model.forward = quantized_forward      #TODO check functionality
         self.quant_modules = [m for m in self.model.modules() if isinstance(m, QuantModule)]
-
-    def forward(self, x):
-        x = self.model.quant(x)     #TODO check functionality
-        x = self.model._forward_impl(x)
-        x = self.model.dequant(x)
-        return x
 
     def add_fused_conv_bn_act(self, model: nn.Module):
         # same functionality as torchvision.models.quantization.resnet.QuantizableResNet.fuse_model
@@ -108,33 +134,93 @@ class BaseQuantModel(nn.Module):
                 if module.downsample is not None:
                     fuse_modules(module.downsample, ["0", "1"], inplace=True)
 
-    def quant_module_refactor(self, module: nn.Module):
+    def _quant_module_refactor(self, module: nn.Module):
         """
         Recursively replace Conv2d and Linear layers with QuantModule and other 
         supported network blocks to their respective wrappers, to enable weight 
         and activations quantization.
         """
-        # prev_quant_module: QuantModule = None
         for name, child_module in module.named_children():
-            if type(child_module) in supported:
-                setattr(module, name, supported[type(child_module)](
+            if type(child_module) in FLOAT_TO_FAKE_QUANT_MAPPING:
+                setattr(module, name, FLOAT_TO_FAKE_QUANT_MAPPING[type(child_module)](
                     child_module, self.weight_quant_params, self.act_quant_params
                 ))
-            elif isinstance(child_module, (nn.Conv2d, nni.ConvReLU2d, nn.Linear, nni.LinearReLU)):
-                setattr(module, name, QuantModule(
-                    child_module, self.weight_quant_params, self.act_quant_params
-                ))
-            #    prev_quant_module = getattr(module, name)
-            # elif isinstance(child_module, (nn.ReLU, nn.ReLU6)):
-            #     if prev_quant_module is not None:
-            #         prev_quant_module.activation_function = child_module
-            #     else:
-            #         continue
             elif isinstance(child_module, (StraightThrough, nn.Identity, nn.ReLU)):
                 continue
             else:
-                self.quant_module_refactor(child_module)
-            
+                self._quant_module_refactor(child_module)
+
+    def convert_model_to_quantized(self, inplace=True, remove_qconfig=True):
+        if not inplace:
+            model = copy.deepcopy(self.model)
+        inp_qparams = self.input_quantizer.get_qprams()
+        model.inp_quant = QuantStub(qconfig=QConfig(
+            weight = None,
+            activation = FixedQParamsObserver.with_args(
+                qscheme = get_qscheme(inp_qparams['per_channel'], inp_qparams['symmetric']),
+                dtype = get_dtype(inp_qparams['quant_min'], inp_qparams['quant_max']),
+                quant_min = inp_qparams['quant_min'],
+                quant_max = inp_qparams['quant_max'],
+                scale = inp_qparams['scale'],
+                zero_point = inp_qparams['zero_point']
+            )
+        ))
+        #TODO attach activation_post_process to QuantStub
+        model.inp_dequant = DeQuantStub()
+        self._attach_qconfig_to_quantizable(model)
+        self._convert_quantizable(model, FLOAT_TO_TRUE_QUANT_MAPPING, inplace)
+        if remove_qconfig:
+            self._remove_qconfig_from_quantizable(model)
+        return model
+
+    def _convert_quantizable(self, module: nn.Module, mapping: dict, inplace = True):
+        if not inplace:
+            module = copy.deepcopy(module)
+        reassign = dict()
+        for name, child_module in module.named_children():
+            if not isinstance(child_module, _FusedModule):  # fused modules are swapped as one unit
+                self._convert_quantizable(child_module, mapping, True)
+            reassign[name] = self._swap_module(child_module, mapping)
+        for name, quantized_module in reassign.items():
+            module._modules[name] = quantized_module
+        return module
+
+    def _attach_qconfig_to_quantizable(self, module: nn.Module):
+        for name, child_module in module.named_children:
+            if isinstance(child_module, QuantModule):
+                qparams_config = child_module.get_quantization_params_config()
+                setattr(module, name, child_module.orig_module)                
+                child_module.qconfig = QConfig(
+                    weight = qparams_config['weight'],
+                    activation = qparams_config['act']
+                )
+                child_module.add_module(
+                    'activation_post_process', 
+                    child_module.qconfig.activation()
+                )
+            elif isinstance(child_module, BaseQuantBlock):
+                child_module.convert_to_quantizable_with_config()
+            else:
+                self._attach_qconfig_to_quantizable(child_module)
+
+    def _remove_qconfig_from_quantizable(self, module: nn.Module):
+        for child_module in module.children():
+            self._remove_qconfig_from_quantizable(child_module)
+        if hasattr(module, 'activation_post_process'):
+            delattr(module, 'activation_post_process')
+        if hasattr(module, 'qconfig'):
+            delattr(module, 'qconfig')
+
+    def _swap_module(self, module: nn.Module, mapping: dict):
+        new_module = module
+        if hasattr(module, 'qconfig') and module.qconfig is not None:
+            swapped = False
+            if _type(module) in mapping:
+                new_module = mapping[_type(module)].from_float(module)
+                swapped = True
+        if swapped:
+            pass    #TODO: hook management
+        return new_module
 
     def set_quant_state(self, weight_quant: bool = True, act_quant: bool = True):
         """
