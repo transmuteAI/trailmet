@@ -150,11 +150,25 @@ class QuantModule(nn.Module):
         self.use_act_quant = act
 
 
-    def get_quantization_parameters(self):
-        return {
-            'weight': self.weight_quantizer.get_qparams(),  #TODO
-            'act': self.act_quantizer.get_qparams()  #TODO
-        }
+    def get_quantization_params_config(self):
+        fixed_qparams_config = dict() 
+        for type in ["weight", "act"]:
+            qparams = eval(f"self.{type}_quantizer.get_qparams()")
+            fixed_qparams_config[type] = FixedQParamsObserver.with_args(
+                qscheme = get_qscheme(
+                    per_channel = qparams['per_channel'],
+                    symmetric = qparams['symmetric']
+                ),
+                dtype = get_dtype(
+                    quant_min = qparams['quant_min'],
+                    quant_max = qparams['quant_max']
+                ),
+                quant_min = qparams['quant_min'],
+                quant_max = qparams['quant_max'],
+                scale = qparams['scale'],
+                zero_point = qparams['zero_point']
+            )
+        return fixed_qparams_config
              
                  
 class BaseQuantBlock(nn.Module):
@@ -172,39 +186,22 @@ class BaseQuantBlock(nn.Module):
             if isinstance(module, QuantModule):
                 module.set_quantization_state(weight, act)
 
-    def _convert_quant_modules_to_quantizable(self):
+    def convert_to_quantizable_with_config(self):
         module_qparams = dict()
-        for name, module in self.named_children():
+        for name, module in self.named_modules():
             if isinstance(module, QuantModule):
-                module_qparams[name] = module.get_quantization_parameters()
+                module_qparams[name] = module.get_quantization_params_config()
                 setattr(self, name, module.orig_module)     #TODO: test it out
         self._attach_qconfig_to_quantizable(module_qparams)
 
     def _attach_qconfig_to_quantizable(self, module_qparams: dict):
         for name, qparams in module_qparams.items():
-            fixed_qparam_obs = dict()
-            for type in ["weight", "act"]:
-                fixed_qparam_obs[type] = FixedQParamsObserver.with_args(
-                    qscheme = get_qscheme(
-                    per_channel=qparams[type]['per_channel'],
-                    symmetric=qparams[type]['symmetric']
-                    ),
-                    dtype = get_dtype(
-                        quant_min=qparams[type]['quant_min'],
-                        quant_max=qparams[type]['quant_max']
-                    ),
-                    quant_min = qparams[type]['quant_min'],
-                    quant_max = qparams[type]['quant_max'],
-                    scale = qparams[type]['scale'],
-                    zero_point = qparams[type]['zero_point']
-                )
             if isinstance(eval(f"self.{name}"), nni.ConvReLU2d):    # propagate qconfig 
                 setattr(eval(f"self.{name}[0]"), "qconfig", QConfig(
-                    weight=fixed_qparam_obs["weight"]))
-        
+                    weight = qparams["weight"]))
             setattr(eval(f"self.{name}"), "qconfig", QConfig(
-                weight=fixed_qparam_obs["weight"],
-                activation=fixed_qparam_obs["act"]
+                weight = qparams["weight"],
+                activation = qparams["act"]
             ))
             eval(f"self.{name}.add_module")(
                 "activation_post_process", 
@@ -248,7 +245,7 @@ class QuantBottleneck(BaseQuantBlock):
         return out
 
     def convert_to_quantizable_with_config(self):
-        self._convert_quant_modules_to_quantizable()
+        super().convert_to_quantizable_with_config()
         self.disable_fake_quantization = True
         act_qparams = self.act_quantizer.get_qparams()  #TODO
         self.residual_add_out.qconfig = QConfig(
