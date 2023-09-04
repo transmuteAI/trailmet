@@ -56,7 +56,7 @@ def get_dtype(quant_min: int, quant_max: int):
         return torch.qint32
 
 def replace_activation_with_identity(module: torch.nn.Module, activations: list) -> None:
-    reassign = {}
+    reassign = dict()
     for name, child_module in module.named_children():
         replace_activation_with_identity(child_module, activations)
         for activation in activations:
@@ -64,6 +64,12 @@ def replace_activation_with_identity(module: torch.nn.Module, activations: list)
                 reassign[name] = torch.nn.Identity()
     for key, value in reassign.items():
         module._modules[key] = value
+
+def quantized_forward(self, x: torch.Tensor) -> torch.Tensor:
+    x = self.inp_quant(x)
+    x = self._forward_impl(x)
+    x = self.out_dequant(x)
+    return x
 
 class StopForwardException(Exception):
     """

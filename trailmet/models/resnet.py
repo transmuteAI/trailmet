@@ -316,7 +316,7 @@ class ResNet(BaseModel):
 
         return nn.Sequential(*layers)
 
-    def forward(self, x):
+    def _forward_impl(self, x):
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.active(x)
@@ -335,6 +335,9 @@ class ResNet(BaseModel):
             return x, feature_vectors
         else:
             return x
+
+    def forward(self, x):
+        return self._forward_impl(x)
 
     def get_bn_layers(self):
         bn_layers = []
