@@ -102,7 +102,7 @@ class BaseQuantModel(nn.Module):
         self.input_quantizer = self.act_quant_params.get('method')(**self.act_quant_params)
         setattr(self.model, 'inp_quant', self.input_quantizer)
         self._quant_module_refactor(self.model)
-        self.model.forward = quantized_forward      #TODO check functionality
+        self.model.forward = quantized_forward.__get__(self.model, nn.Module)      #TODO check functionality
         self.quant_modules = [m for m in self.model.modules() if isinstance(m, QuantModule)]
 
     def add_fused_conv_bn_act(self, model: nn.Module):
@@ -151,13 +151,15 @@ class BaseQuantModel(nn.Module):
                 self._quant_module_refactor(child_module)
 
     def convert_model_to_quantized(self, inplace=True, remove_qconfig=True):
+        model = self.model
         if not inplace:
-            model = copy.deepcopy(self.model)
-        inp_qparams = self.input_quantizer.get_qprams()
+            model = copy.deepcopy(model)
+        model.to(torch.device('cpu'))
+        inp_qparams = self.input_quantizer.get_qparams()
         model.inp_quant = QuantStub(qconfig=QConfig(
             weight = None,
             activation = FixedQParamsObserver.with_args(
-                qscheme = get_qscheme(inp_qparams['per_channel'], inp_qparams['symmetric']),
+                qscheme = get_qscheme(inp_qparams['channel_wise'], inp_qparams['symmetric']),
                 dtype = get_dtype(inp_qparams['quant_min'], inp_qparams['quant_max']),
                 quant_min = inp_qparams['quant_min'],
                 quant_max = inp_qparams['quant_max'],
@@ -165,10 +167,10 @@ class BaseQuantModel(nn.Module):
                 zero_point = inp_qparams['zero_point']
             )
         ))
-        #TODO attach activation_post_process to QuantStub
-        model.inp_dequant = DeQuantStub()
+        model.inp_quant.add_module("activation_post_process", model.inp_quant.qconfig.activation())
+        model.out_dequant = DeQuantStub()
         self._attach_qconfig_to_quantizable(model)
-        self._convert_quantizable(model, FLOAT_TO_TRUE_QUANT_MAPPING, inplace)
+        model = self._convert_quantizable(model, FLOAT_TO_TRUE_QUANT_MAPPING, inplace)
         if remove_qconfig:
             self._remove_qconfig_from_quantizable(model)
         return model
@@ -180,43 +182,67 @@ class BaseQuantModel(nn.Module):
         for name, child_module in module.named_children():
             if not isinstance(child_module, _FusedModule):  # fused modules are swapped as one unit
                 self._convert_quantizable(child_module, mapping, True)
-            reassign[name] = self._swap_module(child_module, mapping)
+            if type(child_module) in mapping:
+                reassign[name] = self._swap_module(child_module, mapping)
         for name, quantized_module in reassign.items():
-            module._modules[name] = quantized_module
+            # module._modules[name] = quantized_module
+            delattr(module, name)
+            setattr(module, name, quantized_module)
+            # print(f"***{name}: {quantized_module}")
+            # print(eval(f"{module}.{name}"))
         return module
 
     def _attach_qconfig_to_quantizable(self, module: nn.Module):
-        for name, child_module in module.named_children:
+        module_qconfig = dict()
+        module_reassign = dict()
+        for name, child_module in module.named_children():
             if isinstance(child_module, QuantModule):
-                qparams_config = child_module.get_quantization_params_config()
-                setattr(module, name, child_module.orig_module)                
-                child_module.qconfig = QConfig(
-                    weight = qparams_config['weight'],
-                    activation = qparams_config['act']
-                )
-                child_module.add_module(
-                    'activation_post_process', 
-                    child_module.qconfig.activation()
-                )
+                module_qconfig[name] = child_module.get_quantization_params_config()
+                module_reassign[name] = child_module.orig_module
+                # setattr(module, name, child_module.orig_module)                
+                # child_module.qconfig = QConfig(
+                #     weight = qparams_config['weight'],
+                #     activation = qparams_config['act']
+                # )
+                # child_module.add_module(
+                #     'activation_post_process', 
+                #     child_module.qconfig.activation()
+                # )
             elif isinstance(child_module, BaseQuantBlock):
                 child_module.convert_to_quantizable_with_config()
             else:
                 self._attach_qconfig_to_quantizable(child_module)
+        for name in module_reassign.keys():
+            delattr(module, name)
+            setattr(module, name, module_reassign[name])
+            submodule = getattr(module, name)
+            if isinstance(submodule, nni.ConvReLU2d):    # propagate qconfig 
+                setattr(submodule[0], "qconfig", QConfig(
+                    weight = module_qconfig[name]["weight"],
+                    activation = None))
+            setattr(submodule, "qconfig", QConfig(
+                weight = module_qconfig[name]["weight"],
+                activation = module_qconfig[name]["act"]
+            ))
+            submodule.add_module("activation_post_process", submodule.qconfig.activation())
 
     def _remove_qconfig_from_quantizable(self, module: nn.Module):
         for child_module in module.children():
             self._remove_qconfig_from_quantizable(child_module)
-        if hasattr(module, 'activation_post_process'):
-            delattr(module, 'activation_post_process')
+        # if hasattr(module, 'activation_post_process'):
+        #     delattr(module, 'activation_post_process')
         if hasattr(module, 'qconfig'):
             delattr(module, 'qconfig')
 
     def _swap_module(self, module: nn.Module, mapping: dict):
         new_module = module
+        swapped = False
         if hasattr(module, 'qconfig') and module.qconfig is not None:
             swapped = False
             if _type(module) in mapping:
-                new_module = mapping[_type(module)].from_float(module)
+                qmod = mapping[_type(module)]
+                new_module = qmod.from_float(module)
+                print(f"swapped {type(module)}: {type(new_module)}")
                 swapped = True
         if swapped:
             pass    #TODO: hook management

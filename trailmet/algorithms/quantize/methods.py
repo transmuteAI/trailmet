@@ -63,7 +63,7 @@ class BaseQuantizer(nn.Module):
             scale, zero_point):
         super(BaseQuantizer, self).__init__()
         self._supported_bits = [2, 3, 4, 8, 16, 32]
-        assert n_bits in self._supported_bits, 'bitwidth not supported'
+        # assert n_bits in self._supported_bits, 'bitwidth not supported'
         if reduce_range:       # handle qint overflow in x86 backend
             n_bits -= 1
         if unsigned:           # use unsigned int
@@ -71,7 +71,7 @@ class BaseQuantizer(nn.Module):
             self.q_min = 0
         else:
             self.q_max = (2 ** (n_bits-1)) - 1
-            self.q_min = -(2 ** (n_bits-1))
+            self.q_min = -(2 ** (n_bits-1)) + 1
         self.scale = scale
         self.zero_point = zero_point
 
@@ -206,7 +206,7 @@ class UniformAffineQuantizer(BaseQuantizer):
         return q_err.item()
 
     def bitwidth_refactor(self, refactored_bit: int):
-        assert refactored_bit in [2,3,4,8,16,32], 'bitwidth not supported'
+        # assert refactored_bit in [2,3,4,8,16,32], 'bitwidth not supported'
         if self.reduce_range:      
             n_bits = refactored_bit - 1
         else:
@@ -225,10 +225,12 @@ class UniformAffineQuantizer(BaseQuantizer):
         return s.format(**self.__dict__)
     
     def get_qparams(self) -> dict:
-        return super().get_qparams().update({
+        qparams = super().get_qparams()
+        qparams.update({
             "symmetric": self.symmetric,
             "channel_wise": self.channel_wise
         })
+        return qparams
 
 
 class AdaRoundQuantizer(BaseQuantizer):
@@ -292,6 +294,7 @@ class UniformSymmetricQuantizer(BaseQuantizer):
     def __init__(self, n_bits, reduce_range=True, unsigned=False, inited=False, **kwargs):
         super().__init__(n_bits=n_bits, reduce_range=reduce_range, unsigned=unsigned,
             scale=None, zero_point=None)
+        self.n_bits = n_bits
         self.inited = inited
         self.symmetric = True
         self.channel_wise = False       # channel wise not supported for now
@@ -316,8 +319,11 @@ class UniformSymmetricQuantizer(BaseQuantizer):
         self.__register_buffer__('alpha', torch.tensor(alpha))
 
     def extra_repr(self):
-        s = 'bits={n_bits}, alpha={alpha}, scale={scale}, zero_point={zero_point} inited={inited}' 
-        return s.format(**self.__dict__)    
+        s = 'bits={n_bits}, scale={scale}, zero_point={zero_point}' 
+        return s.format(**self.__dict__)  
+
+    def get_qparams(self) -> dict:
+        return super().get_qparams()
 
 class LpNormQuantizer(UniformSymmetricQuantizer):
     def __init__(self, n_bits, p_val, inited=False, **kwargs):
@@ -341,10 +347,12 @@ class LpNormQuantizer(UniformSymmetricQuantizer):
         return q_err.item()
 
     def get_qparams(self) -> dict:
-        return super().get_qparams().update({
+        qparams = super().get_qparams()
+        qparams.update({
             "symmetric": self.symmetric,
             "channel_wise": self.channel_wise
         })
+        return qparams
 
 
 

@@ -20,6 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import copy
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -156,7 +157,7 @@ class QuantModule(nn.Module):
             qparams = eval(f"self.{type}_quantizer.get_qparams()")
             fixed_qparams_config[type] = FixedQParamsObserver.with_args(
                 qscheme = get_qscheme(
-                    per_channel = qparams['per_channel'],
+                    per_channel = qparams['channel_wise'],
                     symmetric = qparams['symmetric']
                 ),
                 dtype = get_dtype(
@@ -186,27 +187,31 @@ class BaseQuantBlock(nn.Module):
             if isinstance(module, QuantModule):
                 module.set_quantization_state(weight, act)
 
-    def convert_to_quantizable_with_config(self):
+    def convert_to_quantizable_with_config(self, module: nn.Module):
         module_qparams = dict()
-        for name, module in self.named_modules():
-            if isinstance(module, QuantModule):
-                module_qparams[name] = module.get_quantization_params_config()
-                setattr(self, name, module.orig_module)     #TODO: test it out
-        self._attach_qconfig_to_quantizable(module_qparams)
+        module_reassign = dict()
+        for name, child_module in module.named_modules():
+            if isinstance(child_module, QuantModule):
+                module_qparams[name] = child_module.get_quantization_params_config()
+                module_reassign[name] = child_module.orig_module
+        for name, orig_module in module_reassign.items():   #TODO: test it out
+            delattr(module, name)
+            setattr(module, name, orig_module)
+        self._attach_qconfig_to_quantizable(module, module_qparams)
 
-    def _attach_qconfig_to_quantizable(self, module_qparams: dict):
+    def _attach_qconfig_to_quantizable(self, module: nn.Module, module_qparams: dict):
         for name, qparams in module_qparams.items():
-            if isinstance(eval(f"self.{name}"), nni.ConvReLU2d):    # propagate qconfig 
-                setattr(eval(f"self.{name}[0]"), "qconfig", QConfig(
-                    weight = qparams["weight"]))
-            setattr(eval(f"self.{name}"), "qconfig", QConfig(
+            submodule = getattr(module, name, None)
+            assert submodule is not None
+            if isinstance(submodule, nni.ConvReLU2d):    # propagate qconfig 
+                setattr(submodule[0], "qconfig", QConfig(
+                    weight = qparams["weight"],
+                    activation = None))
+            setattr(submodule, "qconfig", QConfig(
                 weight = qparams["weight"],
                 activation = qparams["act"]
             ))
-            eval(f"self.{name}.add_module")(
-                "activation_post_process", 
-                eval(f"self.{name}.qconfig.activation()")
-            )
+            submodule.add_module("activation_post_process", submodule.qconfig.activation())
 
 
 class QuantBasicBlock(BaseQuantBlock):
@@ -220,7 +225,7 @@ class QuantBottleneck(BaseQuantBlock):
         # assuming all bn and relu are fused in conv 
         self.weight_qparams = weight_qparams
         self.act_qparams = act_qparams
-        self.orig_module = bottleneck
+        # self.orig_module = bottleneck
         self.quant_conv1 = QuantModule(bottleneck.conv1, weight_qparams, act_qparams)    # ConvReLU2d
         self.quant_conv2 = QuantModule(bottleneck.conv2, weight_qparams, act_qparams)    # ConvReLU2d
         self.quant_conv3 = QuantModule(bottleneck.conv3, weight_qparams, act_qparams)    # ConvReLU2d
@@ -245,20 +250,22 @@ class QuantBottleneck(BaseQuantBlock):
         return out
 
     def convert_to_quantizable_with_config(self):
-        super().convert_to_quantizable_with_config()
+        super().convert_to_quantizable_with_config(self)
         self.disable_fake_quantization = True
         act_qparams = self.act_quantizer.get_qparams()  #TODO
         self.residual_add_out.qconfig = QConfig(
             weight=None,
             activation = FixedQParamsObserver.with_args(
-                qscheme = None,
-                dtype = None,
+                qscheme = get_qscheme(act_qparams['channel_wise'], act_qparams['symmetric']),
+                dtype = get_dtype(act_qparams['quant_min'], act_qparams['quant_max']),
                 quant_min = act_qparams['quant_min'],
                 quant_max = act_qparams['quant_max'],
                 scale = act_qparams['scale'],
                 zero_point = act_qparams['zero_point']
             )
         )
+        self.residual_add_out.add_module("activation_post_process", 
+            self.residual_add_out.qconfig.activation())
 
 
 class QuantInvertedResidual(BaseQuantBlock):

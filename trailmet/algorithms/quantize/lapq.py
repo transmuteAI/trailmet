@@ -38,6 +38,7 @@ class QuantModel(BaseQuantModel):
         super().__init__(model, weight_quant_params, act_quant_params, inplace, fuse_model) 
         self.weight_quantizers = []
         self.act_quantizers = []
+        self.act_quantizers.append(self.model.inp_quant)
         for module in self.model.modules():
             if isinstance(module, QuantModule):
                 self.weight_quantizers.append(module.weight_quantizer)
@@ -98,6 +99,7 @@ class LAPQ(BaseQuantization):
         act_quant_params = {
             'n_bits': self.a_bits,
             'bcorr': True,
+            'unsigned': True,
             'method': UniformSymmetricQuantizer,
             'p_val': 2.0,
         }
@@ -163,7 +165,7 @@ class LAPQ(BaseQuantization):
         self.pbar.close()
         alphas = res.x
         if self.verbose:
-            print('==> Layer-wise Scales :\n', alphas)
+            print('==> Layer-wise Alphas :\n', alphas)
         self.qnn.set_alphas_np(alphas)
         print('==> Full quantization (W{}A{}) accuracy: {}'.format(
             self.w_bits, self.a_bits, 
