@@ -46,11 +46,15 @@ def get_qscheme(per_channel=False, symmetric=False):
     else:
         return torch.per_tensor_affine
     
-def get_dtype(quant_min: int, quant_max: int):
-    # bit capacity for qint and quint is reduced by 1 for 'x86' backend
-    if quant_min>=0 and quant_max<=127:
+def get_dtype(quant_min: int, quant_max: int, reduce_range: bool = True):
+    # byte width for qint and quint is reduced by 1 for 'x86' backend
+    assert quant_min < quant_max
+    byte_width = 8
+    if reduce_range:
+        byte_width = 7 
+    if quant_min >= 0 and quant_max < (2**byte_width):
         return torch.quint8
-    elif quant_min>=-64 and quant_max<=63:
+    elif quant_min >= -(2**(byte_width-1)) and quant_max < (2**(byte_width-1)):
         return torch.qint8
     else:
         return torch.qint32
