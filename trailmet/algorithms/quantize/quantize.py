@@ -160,7 +160,7 @@ class BaseQuantModel(nn.Module):
             weight = None,
             activation = FixedQParamsObserver.with_args(
                 qscheme = get_qscheme(inp_qparams['channel_wise'], inp_qparams['symmetric']),
-                dtype = get_dtype(inp_qparams['quant_min'], inp_qparams['quant_max']),
+                dtype = get_dtype(inp_qparams['quant_min'], inp_qparams['quant_max'], inp_qparams['reduce_range']),
                 quant_min = inp_qparams['quant_min'],
                 quant_max = inp_qparams['quant_max'],
                 scale = inp_qparams['scale'],

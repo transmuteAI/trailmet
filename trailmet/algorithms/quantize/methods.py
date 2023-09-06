@@ -62,8 +62,7 @@ class BaseQuantizer(nn.Module):
     def __init__(self, n_bits: int, reduce_range: bool, unsigned: bool,
             scale, zero_point):
         super(BaseQuantizer, self).__init__()
-        self._supported_bits = [2, 3, 4, 8, 16, 32]
-        # assert n_bits in self._supported_bits, 'bitwidth not supported'
+        assert 2 <= n_bits <= 32, "n_bits is outside allowed range [2, 32]" 
         if reduce_range:       # handle qint overflow in x86 backend
             n_bits -= 1
         if unsigned:           # use unsigned int
@@ -74,6 +73,7 @@ class BaseQuantizer(nn.Module):
             self.q_min = -(2 ** (n_bits-1)) + 1
         self.scale = scale
         self.zero_point = zero_point
+        self.reduce_range = reduce_range
 
     def __register_buffer__(self, name, value):
         if hasattr(self, name):
@@ -108,6 +108,7 @@ class BaseQuantizer(nn.Module):
             "zero_point": self.zero_point,
             "quant_max": self.q_max,
             "quant_min": self.q_min,
+            "reduce_range": self.reduce_range
         }
 
 
@@ -127,7 +128,7 @@ class UniformAffineQuantizer(BaseQuantizer):
             channel_wise: bool = False, scale_method: str = 'max', leaf_param: bool = False,
             inited: bool = False, **kwargs):
         super(UniformAffineQuantizer, self).__init__(n_bits=n_bits, reduce_range=reduce_range,
-            unsigned=unsigned,scale=None, zero_point=None)
+            unsigned=unsigned, scale=None, zero_point=None)
         self.symmetric = False
         self.n_bits = n_bits
         self.unsigned = unsigned
@@ -187,11 +188,11 @@ class UniformAffineQuantizer(BaseQuantizer):
                     optim_alpha = optim.minimize_scalar(
                         lambda alpha: self.estimate_quant_error(x, x_max, x_min, alpha),
                         bounds=(0.2, 1.0)).x
-                delta = optim_alpha * (x_max - x_min) / (self.n_levels - 1)
-                zero_point = torch.round( -optim_alpha * x_min / delta)
+                scale = optim_alpha * (x_max - x_min) / float(self.q_max - self.q_min)
+                zero_point = torch.round( -optim_alpha * x_min / scale)
             else:
                 raise NotImplementedError
-        return delta, zero_point
+        return scale, zero_point
 
     def estimate_quant_error(self, x: torch.Tensor, x_max, x_min, alpha, p=2.4):
         scale = alpha * (x_max - x_min) / float(self.q_max - self.q_min)
@@ -291,13 +292,12 @@ class AdaRoundQuantizer(BaseQuantizer):
 
 
 class UniformSymmetricQuantizer(BaseQuantizer):
-    def __init__(self, n_bits, reduce_range=True, unsigned=False, inited=False, **kwargs):
-        super().__init__(n_bits=n_bits, reduce_range=reduce_range, unsigned=unsigned,
-            scale=None, zero_point=None)
+    def __init__(self, n_bits, reduce_range, unsigned, **kwargs):
+        super().__init__(n_bits, reduce_range, unsigned, scale=None, zero_point=None)
         self.n_bits = n_bits
-        self.inited = inited
+        self.inited = False
         self.symmetric = True
-        self.channel_wise = False       # channel wise not supported for now
+        self.channel_wise = False       #TODO: add support for channel wise
         self.alpha = None
         self.eps = torch.finfo(torch.float32).eps
 
@@ -319,15 +319,22 @@ class UniformSymmetricQuantizer(BaseQuantizer):
         self.__register_buffer__('alpha', torch.tensor(alpha))
 
     def extra_repr(self):
-        s = 'bits={n_bits}, scale={scale}, zero_point={zero_point}' 
+        s = 'alpha={alpha}, scale={scale}, zero_point={zero_point}, q_min={q_min}, q_max={q_max}, '\
+            'symmetric={symmetric}, channel_wise={channel_wise}'
         return s.format(**self.__dict__)  
 
     def get_qparams(self) -> dict:
-        return super().get_qparams()
+        qparams = super().get_qparams()
+        qparams.update({
+            "symmetric": self.symmetric,
+            "channel_wise": self.channel_wise
+        })
+        return qparams
+
 
 class LpNormQuantizer(UniformSymmetricQuantizer):
-    def __init__(self, n_bits, p_val, inited=False, **kwargs):
-        super().__init__(n_bits, inited, **kwargs)
+    def __init__(self, n_bits, reduce_range, unsigned, p_val, **kwargs):
+        super().__init__(n_bits, reduce_range, unsigned)
         self.p = p_val
         
     def init_quantization_params(self, x: torch.Tensor):
@@ -346,13 +353,6 @@ class LpNormQuantizer(UniformSymmetricQuantizer):
         q_err = torch.mean(torch.abs(x_dequant - x) ** self.p)
         return q_err.item()
 
-    def get_qparams(self) -> dict:
-        qparams = super().get_qparams()
-        qparams.update({
-            "symmetric": self.symmetric,
-            "channel_wise": self.channel_wise
-        })
-        return qparams
 
 
 

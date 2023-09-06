@@ -31,6 +31,10 @@ from trailmet.algorithms.quantize.quantize import BaseQuantModel, BaseQuantizati
 from trailmet.algorithms.quantize.modules import QuantModule, BaseQuantBlock
 from trailmet.algorithms.quantize.methods import UniformSymmetricQuantizer, LpNormQuantizer
 
+supported = [
+    "resnet",
+    "mobilenetv2"
+]
 
 class QuantModel(BaseQuantModel):
     def __init__(self, model: nn.Module, weight_quant_params: dict, act_quant_params: dict, 
@@ -61,128 +65,157 @@ class QuantModel(BaseQuantModel):
         
 
 class LAPQ(BaseQuantization):
-    def __init__(self, model: nn.Module, dataloaders, **kwargs):
+    def __init__(self, network: str, dataloaders: dict, **kwargs):
         super(LAPQ, self).__init__(**kwargs)
-        self.model = model
+        if network not in supported:
+            raise ValueError(f"Network architecture '{network}' not in supported: {supported}")
         self.train_loader = dataloaders['train']
         self.test_loader = dataloaders['test']
         self.kwargs = kwargs
-        self.w_bits = kwargs.get('W_BITS', 8)
-        self.a_bits = kwargs.get('A_BITS', 8)
-        self.calib_batches = kwargs.get('CALIB_BATCHES', 16)
-        self.act_quant = kwargs.get('ACT_QUANT', True)
-        self.test_before_calibration = kwargs.get('DRY_RUN', True)
-        self.maxiter = kwargs.get('MAX_ITER', 1)
-        self.maxfev = kwargs.get('MAX_FEV', 1)
-        self.verbose = kwargs.get('VERBOSE', True)
-        self.print_freq = kwargs.get('PRINT_FREQ', 20)
-        self.gpu_id = kwargs.get('GPU_ID', 0)
-        self.seed = kwargs.get('SEED', 42)
+        self.w_bits = kwargs.get('w_bits', 8)
+        self.a_bits = kwargs.get('a_bits', 8)
+        self.reduce_range = kwargs.get('reduce_range', True)
+        self.fake_quantize = kwargs.get('fake_quantize', False)
+        self.calib_batches = kwargs.get('calib_batches', 16)
+        self.act_quant = kwargs.get('act_quant', True)
+        self.test_min_max_quant = kwargs.get('test_min_max_quant', True)
+        self.p_val = kwargs.get('p_val', None)
+        self.max_iter = kwargs.get('max_iter', 2000)
+        self.max_fev = kwargs.get('max_fev', 2000)
+        self.eval_freq = kwargs.get('eval_freq', 500)
+        self.verbose = kwargs.get('verbose', True)
+        self.gpu_id = kwargs.get('gpu_id', 0)
+        self.seed = kwargs.get('seed', 42)
         seed_everything(self.seed)
+        assert torch.cuda.is_available(), "GPU is required for calibration"
         self.device = torch.device('cuda:{}'.format(self.gpu_id))
         if self.verbose:
-            print("==> Using seed: {} and device: cuda:{}".format(self.seed, self.gpu_id))
-        self.calib_data = self.get_calib_samples(self.train_loader, 64*self.calib_batches)
-        self.eval_count = count(0)
-        self.min_loss = 1e6
+            print("==> Using seed:{} and device cuda:{}".format(self.seed, self.gpu_id))
+        
 
-    def compress_model(self):
-        self.model.to(self.device)
-        self.model.eval()
+    def compress_model(self, model: nn.Module, inplace: bool = False):
+        model.to(self.device)
+        model.eval()
 
         weight_quant_params = {
             'n_bits': self.w_bits,
-            'bcorr': True,
-            'method': UniformSymmetricQuantizer,
+            'reduce_range': self.reduce_range,
+            'unsigned': False,
             'p_val': 2.0,
+            'method': UniformSymmetricQuantizer,
         }
         act_quant_params = {
             'n_bits': self.a_bits,
-            'bcorr': True,
+            'reduce_range': self.reduce_range,
             'unsigned': True,
-            'method': UniformSymmetricQuantizer,
             'p_val': 2.0,
+            'method': UniformSymmetricQuantizer,
         }
 
-        if self.test_before_calibration:
-            qnn = QuantModel(self.model, weight_quant_params, act_quant_params)
-            qnn.set_quant_state(True, True)
-            acc1, acc5 = self.test(qnn, self.test_loader, device=self.device)
-            print('==> Quantization (W{}A{}) accuracy before LAPQ: {:.4f} | {:.4f}'.format(
-                self.w_bits, self.a_bits, acc1, acc5))
-            del qnn
+        if self.test_min_max_quant:
+            acc1, acc5 = self.test(model, self.test_loader, device=self.device, progress=True)
+            if self.verbose:
+                print('==> Full Precision Model: acc@1 {:.3f} | acc@5 {:.3f}'.format(acc1, acc5))
+            qmodel = QuantModel(model, weight_quant_params, act_quant_params)
+            qmodel.set_quant_state(True, True)
+            acc1, acc5 = self.test(qmodel, self.test_loader, device=self.device, progress=True)
+            if self.verbose:
+                print('==> Quantization accuracy before LAPQ: acc@1 {:.3f} | acc@5 {:.3f}'.format(acc1, acc5))
+            del qmodel
 
         weight_quant_params['method'] = LpNormQuantizer
         act_quant_params['method'] = LpNormQuantizer
-        p_vals = np.linspace(2,4,10)
-        losses = []
-        pbar = tqdm(p_vals, total=len(p_vals))
-        for p in pbar:
-            weight_quant_params['p_val'] = p
-            act_quant_params['p_val'] = p
-            qnn = QuantModel(self.model, weight_quant_params, act_quant_params)
-            qnn.set_quant_state(True, True)
-            loss = self.evaluate_loss(qnn, self.device)
-            losses.append(loss.item())
-            pbar.set_postfix(p_val=p, loss=loss.item())
-            del qnn
-        # using quadratic interpolation to approximate the optimal quantization step size ∆p∗
-        z = np.polyfit(p_vals, losses, 2)
-        y = np.poly1d(z)
-        p_intr = y.deriv().roots[0]
-        print("==> using p val : {:.2f}  with lp-loss : {:.2f}".format(p_intr, min(losses)))
 
+        if self.p_val is None:
+            p_vals = np.linspace(2,3.9,20)
+            losses = []
+            pbar = tqdm(p_vals, total=len(p_vals))
+            for p in pbar:
+                weight_quant_params['p_val'] = p
+                act_quant_params['p_val'] = p
+                qmodel = QuantModel(model, weight_quant_params, act_quant_params)
+                qmodel.set_quant_state(True, True)
+                loss = self.evaluate_loss(qmodel, self.device)
+                losses.append(loss.item())
+                pbar.set_postfix(p_val=p, loss=loss.item())
+                del qmodel
+            # using quadratic interpolation to approximate the optimal quantization step size ∆p∗
+            z = np.polyfit(p_vals, losses, 2)
+            y = np.poly1d(z)
+            p_intr = y.deriv().roots[0]
+            min_loss = min(losses)
+        else:
+            weight_quant_params['p_val'] = self.p_val
+            act_quant_params['p_val'] = self.p_val
+            qmodel = QuantModel(model, weight_quant_params, act_quant_params)
+            qmodel.set_quant_state(True, True)
+            p_intr = self.p_val
+            min_loss = self.evaluate_loss(qmodel, self.device)
+            del qmodel
+
+        if self.verbose:
+            print("==> using p-val : {:.3f}  with lp-loss : {:.3f}".format(p_intr, min_loss))
         weight_quant_params['p_val'] = p_intr
         act_quant_params['p_val'] = p_intr
-        self.qnn = QuantModel(self.model, weight_quant_params, act_quant_params)
-        self.qnn.set_quant_state(weight_quant=True, act_quant=True)
-        lp_acc1, lp_acc5 = self.test(self.qnn, self.test_loader, device=self.device)
+        qmodel = QuantModel(model, weight_quant_params, act_quant_params, inplace=inplace)
+        qmodel.set_quant_state(weight_quant=True, act_quant=True)
+        acc1, acc5 = self.test(qmodel, self.test_loader, device=self.device, progress=True)
         if self.verbose:
-            print('==> Quantization (W{}A{}) accuracy before Optimization: {:.4f} | {:.4f}'.format(
-                self.w_bits, self.a_bits, lp_acc1, lp_acc5))
+            print('==> Quantization accuracy before optimization: acc@1 {:.3f} | acc@5 {:.3f}'.format(acc1, acc5))
             print("==> Starting Powell Optimization")
     
-        init_alphas = self.qnn.get_alphas_np()
-        
+        init_alphas = qmodel.get_alphas_np()
         min_method = "Powell"
-        min_options = {
-            'maxiter' : self.maxiter,
-            'maxfev' : self.maxfev
-        }
+        min_options = {'maxiter' : self.max_iter, 'maxfev' : self.max_fev}
+
         count_iter = count(0)
+        self.eval_acc = 0
+        self.eval_iter = 0
+        
         def local_search_callback(x):
             it = next(count_iter)
-            self.qnn.set_alphas_np(x)
-            loss = self.evaluate_loss(self.qnn.model, self.device)
-            if self.verbose:
-                print('\n==> Loss at end of iter [{}] : {:.4f}\n'.format(it, loss.item()))
+            print(it)
+            if self.verbose and it%self.eval_freq==0:
+                qmodel.set_alphas_np(x)
+                self.eval_acc, _ = self.test(qmodel, self.test_loader, device=self.device, progress=False)
+                self.eval_iter = it
+                # print('\n==> Quantization accuracy at iter [{}]: acc@1 {:.2f} | acc@5 {:.2f}\n'.format(it, acc1, acc5))
 
-        self.pbar = tqdm(total=min(self.maxiter, self.maxfev))
+        self.min_loss = 1e6
+        self.pbar = tqdm(total=min(self.max_iter, self.max_fev))
         res = optim.minimize(
-            lambda alphas: self.evaluate_calibration(alphas, self.qnn, self.device), init_alphas,
+            lambda alphas: self.evaluate_calibration(alphas, qmodel, self.device), init_alphas,
             method=min_method, options=min_options, callback=local_search_callback
         )
         self.pbar.close()
         alphas = res.x
+        status = res.success
         if self.verbose:
-            print('==> Layer-wise Alphas :\n', alphas)
-        self.qnn.set_alphas_np(alphas)
-        print('==> Full quantization (W{}A{}) accuracy: {}'.format(
-            self.w_bits, self.a_bits, 
-            self.test(self.qnn, self.test_loader, device=self.device)))
-        quantized_model = self.qnn.convert_model_to_quantized(inplace = False)
+            print('==> Optimization completed with success status:', status)
+            print('==> Optimized alphas :\n', alphas)
+        qmodel.set_alphas_np(alphas)
+        
+        acc1, acc5 = self.test(qmodel, self.test_loader, device=self.device, progress=True)
+        if self.verbose:
+            print('==> Final LAPQ quantization accuracy: {:.3f} | {:.3f}'.format(acc1, acc5))
+
+        if self.fake_quantize:
+            quantized_model = qmodel
+        else:
+            quantized_model = qmodel.convert_model_to_quantized(inplace=inplace)
+        
         return quantized_model
 
 
     def evaluate_calibration(self, alphas: np.ndarray, qmodel: QuantModel, device):
-        eval_count = next(self.eval_count)
         qmodel.set_alphas_np(alphas)
         loss = self.evaluate_loss(qmodel, device).item()
         if loss < self.min_loss:
             self.min_loss = loss
-        self.pbar.set_postfix(curr_loss=loss, min_loss=self.min_loss)
+        self.pbar.set_postfix(curr_loss=loss, min_loss=self.min_loss, eval_acc=self.eval_acc, eval_iter=self.eval_iter)
         self.pbar.update(1)
         return loss
+
 
     def evaluate_loss(self, model: nn.Module, device):
         criterion = torch.nn.CrossEntropyLoss().to(device)
@@ -191,7 +224,7 @@ class LAPQ(BaseQuantization):
             if not hasattr(self, 'cal_set'):
                 self.cal_set = []
                 for i, (images, target) in enumerate(self.train_loader):
-                    if i>=self.calib_batches:             # TODO: make this robust for variable batch size
+                    if i>=self.calib_batches:             
                         break
                     images = images.to(device, non_blocking=True)
                     target = target.to(device, non_blocking=True)
