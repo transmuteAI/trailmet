@@ -20,7 +20,6 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-import copy
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -40,7 +39,7 @@ __all__ = [
     'QuantBasicblock',
     'QuantBottleneck',
     'QuantInvertedResidual',
-    # legacy modules soon to be phased out
+    # old modules kept temporarily for BC
     'QModule',
     'BaseQBlock',
     'QBasicblock'
@@ -162,7 +161,8 @@ class QuantModule(nn.Module):
                 ),
                 dtype = get_dtype(
                     quant_min = qparams['quant_min'],
-                    quant_max = qparams['quant_max']
+                    quant_max = qparams['quant_max'],
+                    reduce_range = qparams['reduce_range']
                 ),
                 quant_min = qparams['quant_min'],
                 quant_max = qparams['quant_max'],
@@ -225,24 +225,23 @@ class QuantBottleneck(BaseQuantBlock):
         # assuming all bn and relu are fused in conv 
         self.weight_qparams = weight_qparams
         self.act_qparams = act_qparams
-        # self.orig_module = bottleneck
-        self.quant_conv1 = QuantModule(bottleneck.conv1, weight_qparams, act_qparams)    # ConvReLU2d
-        self.quant_conv2 = QuantModule(bottleneck.conv2, weight_qparams, act_qparams)    # ConvReLU2d
+        self.quant_conv1_relu = QuantModule(bottleneck.conv1, weight_qparams, act_qparams)    # ConvReLU2d
+        self.quant_conv2_relu = QuantModule(bottleneck.conv2, weight_qparams, act_qparams)    # ConvReLU2d
         self.quant_conv3 = QuantModule(bottleneck.conv3, weight_qparams, act_qparams)    # ConvReLU2d
         if bottleneck.downsample is not None:
             self.quant_downsample = QuantModule(bottleneck.downsample[0], weight_qparams, act_qparams)   # Conv2d
         else:
             self.quant_downsample = None
-        self.residual_add_out = nnq.FloatFunctional()
+        self.quant_add_skip = nnq.FloatFunctional()
         
     def forward(self, x: torch.Tensor):
-        residual = x
-        out = self.quant_conv1(x)
-        out = self.quant_conv2(out)
+        skip = x
+        out = self.quant_conv1_relu(x)
+        out = self.quant_conv2_relu(out)
         out = self.quant_conv3(out)
         if self.quant_downsample is not None:
-            residual = self.quant_downsample(x)
-        out = self.residual_add_out.add_relu(out, residual)
+            skip = self.quant_downsample(skip)
+        out = self.quant_add_skip.add_relu(out, skip)
         if self.disable_fake_quantization:
             return out
         if self.use_act_quant:
@@ -253,19 +252,19 @@ class QuantBottleneck(BaseQuantBlock):
         super().convert_to_quantizable_with_config(self)
         self.disable_fake_quantization = True
         act_qparams = self.act_quantizer.get_qparams()  #TODO
-        self.residual_add_out.qconfig = QConfig(
+        self.quant_add_skip.qconfig = QConfig(
             weight=None,
             activation = FixedQParamsObserver.with_args(
                 qscheme = get_qscheme(act_qparams['channel_wise'], act_qparams['symmetric']),
-                dtype = get_dtype(act_qparams['quant_min'], act_qparams['quant_max']),
+                dtype = get_dtype(act_qparams['quant_min'], act_qparams['quant_max'], act_qparams['reduce_range']),
                 quant_min = act_qparams['quant_min'],
                 quant_max = act_qparams['quant_max'],
                 scale = act_qparams['scale'],
                 zero_point = act_qparams['zero_point']
             )
         )
-        self.residual_add_out.add_module("activation_post_process", 
-            self.residual_add_out.qconfig.activation())
+        self.quant_add_skip.add_module("activation_post_process", 
+            self.quant_add_skip.qconfig.activation())
 
 
 class QuantInvertedResidual(BaseQuantBlock):
