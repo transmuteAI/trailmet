@@ -38,49 +38,54 @@ https://github.com/kuangliu/pytorch-cifar/blob/master/models/mobilenet.py
 class InvertedResidual(nn.Module):
     """Expand + depthwise + pointwise."""
 
-    def __init__(self, in_planes, out_planes, expansion, stride):
+    def __init__(self, in_planes: int, out_planes: int, expansion: int, stride: int):
         super(InvertedResidual, self).__init__()
+        if stride not in [1, 2]:
+            raise ValueError(f"stride should be either 1 or 2 instead of {stride}")
         self.stride = stride
         self.is_shortcut = False
         planes = expansion * in_planes
-        self.conv1 = nn.Conv2d(in_planes,
-                               planes,
-                               kernel_size=1,
-                               stride=1,
-                               padding=0,
-                               bias=False)
-        self.bn1 = nn.BatchNorm2d(planes)
-        #         self.conv1, self.bn1 = ModuleInjection.make_prunable(self.conv1, self.bn1)
-        self.conv2 = nn.Conv2d(
-            planes,
-            planes,
-            kernel_size=3,
-            stride=stride,
-            padding=1,
-            groups=planes,
-            bias=False,
+        self.conv1 = nn.Conv2d(
+            in_channels=in_planes, 
+            out_channels=planes, 
+            kernel_size=1,
+            stride=1, 
+            padding=0, 
+            bias=False
         )
-        self.bn2 = nn.BatchNorm2d(planes)
-        self.conv3 = nn.Conv2d(planes,
-                               out_planes,
-                               kernel_size=1,
-                               stride=1,
-                               padding=0,
-                               bias=False)
-        self.bn3 = nn.BatchNorm2d(out_planes)
-        #         self.conv3, self.bn3 = ModuleInjection.make_prunable(self.conv3, self.bn3)
+        self.bn1 = nn.BatchNorm2d(num_features=planes)
+        self.conv2 = nn.Conv2d(
+            in_channels=planes, 
+            out_channels=planes, 
+            kernel_size=3,
+            stride=stride, 
+            padding=1, 
+            groups=planes, 
+            bias=False
+        )
+        self.bn2 = nn.BatchNorm2d(num_features=planes)
+        self.conv3 = nn.Conv2d(
+            in_channels=planes, 
+            out_channels=out_planes, 
+            kernel_size=1,
+            stride=1, 
+            padding=0, 
+            bias=False
+        )
+        self.bn3 = nn.BatchNorm2d(num_features=out_planes)
 
         self.shortcut = nn.Sequential()
         if stride == 1 and in_planes != out_planes:
             self.is_shortcut = True
-            conv_module = nn.Conv2d(in_planes,
-                                    out_planes,
-                                    kernel_size=1,
-                                    stride=1,
-                                    padding=0,
-                                    bias=False)
-            bn_module = nn.BatchNorm2d(out_planes)
-            #             conv_module, bn_module = ModuleInjection.make_prunable(conv_module, bn_module)
+            conv_module = nn.Conv2d(
+                in_channels=in_planes, 
+                out_channels=out_planes, 
+                kernel_size=1,
+                stride=1, 
+                padding=0, 
+                bias=False
+            )
+            bn_module = nn.BatchNorm2d(num_features=out_planes)
             if hasattr(bn_module, 'is_imp'):
                 bn_module.is_imp = True
             self.shortcut = nn.Sequential(conv_module, bn_module)
@@ -131,10 +136,10 @@ class InvertedResidual(nn.Module):
 
 
 class MobileNetv2(BaseModel):
-    # (expansion, out_planes, num_blocks, stride)
+    # CFG -> (expansion, out_planes, num_blocks, stride)
     cfg = [
         (1, 16, 1, 1),
-        (6, 24, 2, 2),  # NOTE: change stride 2 -> 1 for CIFAR10
+        (6, 24, 2, 2),  # NOTE: change layers[1] stride 2->1 for CIFAR10
         (6, 32, 3, 2),
         (6, 64, 4, 2),
         (6, 96, 3, 1),
@@ -142,36 +147,39 @@ class MobileNetv2(BaseModel):
         (6, 320, 1, 1),
     ]
 
-    def __init__(self, num_classes=10, cfg=None):
+    def __init__(self, num_classes, cfg=None):
         super(MobileNetv2, self).__init__()
         if cfg:
+            if len(cfg)==0 or len(cfg[0])!=4:
+                raise ValueError(f"cfg should be a 4-element list, got {cfg}")
             self.cfg = cfg
-        # NOTE: change conv1 stride 2 -> 1 for CIFAR10
-        self.conv1 = nn.Conv2d(3,
-                               32,
-                               kernel_size=3,
-                               stride=2,
-                               padding=1,
-                               bias=False)
-        self.bn1 = nn.BatchNorm2d(32)
-        #         self.conv1, self.bn1 = ModuleInjection.make_prunable(self.conv1, self.bn1)
+        self.conv1 = nn.Conv2d(
+            in_channels=3, 
+            out_channels=32, 
+            kernel_size=3,
+            stride=2,   # NOTE: change conv1 stride 2->1 for CIFAR10
+            padding=1, 
+            bias=False
+        )
+        self.bn1 = nn.BatchNorm2d(num_features=32)
         if hasattr(self.bn1, 'is_imp'):
             self.bn1.is_imp = True
         self.layers = self._make_layers(in_planes=32)
-        self.conv2 = nn.Conv2d(self.cfg[-1][1],
-                               1280,
-                               kernel_size=1,
-                               stride=2,
-                               padding=0,
-                               bias=False)
-        self.bn2 = nn.BatchNorm2d(1280)
-        #         self.conv2, self.bn2 = ModuleInjection.make_prunable(self.conv2, self.bn2)
+        self.conv2 = nn.Conv2d(
+            in_channels=self.cfg[-1][1], 
+            out_channels=1280, 
+            kernel_size=1,
+            stride=2, 
+            padding=0, 
+            bias=False
+        )
+        self.bn2 = nn.BatchNorm2d(num_features=1280)
         if hasattr(self.bn2, 'is_imp'):
             self.bn2.is_imp = True
         self.avgpool = nn.AdaptiveAvgPool2d(output_size=1)
         self.linear = nn.Linear(1280, num_classes)
 
-    def _make_layers(self, in_planes):
+    def _make_layers(self, in_planes: int):
         layers = []
         for expansion, out_planes, num_blocks, stride in self.cfg:
             strides = [stride] + [1] * (num_blocks - 1)
@@ -181,16 +189,19 @@ class MobileNetv2(BaseModel):
                 in_planes = out_planes
         return nn.Sequential(*layers)
 
-    def forward(self, x):
+    # TorchScript doesn't support inheritance, so the superclass method should have
+    # name other than 'forward' that can be accessed in a subclass
+    def _forward_impl(self, x: torch.Tensor) -> torch.Tensor:
         out = F.relu(self.bn1(self.conv1(x)))
         out = self.layers(out)
         out = F.relu(self.bn2(self.conv2(out)))
-        # NOTE: change pooling kernel_size 7 -> 4 for CIFAR10
-        # out = F.avg_pool2d(out, 7)
         out = self.avgpool(out)
         out = out.view(out.size(0), -1)
         out = self.linear(out)
         return out
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self._forward_impl(x)
 
     def get_flops(self, insize):
         flops = 0
@@ -222,24 +233,6 @@ class MobileNetv2(BaseModel):
         flops += (1 + self.linear.in_features) * self.linear.out_features
         return flops
 
-    def removable_orphans(self):
-        num_removed = 0
-        for b in self.layers:
-            m1, m2 = b.bn1, b.bn3
-            if self.is_all_pruned(m1) or self.is_all_pruned(m2):
-                num_removed += self.n_remaining(m1) + self.n_remaining(m2)
-        return num_removed
-
-    def remove_orphans(self):
-        num_removed = 0
-        for b in self.layers:
-            m1, m2 = b.bn1, b.bn3
-            if self.is_all_pruned(m1) or self.is_all_pruned(m2):
-                num_removed += self.n_remaining(m1) + self.n_remaining(m2)
-                m1.pruned_zeta.data.copy_(torch.zeros_like(m1.pruned_zeta))
-                m2.pruned_zeta.data.copy_(torch.zeros_like(m2.pruned_zeta))
-        return num_removed
-
 
 def get_mobilenet(model, num_classes, cfg=None):
     """Returns the requested model, ready for training/pruning with the
@@ -250,9 +243,6 @@ def get_mobilenet(model, num_classes, cfg=None):
     :param num_classes: int, num classes in the dataset
     :return: A prunable MobileNet model
     """
-    #     ModuleInjection.pruning_method = method
-    #     ModuleInjection.prunable_modules = []
     if model == 'mobilenetv2':
         net = MobileNetv2(num_classes, cfg)
-    #     net.prunable_modules = ModuleInjection.prunable_modules
     return net
