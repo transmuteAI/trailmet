@@ -65,35 +65,34 @@ class QuantModel(BaseQuantModel):
         
 
 class LAPQ(BaseQuantization):
-    def __init__(self, network: str, dataloaders: dict, **kwargs):
-        super(LAPQ, self).__init__(**kwargs)
-        if network not in supported:
-            raise ValueError(f"Network architecture '{network}' not in supported: {supported}")
-        self.train_loader = dataloaders['train']
-        self.test_loader = dataloaders['test']
+    def __init__(self, arch: str, dataloaders: dict, **kwargs):
+        super(LAPQ, self).__init__(dataloaders, **kwargs)
+        if arch not in supported:
+            raise ValueError(f"Network architecture '{arch}' not in supported: {supported}")
         self.kwargs = kwargs
         self.w_bits = kwargs.get('w_bits', 8)
         self.a_bits = kwargs.get('a_bits', 8)
         self.reduce_range = kwargs.get('reduce_range', True)
-        self.fake_quantize = kwargs.get('fake_quantize', False)
-        self.calib_batches = kwargs.get('calib_batches', 16)
         self.act_quant = kwargs.get('act_quant', True)
-        self.test_min_max_quant = kwargs.get('test_min_max_quant', True)
         self.p_val = kwargs.get('p_val', None)
         self.max_iter = kwargs.get('max_iter', 2000)
         self.max_fev = kwargs.get('max_fev', 2000)
         self.eval_freq = kwargs.get('eval_freq', 500)
         self.verbose = kwargs.get('verbose', True)
-        self.gpu_id = kwargs.get('gpu_id', 0)
+        calib_bs = kwargs.get('calib_bs', 256)
+        calib_size = kwargs.get('calib_size', 1024)
+        self.calib_data = self.get_calib_data(calib_bs, calib_size)
         self.seed = kwargs.get('seed', 42)
         seed_everything(self.seed)
         assert torch.cuda.is_available(), "GPU is required for calibration"
-        self.device = torch.device('cuda:{}'.format(self.gpu_id))
-        if self.verbose:
-            print("==> Using seed:{} and device cuda:{}".format(self.seed, self.gpu_id))
+        gpu_id = kwargs.get('gpu_id', 0)
+        self.device = torch.device('cuda:{}'.format(gpu_id))
         
 
-    def compress_model(self, model: nn.Module, inplace: bool = False):
+    def compress_model(self, model: nn.Module, inplace: bool = False, 
+            test_before_calibration: bool = True,
+            return_fake_quantized: bool = False,
+        ) -> nn.Module:
         model.to(self.device)
         model.eval()
 
@@ -112,13 +111,13 @@ class LAPQ(BaseQuantization):
             'method': UniformSymmetricQuantizer,
         }
 
-        if self.test_min_max_quant:
-            acc1, acc5 = self.test(model, self.test_loader, device=self.device, progress=True)
+        if test_before_calibration:
+            acc1, acc5 = self.test(model, self.test_data, device=self.device, progress=True)
             if self.verbose:
                 print('==> Full Precision Model: acc@1 {:.3f} | acc@5 {:.3f}'.format(acc1, acc5))
             qmodel = QuantModel(model, weight_quant_params, act_quant_params)
             qmodel.set_quant_state(True, True)
-            acc1, acc5 = self.test(qmodel, self.test_loader, device=self.device, progress=True)
+            acc1, acc5 = self.test(qmodel, self.test_data, device=self.device, progress=True)
             if self.verbose:
                 print('==> Quantization accuracy before LAPQ: acc@1 {:.3f} | acc@5 {:.3f}'.format(acc1, acc5))
             del qmodel
@@ -135,9 +134,9 @@ class LAPQ(BaseQuantization):
                 act_quant_params['p_val'] = p
                 qmodel = QuantModel(model, weight_quant_params, act_quant_params)
                 qmodel.set_quant_state(True, True)
-                loss = self.evaluate_loss(qmodel, self.device)
-                losses.append(loss.item())
-                pbar.set_postfix(p_val=p, loss=loss.item())
+                loss = self.evaluate_loss(qmodel, self.calib_data, self.device)
+                losses.append(loss)
+                pbar.set_postfix(p_val=p, loss=loss)
                 del qmodel
             # using quadratic interpolation to approximate the optimal quantization step size ∆p∗
             z = np.polyfit(p_vals, losses, 2)
@@ -150,7 +149,7 @@ class LAPQ(BaseQuantization):
             qmodel = QuantModel(model, weight_quant_params, act_quant_params)
             qmodel.set_quant_state(True, True)
             p_intr = self.p_val
-            min_loss = self.evaluate_loss(qmodel, self.device)
+            min_loss = self.evaluate_loss(qmodel, self.calib_data, self.device)
             del qmodel
 
         if self.verbose:
@@ -159,7 +158,7 @@ class LAPQ(BaseQuantization):
         act_quant_params['p_val'] = p_intr
         qmodel = QuantModel(model, weight_quant_params, act_quant_params, inplace=inplace)
         qmodel.set_quant_state(weight_quant=True, act_quant=True)
-        acc1, acc5 = self.test(qmodel, self.test_loader, device=self.device, progress=True)
+        acc1, acc5 = self.test(qmodel, self.test_data, device=self.device, progress=True)
         if self.verbose:
             print('==> Quantization accuracy before optimization: acc@1 {:.3f} | acc@5 {:.3f}'.format(acc1, acc5))
             print("==> Starting Powell Optimization")
@@ -177,62 +176,40 @@ class LAPQ(BaseQuantization):
             print(it)
             if self.verbose and it%self.eval_freq==0:
                 qmodel.set_alphas_np(x)
-                self.eval_acc, _ = self.test(qmodel, self.test_loader, device=self.device, progress=False)
+                self.eval_acc, _ = self.test(qmodel, self.test_data, device=self.device, progress=False)
                 self.eval_iter = it
                 # print('\n==> Quantization accuracy at iter [{}]: acc@1 {:.2f} | acc@5 {:.2f}\n'.format(it, acc1, acc5))
 
         self.min_loss = 1e6
         self.pbar = tqdm(total=min(self.max_iter, self.max_fev))
         res = optim.minimize(
-            lambda alphas: self.evaluate_calibration(alphas, qmodel, self.device), init_alphas,
+            lambda alphas: self.evaluate_calibration(alphas, qmodel), init_alphas,
             method=min_method, options=min_options, callback=local_search_callback
         )
         self.pbar.close()
         alphas = res.x
         status = res.success
         if self.verbose:
-            print('==> Optimization completed with success status:', status)
+            print('==> Optimization completed with status:', status)
             print('==> Optimized alphas :\n', alphas)
         qmodel.set_alphas_np(alphas)
         
-        acc1, acc5 = self.test(qmodel, self.test_loader, device=self.device, progress=True)
+        acc1, acc5 = self.test(qmodel, self.test_data, device=self.device, progress=True)
         if self.verbose:
             print('==> Final LAPQ quantization accuracy: {:.3f} | {:.3f}'.format(acc1, acc5))
 
-        if self.fake_quantize:
+        if return_fake_quantized:
             quantized_model = qmodel
         else:
             quantized_model = qmodel.convert_model_to_quantized(inplace=inplace)
-        
+
         return quantized_model
 
-
-    def evaluate_calibration(self, alphas: np.ndarray, qmodel: QuantModel, device):
+    def evaluate_calibration(self, alphas: np.ndarray, qmodel: QuantModel):
         qmodel.set_alphas_np(alphas)
-        loss = self.evaluate_loss(qmodel, device).item()
+        loss = self.evaluate_loss(qmodel, self.calib_data, self.device)
         if loss < self.min_loss:
             self.min_loss = loss
-        self.pbar.set_postfix(curr_loss=loss, min_loss=self.min_loss, eval_acc=self.eval_acc, eval_iter=self.eval_iter)
+        self.pbar.set_postfix(curr_loss=loss, min_loss=self.min_loss)
         self.pbar.update(1)
         return loss
-
-
-    def evaluate_loss(self, model: nn.Module, device):
-        criterion = torch.nn.CrossEntropyLoss().to(device)
-        model.eval()
-        with torch.no_grad():
-            if not hasattr(self, 'cal_set'):
-                self.cal_set = []
-                for i, (images, target) in enumerate(self.train_loader):
-                    if i>=self.calib_batches:             
-                        break
-                    images = images.to(device, non_blocking=True)
-                    target = target.to(device, non_blocking=True)
-                    self.cal_set.append((images, target))
-            res = torch.tensor([0.]).to(device)
-            for i in range(len(self.cal_set)):
-                images, target = self.cal_set[i]
-                output = model(images)
-                loss = criterion(output, target)
-                res += loss
-            return res / len(self.cal_set)        

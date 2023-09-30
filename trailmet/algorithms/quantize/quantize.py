@@ -242,7 +242,7 @@ class BaseQuantModel(nn.Module):
             if _type(module) in mapping:
                 qmod = mapping[_type(module)]
                 new_module = qmod.from_float(module)
-                print(f"swapped {type(module)}: {type(new_module)}")
+                # print(f"swapped {type(module)}: {type(new_module)}")
                 swapped = True
         if swapped:
             pass    #TODO: hook management
@@ -337,25 +337,44 @@ class BaseQuantModel(nn.Module):
 
 class BaseQuantization(BaseAlgorithm):
     """base class for quantization algorithms"""
-    def __init__(self, **kwargs):
+    def __init__(self, dataloaders, **kwargs):
         super(BaseQuantization, self).__init__(**kwargs)
+        self.train_data = dataloaders['train']
+        self.test_data = dataloaders['test']
+
+    def quantize(self, model, method, **kwargs):
         pass
 
-    def quantize(self, model, dataloaders, method, **kwargs):
-        pass
-
-    def get_calib_samples(self, train_loader, num_samples):
+    def get_calib_data(self, num_samples: int, batch_size: int):
         """
-        Get calibration-dataset samples for finetuning quantized weights and 
-        quantization parameters
+        Get samples for calibrating quantization parameters
         """
-        calib_data = []
-        for batch in train_loader:
-            calib_data.append(batch[0])
-            if len(calib_data)*batch[0].size(0) >= num_samples:
+        inp, out = [], []
+        for batch in self.train_data:
+            inp.extend(batch[0])
+            out.extend(batch[1])
+            if len(inp) >= num_samples: 
                 break
-        return torch.cat(calib_data, dim=0)[:num_samples]
+        batches = []
+        for i in range(0, num_samples, batch_size):
+            batch_inp = inp[i: i+batch_size]
+            batch_out = out[i: i+batch_size]
+            batches.append([
+                torch.stack(batch_inp, dim=0).to(torch.device('cuda')),
+                torch.stack(batch_out, dim=0).to(torch.device('cuda'))
+            ])
+        return batches
 
+    def evaluate_loss(self, model, dataloader, device):
+        criterion = torch.nn.CrossEntropyLoss().to(device)
+        model.eval()
+        res = 0
+        with torch.no_grad():
+            for inputs, targets in dataloader:
+                outputs = model(inputs)
+                loss = criterion(outputs, targets)
+                res += loss.item()
+        return res/len(dataloader)
 
     def sensitivity_analysis(self, qmodel: BaseQuantModel, dataloader, test_bits, 
             budget, save_path, exp_name):
