@@ -23,10 +23,11 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Union
+from typing import Union, Dict, Callable
 from trailmet.models.resnet import BasicBlock, Bottleneck
 from trailmet.models.mobilenet import InvertedResidual
 from trailmet.algorithms.quantize.methods import UniformAffineQuantizer, ActQuantizer
+from trailmet.algorithms.quantize._methods import BaseQuantizer, UniformQuantizer, AdaRoundQuantizer
 from trailmet.algorithms.quantize.utils import get_qscheme, get_dtype
 from torch.ao.quantization import QConfig, FixedQParamsObserver
 import torch.ao.nn.quantized as nnq
@@ -45,6 +46,10 @@ __all__ = [
     'QInvertedResidual',
 ]
 
+QUANTIZER_MAPPING: Dict[str, Callable] = {
+    'uniform': UniformQuantizer,
+    'adaround': AdaRoundQuantizer
+}
 class StraightThrough(nn.Module):
     """
     Identity Layer, same as torch.nn.modules.linear.Identity
@@ -59,25 +64,22 @@ class QuantModule(nn.Module):
     """
     Wrapper Module to simulate fake quantization
     """
-    def __init__(self,
-        orig_module: Union[nni.ConvReLU2d, nn.Conv2d, nn.Linear],
-        weight_qparams: dict, act_qparams: dict,
-        ) -> None:
+    def __init__(self, orig_module: nn.Module, weight_qparams: dict, act_qparams: dict):
         super().__init__()
         self.orig_module = orig_module
-        if isinstance(orig_module, nni.modules.fused._FusedModule):
+        if isinstance(orig_module, (nni.ConvReLU2d, nni.LinearReLU)):
             assert len(orig_module)==2
             if type(orig_module[0]) == nn.Conv2d:
+                self.fwd_func = F.conv2d
                 self.fwd_kwargs = dict(
                     stride = orig_module[0].stride,
                     padding = orig_module[0].padding,
                     dilation = orig_module[0].dilation,
                     groups = orig_module[0].groups
                 )
-                self.fwd_func = F.conv2d
-            elif type(orig_module[1]) == nn.Linear:
-                self.fwd_kwargs = dict()
+            elif type(orig_module[0]) == nn.Linear:
                 self.fwd_func = F.linear
+                self.fwd_kwargs = dict()
             else: 
                 raise NotImplementedError
             
@@ -90,34 +92,36 @@ class QuantModule(nn.Module):
             self.orig_weight = orig_module[0].weight.data.clone()
             self.bias = orig_module[0].bias
 
-        if isinstance(orig_module, (nn.Conv2d, nn.Linear)):
+        elif isinstance(orig_module, (nn.Conv2d, nn.Linear)):
             if type(orig_module) == nn.Conv2d:
+                self.fwd_func = F.conv2d
                 self.fwd_kwargs = dict(
                     stride = orig_module.stride,
                     padding = orig_module.padding,
                     dilation = orig_module.dilation,
                     groups = orig_module.groups
                 )
-                self.fwd_func = F.conv2d
             elif type(orig_module) == nn.Linear:
-                self.fwd_kwargs = dict()
                 self.fwd_func = F.linear
+                self.fwd_kwargs = dict()
             else:
                 raise NotImplementedError
             
             self.fwd_post = self.identity
-            
             self.weight = orig_module.weight
             self.orig_weight = orig_module.weight.data.clone()
             self.bias = orig_module.bias
 
-        self.use_weight_quant = False
-        self.use_act_quant = False
-        self.weight_quantizer = weight_qparams.get(
-            'method', UniformAffineQuantizer)(**weight_qparams)
-        self.act_quantizer = act_qparams.get(
-            'method', UniformAffineQuantizer)(**act_qparams)
+        else:
+            raise NotImplementedError
 
+        self.weight_quantizer: BaseQuantizer = QUANTIZER_MAPPING[weight_qparams.get(
+            'quantizer', 'uniform')](weight_qparams)
+        self.act_quantizer: BaseQuantizer = QUANTIZER_MAPPING[act_qparams.get(
+            'quantizer', 'uniform')](act_qparams)
+
+        self.use_act_quant = False
+        self.use_weight_quant = False
         self.ignore_reconstruction = False
         self.extra_repr = orig_module.extra_repr
 
@@ -139,79 +143,66 @@ class QuantModule(nn.Module):
     def identity(self, x: torch.Tensor):
         return x
 
+    def set_observation_state(self, weight_obs: bool, act_obs: bool):
+        self.weight_quantizer.enable_observation = weight_obs
+        self.act_quantizer.enable_observation = act_obs
 
-    def set_quantization_state(self, weight: bool = False, act: bool = False):
-        self.use_weight_quant = weight
-        self.use_act_quant = act
+    def set_quantization_state(self, weight_quant: bool, act_quant: bool):
+        self.use_weight_quant = weight_quant
+        self.use_act_quant = act_quant
 
-
-    def get_quantization_params_config(self):
-        fixed_qparams_config = dict() 
-        for type in ["weight", "act"]:
-            qparams = eval(f"self.{type}_quantizer.get_qparams()")
-            fixed_qparams_config[type] = FixedQParamsObserver.with_args(
-                qscheme = get_qscheme(
-                    per_channel = qparams['channel_wise'],
-                    symmetric = qparams['symmetric']
-                ),
-                dtype = get_dtype(
-                    quant_min = qparams['quant_min'],
-                    quant_max = qparams['quant_max'],
-                    reduce_range = qparams['reduce_range']
-                ),
-                quant_min = qparams['quant_min'],
-                quant_max = qparams['quant_max'],
-                scale = qparams['scale'],
-                zero_point = qparams['zero_point']
-            )
-        return fixed_qparams_config
-             
 
 
 class BaseQuantBlock(nn.Module):
-    def __init__(self, act_qparams: dict = {}) -> None:
+    def __init__(self, act_qparams: dict) -> None:
         super().__init__()
+        self.act_quantizer: BaseQuantizer = QUANTIZER_MAPPING[act_qparams.get(
+            'quantizer', 'uniform')](act_qparams)
         self.use_act_quant = False
-        self.act_quantizer = act_qparams.get(
-            'method', UniformAffineQuantizer)(**act_qparams)
         self._fake_quantization = True
         self.ignore_reconstruction = False
 
-
-    def set_quantization_state(self, weight: bool = False, act: bool = False):
-        self.use_act_quant = act
+    def set_observation_state(self, weight_obs: bool, act_obs: bool):
+        self.act_quantizer.enable_observation = act_obs
         for module in self.modules():
             if isinstance(module, QuantModule):
-                module.set_quantization_state(weight, act)
+                module.set_observation_state(weight_obs, act_obs)
+
+    def set_quantization_state(self, weight_quant: bool, act_quant: bool):
+        self.use_act_quant = act_quant
+        for module in self.modules():
+            if isinstance(module, QuantModule):
+                module.set_quantization_state(weight_quant, act_quant)
 
 
-    def convert_to_quantizable_with_config(self, module: nn.Module):
+    def _convert_to_quantizable_with_qconfig(self, module: nn.Module):
         self._fake_quantization = False
-        module_qparams = dict()
+        module_attach = dict()
         module_reassign = dict()
-        for name, child_module in module.named_modules():
-            if isinstance(child_module, QuantModule):
-                module_qparams[name] = child_module.get_quantization_params_config()
-                module_reassign[name] = child_module.orig_module
-        for name, orig_module in module_reassign.items():   #TODO: test it out
+        
+        for name, submodule in module.named_modules():
+            if isinstance(submodule, QuantModule):
+                module_attach[name]['weight'] = submodule.weight_quantizer.observer
+                module_attach[name]['activation'] = submodule.act_quantizer.observer
+                module_reassign[name] = submodule.orig_module
+        
+        for name, orig_module in module_reassign.items():  
             delattr(module, name)
             setattr(module, name, orig_module)
-        self._attach_qconfig_to_quantizable(module, module_qparams)
-
-
-    def _attach_qconfig_to_quantizable(self, module: nn.Module, module_qparams: dict):
-        for name, qparams in module_qparams.items():
+        
+        for name, observers in module_attach.items():
             submodule = getattr(module, name, None)
             assert submodule is not None
-            if isinstance(submodule, nni.ConvReLU2d):    # propagate qconfig 
-                setattr(submodule[0], "qconfig", QConfig(
-                    weight = qparams["weight"],
-                    activation = None))
-            setattr(submodule, "qconfig", QConfig(
-                weight = qparams["weight"],
-                activation = qparams["act"]
+            if isinstance(submodule, nni.ConvReLU2d):   # propagate qconfig
+                setattr(submodule[0], 'qconfig', QConfig(
+                    weight = observers['weight'],
+                    activation = None
+                ))
+            setattr(submodule, 'qconfig', QConfig(
+                weight = observers['weight'],
+                activation = observers['activation']
             ))
-            submodule.add_module("activation_post_process", submodule.qconfig.activation())
+            submodule.add_module('activation_post_process', submodule.qconfig.activation())                    
 
 
 
@@ -238,22 +229,13 @@ class QuantBasicBlock(BaseQuantBlock):
         return out
     
 
-    def convert_to_quantizable_with_config(self):
-        super().convert_to_quantizable_with_config(self)
-        self._fake_quantization = False
-        act_qparams = self.act_quantizer.get_qparams()
-        self.add_skip.qconfig = QConfig(
-            weight=None,
-            activation = FixedQParamsObserver.with_args(
-                qscheme = get_qscheme(act_qparams['channel_wise'], act_qparams['symmetric']),
-                dtype = get_dtype(act_qparams['quant_min'], act_qparams['quant_max'], act_qparams['reduce_range']),
-                quant_min = act_qparams['quant_min'],
-                quant_max = act_qparams['quant_max'],
-                scale = act_qparams['scale'],
-                zero_point = act_qparams['zero_point']
-            )
-        )
-        self.add_skip.add_module("activation_post_process", 
+    def _convert_to_quantizable_with_qconfig(self):
+        super()._convert_to_quantizable_with_qconfig(self)
+        setattr(self.add_skip, 'qconfig', QConfig(
+            weight = None,
+            activation = self.act_quantizer.observer
+        ))
+        self.add_skip.add_module('activation_post_process', 
             self.add_skip.qconfig.activation())
 
 
@@ -283,22 +265,13 @@ class QuantBottleneck(BaseQuantBlock):
         return out
 
 
-    def convert_to_quantizable_with_config(self):
-        super().convert_to_quantizable_with_config(self)
-        self._fake_quantization = False
-        act_qparams = self.act_quantizer.get_qparams() 
-        self.add_skip.qconfig = QConfig(
-            weight=None,
-            activation = FixedQParamsObserver.with_args(
-                qscheme = get_qscheme(act_qparams['channel_wise'], act_qparams['symmetric']),
-                dtype = get_dtype(act_qparams['quant_min'], act_qparams['quant_max'], act_qparams['reduce_range']),
-                quant_min = act_qparams['quant_min'],
-                quant_max = act_qparams['quant_max'],
-                scale = act_qparams['scale'],
-                zero_point = act_qparams['zero_point']
-            )
-        )
-        self.add_skip.add_module("activation_post_process", 
+    def _convert_to_quantizable_with_qconfig(self):
+        super()._convert_to_quantizable_with_qconfig(self)
+        setattr(self.add_skip, 'qconfig', QConfig(
+            weight = None,
+            activation = self.act_quantizer.observer
+        ))
+        self.add_skip.add_module('activation_post_process', 
             self.add_skip.qconfig.activation())
 
 

@@ -100,30 +100,43 @@ class LAPQ(BaseQuantization):
             'n_bits': self.w_bits,
             'reduce_range': self.reduce_range,
             'unsigned': False,
-            'p_val': 2.0,
-            'method': UniformSymmetricQuantizer,
+            'symmetric': True,
+            'per_channel': False,
+            'quantizer': 'uniform',
+            'observer': 'min_max'
         }
         act_quant_params = {
             'n_bits': self.a_bits,
             'reduce_range': self.reduce_range,
             'unsigned': True,
-            'p_val': 2.0,
-            'method': UniformSymmetricQuantizer,
+            'symmetric': False,
+            'quantizer': 'uniform',
+            'observer': 'min_max'
         }
 
         if test_before_calibration:
-            acc1, acc5 = self.test(model, self.test_data, device=self.device, progress=True)
+            qmodel = QuantModel(model, weight_quant_params, act_quant_params)
+            qmodel.set_quantization_state(False, False)
+            acc1, acc5 = self.test(qmodel, self.test_data, device=self.device, progress=True)
             if self.verbose:
                 print('==> Full Precision Model: acc@1 {:.3f} | acc@5 {:.3f}'.format(acc1, acc5))
-            qmodel = QuantModel(model, weight_quant_params, act_quant_params)
-            qmodel.set_quant_state(True, True)
+            qmodel.set_quantization_state(True, True)
+            _ = self.evaluate_loss(qmodel, self.calib_data, self.device)
+            qmodel.set_observation_state(False, False)
             acc1, acc5 = self.test(qmodel, self.test_data, device=self.device, progress=True)
             if self.verbose:
                 print('==> Quantization accuracy before LAPQ: acc@1 {:.3f} | acc@5 {:.3f}'.format(acc1, acc5))
             del qmodel
 
-        weight_quant_params['method'] = LpNormQuantizer
-        act_quant_params['method'] = LpNormQuantizer
+        weight_quant_params.update({
+            'observer': 'lp_norm',
+            'p_val': self.p_val,
+        })
+        act_quant_params.update({
+            'observer': 'lp_norm',
+            'p_val': self.p_val,
+            'pos_dist': True,
+        })
 
         if self.p_val is None:
             p_vals = np.linspace(2,3.9,20)
@@ -133,31 +146,25 @@ class LAPQ(BaseQuantization):
                 weight_quant_params['p_val'] = p
                 act_quant_params['p_val'] = p
                 qmodel = QuantModel(model, weight_quant_params, act_quant_params)
-                qmodel.set_quant_state(True, True)
+                qmodel.set_quantization_state(True, True)
                 loss = self.evaluate_loss(qmodel, self.calib_data, self.device)
                 losses.append(loss)
                 pbar.set_postfix(p_val=p, loss=loss)
                 del qmodel
-            # using quadratic interpolation to approximate the optimal quantization step size ∆p∗
+            # using quadratic interpolation to approximate the optimal ∆p∗
             z = np.polyfit(p_vals, losses, 2)
             y = np.poly1d(z)
-            p_intr = y.deriv().roots[0]
-            min_loss = min(losses)
-        else:
-            weight_quant_params['p_val'] = self.p_val
-            act_quant_params['p_val'] = self.p_val
-            qmodel = QuantModel(model, weight_quant_params, act_quant_params)
-            qmodel.set_quant_state(True, True)
-            p_intr = self.p_val
-            min_loss = self.evaluate_loss(qmodel, self.calib_data, self.device)
-            del qmodel
+            self.p_val = y.deriv().roots[0]
 
-        if self.verbose:
-            print("==> using p-val : {:.3f}  with lp-loss : {:.3f}".format(p_intr, min_loss))
-        weight_quant_params['p_val'] = p_intr
-        act_quant_params['p_val'] = p_intr
+        weight_quant_params['p_val'] = self.p_val
+        act_quant_params['p_val'] = self.p_val
         qmodel = QuantModel(model, weight_quant_params, act_quant_params, inplace=inplace)
-        qmodel.set_quant_state(weight_quant=True, act_quant=True)
+        qmodel.set_quantization_state(True, True)
+        min_loss = self.evaluate_loss(qmodel, self.calib_data, self.device)
+        if self.verbose:
+            print("==> using p-val : {:.3f}  with lp-loss : {:.3f}".format(self.p_val, min_loss))
+
+        qmodel.set_observation_state(False, False)
         acc1, acc5 = self.test(qmodel, self.test_data, device=self.device, progress=True)
         if self.verbose:
             print('==> Quantization accuracy before optimization: acc@1 {:.3f} | acc@5 {:.3f}'.format(acc1, acc5))
@@ -204,6 +211,7 @@ class LAPQ(BaseQuantization):
             quantized_model = qmodel.convert_model_to_quantized(inplace=inplace)
 
         return quantized_model
+
 
     def evaluate_calibration(self, alphas: np.ndarray, qmodel: QuantModel):
         qmodel.set_alphas_np(alphas)
