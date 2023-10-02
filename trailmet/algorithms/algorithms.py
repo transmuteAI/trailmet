@@ -180,7 +180,7 @@ class BaseAlgorithm(object):
                 res.append(correct_k.mul_(100.0 / batch_size))
             return res
 
-    def test(self, model, dataloader, loss_fn=None, device=None):
+    def test(self, model, dataloader, loss_fn=None, device=None, progress=True):
         """This method is used to test the performance of the trained model."""
         if device is None:
             device = next(model.parameters()).device
@@ -188,12 +188,12 @@ class BaseAlgorithm(object):
             model.to(device)
         model.eval()
         counter = 0
-        tk1 = tqdm_notebook(dataloader, total=len(dataloader))
         running_acc1 = 0
         running_acc5 = 0
         running_loss = 0
+        pbar = tqdm_notebook(dataloader, total=len(dataloader)) if progress else dataloader
         with torch.no_grad():
-            for images, targets in tk1:
+            for images, targets in pbar:
                 counter += 1
                 images = images.to(device)
                 targets = targets.to(device)
@@ -204,13 +204,15 @@ class BaseAlgorithm(object):
                 if loss_fn is not None:
                     loss = loss_fn(outputs, targets)
                     running_loss += loss.item()
-                    tk1.set_postfix(
-                        loss=running_loss / counter,
-                        acc1=running_acc1 / counter,
-                        acc5=running_acc5 / counter,
-                    )
+                    if progress:
+                        pbar.set_postfix(
+                            loss=running_loss / counter,
+                            acc1=running_acc1 / counter,
+                            acc5=running_acc5 / counter,
+                        )
                 else:
-                    tk1.set_postfix(acc1=running_acc1 / counter,
+                    if progress:
+                        pbar.set_postfix(acc1=running_acc1 / counter,
                                     acc5=running_acc5 / counter)
         if loss_fn is not None:
             return running_acc1 / counter, running_loss / counter
