@@ -59,6 +59,32 @@ def get_dtype(quant_min: int, quant_max: int, reduce_range: bool = True):
     else:
         return torch.qint32
 
+def round_ste(x: torch.Tensor):
+    return (x.round() - x).detach() + x
+
+def fake_quantize(x: torch.Tensor, scale: torch.Tensor, zero_point: torch.Tensor,
+        quant_min: int, quant_max: int):
+    x_int = round_ste(x / scale) + zero_point
+    x_quant = torch.clamp(x_int, quant_min, quant_max)
+    x_dequant = (x_quant - zero_point) * scale
+    return x_dequant
+
+def reshape_qparams_by_channel(x: torch.Tensor, scale: torch.Tensor, 
+        zero_point: torch.Tensor, ch_axis: int):
+    new_shape = [1] * len(x.shape)
+    new_shape[ch_axis] = x.shape[ch_axis]
+    scale = scale.reshape(new_shape)
+    zero_point = zero_point.reshape(new_shape)
+    return scale, zero_point 
+
+def transform_and_flatten_tensor_by_channel(x: torch.Tensor, ch_axis: int): 
+    new_axis_list = list(range(len(x.shape)))
+    new_axis_list[ch_axis] = 0
+    new_axis_list[0] = ch_axis
+    x_tran = x.permute(new_axis_list)
+    x_flat = torch.flatten(x_tran, start_dim=1)
+    return x_flat
+
 def replace_activation_with_identity(module: torch.nn.Module, activations: list) -> None:
     reassign = dict()
     for name, child_module in module.named_children():
